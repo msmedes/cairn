@@ -266,7 +266,7 @@ run_codex_iteration() {
   local sandbox_name
   sandbox_name="$(build_sandbox_name)"
 
-  if ! "${SANDBOX_CMD[@]}" --name "$sandbox_name" "$ACTIVE_WORKTREE" -- "${codex_args[@]}" - <"$prompt_path"; then
+  if ! "${SANDBOX_CMD[@]}" --name "$sandbox_name" "$ACTIVE_WORKTREE" "$ROOT_DIR/.git" -- "${codex_args[@]}" - <"$prompt_path"; then
     echo "Codex exited non-zero on iteration $ITERATION." >&2
     return 1
   fi
