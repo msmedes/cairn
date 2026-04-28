@@ -42,6 +42,7 @@ function App() {
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
+    let cancelled = false;
 
     listen<SidecarEvent>("sidecar-event", (event) => {
       const payload = event.payload;
@@ -87,9 +88,17 @@ function App() {
       }
     }).then((fn) => {
       unlisten = fn;
+      // Now that the listener is attached, also query current state
+      // in case the sidecar emitted `ready` before we subscribed.
+      invoke<boolean>("get_sidecar_status")
+        .then((isReady) => {
+          if (!cancelled && isReady) setReady(true);
+        })
+        .catch((err) => console.error("get_sidecar_status failed", err));
     });
 
     return () => {
+      cancelled = true;
       unlisten?.();
     };
   }, []);

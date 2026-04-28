@@ -3,6 +3,7 @@
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -15,6 +16,7 @@ use tokio::sync::Mutex;
 struct SidecarState {
     child: Mutex<Option<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
+    ready: AtomicBool,
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
@@ -51,6 +53,11 @@ async fn send_prompt(
     write_line(&state.stdin, &payload).await
 }
 
+#[tauri::command]
+fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> bool {
+    state.ready.load(Ordering::Acquire)
+}
+
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
     let script = sidecar_script_path();
 
@@ -73,6 +80,7 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     // stdout — JSONL events forwarded to the frontend
     {
         let app = app.clone();
+        let state = state.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             loop {
@@ -84,6 +92,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                         }
                         match serde_json::from_str::<Value>(trimmed) {
                             Ok(value) => {
+                                if value.get("type").and_then(|v| v.as_str()) == Some("ready") {
+                                    state.ready.store(true, Ordering::Release);
+                                }
                                 let _ = app.emit(SIDECAR_EVENT, value);
                             }
                             Err(_) => {
@@ -119,7 +130,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(sidecar_state.clone())
-        .invoke_handler(tauri::generate_handler![send_prompt])
+        .invoke_handler(tauri::generate_handler![send_prompt, get_sidecar_status])
         .setup(move |app| {
             let app_handle = app.handle().clone();
             let state = sidecar_state.clone();
