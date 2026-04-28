@@ -248,7 +248,6 @@ run_codex_iteration() {
 
   codex_args+=(
     exec
-    --cd "$ACTIVE_WORKTREE"
     --add-dir "$ROOT_DIR/.git"
     --output-schema "$SCHEMA_FILE"
     --output-last-message "$result_path"
