@@ -87,9 +87,16 @@ function App() {
           break;
       }
     }).then((fn) => {
+      // If the effect was already torn down (StrictMode dev double-mount,
+      // unmount during HMR, etc.), unsubscribe immediately so we don't
+      // leak a duplicate listener.
+      if (cancelled) {
+        fn();
+        return;
+      }
       unlisten = fn;
-      // Now that the listener is attached, also query current state
-      // in case the sidecar emitted `ready` before we subscribed.
+      // Listener is live now — query current state in case the sidecar
+      // emitted `ready` before we subscribed.
       invoke<boolean>("get_sidecar_status")
         .then((isReady) => {
           if (!cancelled && isReady) setReady(true);
