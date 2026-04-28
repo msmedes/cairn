@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ProjectStore } from "../project-store";
@@ -58,6 +64,72 @@ test("touch updates lastOpenedAt without changing createdAt", () => {
 	expect(touched.createdAt).toBe("2026-04-28T10:00:00.000Z");
 	expect(touched.lastOpenedAt).toBe("2026-04-28T13:00:00.000Z");
 	expect(store.read(project.id)?.lastOpenedAt).toBe("2026-04-28T13:00:00.000Z");
+});
+
+test("rename uses a clean display name, renames the folder, and updates metadata", () => {
+	const store = new ProjectStore(tempProjectsRoot());
+	const project = store.create(
+		"Temporary quiz idea",
+		new Date("2026-04-28T10:00:00.000Z"),
+	);
+	const renamed = store.rename(project.id, "  Training Quiz Tool  ");
+
+	expect(renamed.ok).toBe(true);
+	if (!renamed.ok) throw new Error(renamed.message);
+	expect(renamed.project).toMatchObject({
+		id: "training-quiz-tool",
+		name: "Training Quiz Tool",
+		displayName: "Training Quiz Tool",
+		createdAt: "2026-04-28T10:00:00.000Z",
+	});
+	expect(existsSync(project.path)).toBe(false);
+	expect(existsSync(renamed.project.path)).toBe(true);
+	expect(JSON.parse(readFileSync(join(renamed.project.path, "project.json"), "utf8"))).toMatchObject({
+		id: "training-quiz-tool",
+		name: "Training Quiz Tool",
+	});
+});
+
+test("rename silently disambiguates duplicate chosen names", () => {
+	const root = tempProjectsRoot();
+	const store = new ProjectStore(root);
+	const first = store.create("First draft", new Date("2026-04-28T10:00:00.000Z"));
+	const second = store.create("Second draft", new Date("2026-04-28T11:00:00.000Z"));
+
+	const firstRenamed = store.rename(first.id, "Quiz Tool");
+	const secondRenamed = store.rename(second.id, "Quiz Tool");
+
+	expect(firstRenamed.ok && firstRenamed.project.id).toBe("quiz-tool");
+	expect(secondRenamed.ok && secondRenamed.project.id).toBe("quiz-tool-2");
+	expect(store.read("quiz-tool")?.name).toBe("Quiz Tool");
+	expect(store.read("quiz-tool-2")?.name).toBe("Quiz Tool");
+});
+
+test("rename handles empty names without changing the project folder", () => {
+	const store = new ProjectStore(tempProjectsRoot());
+	const project = store.create(
+		"Temporary quiz idea",
+		new Date("2026-04-28T10:00:00.000Z"),
+	);
+	const renamed = store.rename(project.id, "   ");
+
+	expect(renamed.ok).toBe(false);
+	expect(renamed.project).toEqual(project);
+	expect(existsSync(project.path)).toBe(true);
+	expect(store.read(project.id)?.name).toBe("Temporary quiz idea");
+});
+
+test("rename preserves non-Latin display names while falling back to an untitled slug", () => {
+	const store = new ProjectStore(tempProjectsRoot());
+	const project = store.create(
+		"Temporary quiz idea",
+		new Date("2026-04-28T10:00:00.000Z"),
+	);
+	const renamed = store.rename(project.id, "東京の予定表");
+
+	expect(renamed.ok && renamed.project.id).toBe("untitled");
+	expect(renamed.ok && renamed.project.displayName).toBe("東京の予定表");
+	expect(store.read("untitled")?.name).toBe("東京の予定表");
 });
 
 test("read rejects metadata ids that mismatch the containing folder", () => {
