@@ -8,7 +8,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
@@ -27,12 +27,24 @@ struct SidecarState {
     // reflect a dead sidecar even if the error event fired before the
     // frontend's listener was attached.
     last_error: StdMutex<Option<String>>,
+    // Latest hydrate payload so the frontend can recover if it subscribes
+    // after the sidecar emits the one-shot startup event.
+    last_hydrate: StdMutex<Option<Vec<HydratedMessage>>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct HydratedMessage {
+    id: String,
+    role: String,
+    text: String,
+    done: bool,
 }
 
 #[derive(Serialize)]
 struct SidecarStatus {
     ready: bool,
     error: Option<String>,
+    hydrate: Option<Vec<HydratedMessage>>,
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
@@ -44,9 +56,32 @@ fn sidecar_script_path() -> String {
     format!("{}/../sidecar/index.ts", manifest_dir)
 }
 
-fn workspace_path() -> String {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    format!("{}/../.workspace", manifest_dir)
+fn user_home_dir() -> Result<PathBuf, String> {
+    if let Some(home) = std::env::var_os("HOME") {
+        return Ok(PathBuf::from(home));
+    }
+
+    if let Some(user_profile) = std::env::var_os("USERPROFILE") {
+        return Ok(PathBuf::from(user_profile));
+    }
+
+    let home_drive = std::env::var_os("HOMEDRIVE");
+    let home_path = std::env::var_os("HOMEPATH");
+    match (home_drive, home_path) {
+        (Some(drive), Some(path)) => {
+            let mut combined = PathBuf::from(drive);
+            combined.push(path);
+            Ok(combined)
+        }
+        _ => Err("could not resolve the user home directory".to_string()),
+    }
+}
+
+fn project_root_path() -> Result<PathBuf, String> {
+    Ok(user_home_dir()?
+        .join(".guide")
+        .join("projects")
+        .join("default"))
 }
 
 fn persona_path() -> String {
@@ -54,23 +89,23 @@ fn persona_path() -> String {
     format!("{}/../prompts/persona.md", manifest_dir)
 }
 
-fn workspace_file_path(name: &str) -> Result<PathBuf, String> {
+fn project_file_path(name: &str) -> Result<PathBuf, String> {
     let relative = Path::new(name);
 
     if relative.is_absolute() {
-        return Err("workspace file path must be relative".into());
+        return Err("project file path must be relative".into());
     }
 
     for component in relative.components() {
         match component {
             Component::Normal(_) | Component::CurDir => {}
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err("workspace file path must stay inside the workspace".into());
+                return Err("project file path must stay inside the project".into());
             }
         }
     }
 
-    Ok(Path::new(&workspace_path()).join(relative))
+    Ok(project_root_path()?.join(relative))
 }
 
 fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
@@ -121,29 +156,34 @@ async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Resul
 #[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
+    let hydrate = state.last_hydrate.lock().ok().and_then(|guard| guard.clone());
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
+        hydrate,
     }
 }
 
 #[tauri::command]
-fn read_workspace_file(name: String) -> Result<String, String> {
-    let path = workspace_file_path(&name)?;
+fn read_project_file(name: String) -> Result<String, String> {
+    let path = project_file_path(&name)?;
     match fs::read_to_string(&path) {
         Ok(contents) => Ok(contents),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(err) => Err(format!("failed to read workspace file {}: {}", name, err)),
+        Err(err) => Err(format!("failed to read project file {}: {}", name, err)),
     }
 }
 
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
     let script = sidecar_script_path();
-    let workspace = workspace_path();
+    let project_root = project_root_path()?;
     let persona = persona_path();
 
     state.ready.store(false, Ordering::Release);
     if let Ok(mut slot) = state.last_error.lock() {
+        *slot = None;
+    }
+    if let Ok(mut slot) = state.last_hydrate.lock() {
         *slot = None;
     }
 
@@ -161,8 +201,13 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar (bun in PATH?): {}", e))?;
 
-    fs::create_dir_all(&workspace)
-        .map_err(|e| format!("failed to create workspace directory {}: {}", workspace, e))?;
+    fs::create_dir_all(&project_root).map_err(|e| {
+        format!(
+            "failed to create project directory {}: {}",
+            project_root.display(),
+            e
+        )
+    })?;
 
     let mut stdin = child.stdin.take().ok_or("no stdin pipe on sidecar")?;
     let stdout = child.stdout.take().ok_or("no stdout pipe on sidecar")?;
@@ -170,7 +215,6 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
 
     let init_payload = serde_json::json!({
         "type": "init",
-        "workspacePath": workspace,
         "personaPath": persona,
     });
     write_json_line(&mut stdin, &init_payload)
@@ -211,6 +255,18 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                         {
                                             if let Ok(mut slot) = state.last_error.lock() {
                                                 *slot = Some(message.to_string());
+                                            }
+                                        }
+                                    }
+                                    Some("hydrate") => {
+                                        if let Some(messages) = value.get("messages") {
+                                            if let Ok(parsed) = serde_json::from_value::<
+                                                Vec<HydratedMessage>,
+                                            >(messages.clone())
+                                            {
+                                                if let Ok(mut slot) = state.last_hydrate.lock() {
+                                                    *slot = Some(parsed);
+                                                }
                                             }
                                         }
                                     }
@@ -285,7 +341,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             send_prompt,
             get_sidecar_status,
-            read_workspace_file
+            read_project_file
         ])
         .on_window_event({
             let state = sidecar_state.clone();
