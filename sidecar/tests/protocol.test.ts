@@ -8,7 +8,13 @@
  */
 
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
@@ -74,8 +80,8 @@ function createPersonaFile(contents = "You are the Guide. Ask one short scoping 
 	return personaPath;
 }
 
-function projectRootFor(homeDir: string): string {
-	return join(homeDir, ".guide", "projects", "default");
+function projectsRootFor(homeDir: string): string {
+	return join(homeDir, ".guide", "projects");
 }
 
 function writeToSidecar(proc: SubprocessHandle, line: string) {
@@ -189,6 +195,16 @@ if (!authCheck.ok) {
 				DEFAULT_TIMEOUT_MS,
 			);
 
+			const activeProject = promptEvents.find(
+				(event) => event.type === "active_project",
+			);
+			expect(activeProject?.project).toEqual(
+				expect.objectContaining({
+					id: expect.stringMatching(/^\d{4}-\d{2}-\d{2}-what-s-2-2$/),
+					name: "what's 2 + 2?",
+					displayName: "what's 2 + 2?",
+				}),
+			);
 			expect(promptEvents.some((event) => event.type === "text_delta")).toBe(true);
 			expect(promptEvents.at(-1)?.type).toBe("agent_end");
 
@@ -205,7 +221,7 @@ if (!authCheck.ok) {
 	);
 
 	test(
-		"respawn hydrates the previous user message from the persisted default project",
+		"respawn hydrates the previous user message from the most recent project",
 		async () => {
 			const guideHome = createGuideHome();
 			const personaPath = createPersonaFile();
@@ -288,13 +304,13 @@ test("malformed input emits an error event without killing the sidecar", async (
 	}
 });
 
-test("init creates the fixed default project path before reporting ready", async () => {
+test("init on an empty guide home reports ready without creating a project", async () => {
 	const guideHome = createGuideHome();
 	const proc = spawnSidecar(guideHome);
 	const personaPath = createPersonaFile();
-	const projectRoot = projectRootFor(guideHome);
+	const projectsRoot = projectsRootFor(guideHome);
 
-	expect(existsSync(projectRoot)).toBe(false);
+	expect(existsSync(projectsRoot)).toBe(false);
 
 	writeToSidecar(
 		proc,
@@ -307,8 +323,68 @@ test("init creates the fixed default project path before reporting ready", async
 		DEFAULT_TIMEOUT_MS,
 	);
 	expect(readyEvents.at(-1)?.type).toBe("ready");
-	expect(existsSync(projectRoot)).toBe(true);
+	expect(readyEvents.find((event) => event.type === "hydrate")).toEqual({
+		type: "hydrate",
+		messages: [],
+	});
+	expect(existsSync(projectsRoot)).toBe(false);
 });
+
+if (!authCheck.ok) {
+	test.skip("first prompt creates a dated project folder in an empty guide home", () => {});
+} else {
+	test(
+		"first prompt creates a dated project folder in an empty guide home",
+		async () => {
+			const guideHome = createGuideHome();
+			const proc = spawnSidecar(guideHome);
+			const personaPath = createPersonaFile();
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({ type: "init", personaPath }) + "\n",
+			);
+			await collectEvents(
+				proc,
+				(event) => event.type === "ready",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({
+					type: "prompt",
+					text: "Build a volunteer snack rota",
+				}) + "\n",
+			);
+			const promptEvents = await collectEvents(
+				proc,
+				(event) => event.type === "agent_end",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			const projectsRoot = projectsRootFor(guideHome);
+			const projectIds = readdirSync(projectsRoot);
+			expect(projectIds).toHaveLength(1);
+			expect(projectIds[0]).toMatch(
+				/^\d{4}-\d{2}-\d{2}-build-a-volunteer-snack-rota$/,
+			);
+			const metadata = JSON.parse(
+				readFileSync(join(projectsRoot, projectIds[0]!, "project.json"), "utf8"),
+			);
+			expect(metadata).toEqual(
+				expect.objectContaining({
+					id: projectIds[0],
+					name: "Build a volunteer snack rota",
+				}),
+			);
+			expect(
+				promptEvents.some((event) => event.type === "active_project"),
+			).toBe(true);
+		},
+		DEFAULT_TIMEOUT_MS,
+	);
+}
 
 test("init emits an error event when personaPath does not exist", async () => {
 	const guideHome = createGuideHome();
