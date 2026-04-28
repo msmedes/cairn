@@ -10,7 +10,7 @@ Rules:
 - Use the `gh` CLI for GitHub work instead: issue reads, issue comments, PR creation, PR updates, PR merge, and status checks.
 - If this prompt includes an assigned issue, branch, or worktree, treat that assignment as authoritative and work only on that issue.
 - If no issue is assigned, inspect the full open-issue list and choose the next ready issue yourself.
-- Treat issue body lines like `Blocked by #123` as hard dependencies. Do not start a blocked issue.
+- Treat issue body lines like `Blocked by #123` as hard dependencies only while the referenced issue is still open. If the referenced issue is closed, treat that dependency as satisfied.
 - Work only on one issue in this run.
 - Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
 - Read the relevant `_meta` docs before coding, especially any PRD or context files referenced by the issue.
