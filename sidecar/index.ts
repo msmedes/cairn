@@ -23,6 +23,7 @@ import {
 	type HydrateEvent,
 	translateSessionEntriesToHydrateEvent,
 } from "./hydrate";
+import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 
 type InMsg =
 	| { type: "init"; personaPath?: string }
@@ -47,6 +48,7 @@ let unsubscribeSession: (() => void) | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
 let streamedAssistantText = false;
+let suppressAssistantError = false;
 
 loadRepoLocalEnv();
 
@@ -114,6 +116,7 @@ function disposeSession() {
 	session = null;
 	sessionManager = null;
 	streamedAssistantText = false;
+	suppressAssistantError = false;
 }
 
 function wireSessionEvents(nextSession: AgentSession) {
@@ -133,6 +136,16 @@ function wireSessionEvents(nextSession: AgentSession) {
 				if (assistantError) {
 					streamedAssistantText = false;
 					emitDevLog({ type: "assistant_error", message: assistantError });
+					if (suppressAssistantError) {
+						if (sessionManager) {
+							emit(
+								translateSessionEntriesToHydrateEvent(
+									sessionManager.getEntries(),
+								),
+							);
+						}
+						break;
+					}
 					emit({
 						type: "error",
 						message: "I hit a snag while working on that.",
@@ -161,6 +174,7 @@ function wireSessionEvents(nextSession: AgentSession) {
 				});
 				break;
 			case "agent_end":
+				suppressAssistantError = false;
 				emit({ type: "agent_end" });
 				break;
 		}
@@ -201,7 +215,17 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	session = nextSession;
 	sessionManager = nextSessionManager;
 	wireSessionEvents(nextSession);
-	emit(translateSessionEntriesToHydrateEvent(nextSessionManager.getEntries()));
+	suppressAssistantError = true;
+	await emitHydrateAndMaybeResumeRecap(nextSession, nextSessionManager, {
+		emitHydrate: (event) => emit(event),
+		onRecapError: (err) => {
+			emitDevLog({
+				type: "assistant_error",
+				message: `resume recap failed: ${formatError(err)}`,
+			});
+		},
+	});
+	suppressAssistantError = false;
 	emit({ type: "ready" });
 }
 
