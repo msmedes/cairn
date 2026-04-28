@@ -8,10 +8,11 @@
  */
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import { loadRepoLocalEnv } from "../env";
 
 const SIDECAR_ENTRY = resolve(import.meta.dir, "..", "index.ts");
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -21,6 +22,7 @@ type SidecarEvent = { type: string } & Record<string, JsonValue>;
 type SubprocessHandle = ReturnType<typeof Bun.spawn>;
 
 const liveProcs = new Set<SubprocessHandle>();
+loadRepoLocalEnv();
 const authCheck = getAuthCheck();
 
 afterEach(() => {
@@ -59,6 +61,13 @@ function spawnSidecar(): SubprocessHandle {
 
 function createWorkspace(): string {
 	return mkdtempSync(join(tmpdir(), "guide-sidecar-"));
+}
+
+function createPersonaFile(contents = "You are the Guide. Ask one short scoping question at a time."): string {
+	const workspacePath = createWorkspace();
+	const personaPath = join(workspacePath, "persona.md");
+	writeFileSync(personaPath, contents, "utf8");
+	return personaPath;
 }
 
 function writeToSidecar(proc: SubprocessHandle, line: string) {
@@ -142,10 +151,11 @@ if (!authCheck.ok) {
 		async () => {
 			const proc = spawnSidecar();
 			const workspacePath = createWorkspace();
+			const personaPath = createPersonaFile();
 
 			writeToSidecar(
 				proc,
-				JSON.stringify({ type: "init", workspacePath, personaPath: "unused" }) + "\n",
+				JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
 			);
 
 			const readyEvents = await collectEvents(
@@ -195,9 +205,10 @@ test("malformed input emits an error event without killing the sidecar", async (
 
 	if (authCheck.ok) {
 		const workspacePath = createWorkspace();
+		const personaPath = createPersonaFile();
 		writeToSidecar(
 			proc,
-			JSON.stringify({ type: "init", workspacePath, personaPath: "unused" }) + "\n",
+			JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
 		);
 		const readyEvents = await collectEvents(
 			proc,
@@ -206,4 +217,27 @@ test("malformed input emits an error event without killing the sidecar", async (
 		);
 		expect(readyEvents.at(-1)?.type).toBe("ready");
 	}
+});
+
+test("init emits an error event when personaPath does not exist", async () => {
+	const proc = spawnSidecar();
+	const workspacePath = createWorkspace();
+	const missingPersonaPath = join(workspacePath, "missing-persona.md");
+
+	writeToSidecar(
+		proc,
+		JSON.stringify({
+			type: "init",
+			workspacePath,
+			personaPath: missingPersonaPath,
+		}) + "\n",
+	);
+
+	const errorEvents = await collectEvents(
+		proc,
+		(event) => event.type === "error",
+		DEFAULT_TIMEOUT_MS,
+	);
+	expect(errorEvents.at(-1)?.type).toBe("error");
+	expect(errorEvents.at(-1)?.message).toContain("missing-persona.md");
 });
