@@ -4,30 +4,59 @@
 
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 
+use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Default)]
 struct SidecarState {
-    child: Mutex<Option<Child>>,
-    stdin: Mutex<Option<ChildStdin>>,
+    // Sync mutex so a sync window-event handler can lock and kill on close.
+    child: StdMutex<Option<Child>>,
+    // Async mutex so write_line can hold across awaits.
+    stdin: AsyncMutex<Option<ChildStdin>>,
     ready: AtomicBool,
+    // Last fatal error from the sidecar lifecycle (spawn failure, EOF, etc.).
+    // Pulled by the frontend via get_sidecar_status so the user-visible UI can
+    // reflect a dead sidecar even if the error event fired before the
+    // frontend's listener was attached.
+    last_error: StdMutex<Option<String>>,
+}
+
+#[derive(Serialize)]
+struct SidecarStatus {
+    ready: bool,
+    error: Option<String>,
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
 
 fn sidecar_script_path() -> String {
-    // dev-time path; the sidecar is a sibling of `src-tauri` at the repo root.
+    // Dev-time path; release/packaging is a later slice.
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     format!("{}/../sidecar/index.ts", manifest_dir)
 }
 
-async fn write_line(stdin_slot: &Mutex<Option<ChildStdin>>, value: &Value) -> Result<(), String> {
+fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
+    eprintln!("[sidecar:fatal] {}", message);
+    state.ready.store(false, Ordering::Release);
+    if let Ok(mut slot) = state.last_error.lock() {
+        *slot = Some(message.clone());
+    }
+    let _ = app.emit(
+        SIDECAR_EVENT,
+        serde_json::json!({ "type": "error", "message": message }),
+    );
+}
+
+async fn write_line(
+    stdin_slot: &AsyncMutex<Option<ChildStdin>>,
+    value: &Value,
+) -> Result<(), String> {
     let line = format!("{}\n", value);
     let mut guard = stdin_slot.lock().await;
     let stdin = guard
@@ -45,17 +74,22 @@ async fn write_line(stdin_slot: &Mutex<Option<ChildStdin>>, value: &Value) -> Re
 }
 
 #[tauri::command]
-async fn send_prompt(
-    text: String,
-    state: State<'_, Arc<SidecarState>>,
-) -> Result<(), String> {
+async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
     let payload = serde_json::json!({ "type": "prompt", "text": text });
     write_line(&state.stdin, &payload).await
 }
 
 #[tauri::command]
-fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> bool {
-    state.ready.load(Ordering::Acquire)
+fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
+    let error = state
+        .last_error
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    SidecarStatus {
+        ready: state.ready.load(Ordering::Acquire),
+        error,
+    }
 }
 
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
@@ -75,9 +109,11 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     let stderr = child.stderr.take().ok_or("no stderr pipe on sidecar")?;
 
     *state.stdin.lock().await = Some(stdin);
-    *state.child.lock().await = Some(child);
+    if let Ok(mut slot) = state.child.lock() {
+        *slot = Some(child);
+    }
 
-    // stdout — JSONL events forwarded to the frontend
+    // stdout — JSONL events forwarded to the frontend.
     {
         let app = app.clone();
         let state = state.clone();
@@ -102,9 +138,12 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                             }
                         }
                     }
-                    Ok(None) => break,
+                    Ok(None) => {
+                        record_error(&state, "sidecar exited unexpectedly".into(), &app);
+                        break;
+                    }
                     Err(err) => {
-                        eprintln!("[sidecar:stdout-err] {}", err);
+                        record_error(&state, format!("sidecar stdout error: {}", err), &app);
                         break;
                     }
                 }
@@ -112,7 +151,7 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         });
     }
 
-    // stderr — dev log only
+    // stderr — dev log only.
     tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = lines.next_line().await {
@@ -123,31 +162,52 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     Ok(())
 }
 
+fn shutdown_sidecar(state: &SidecarState) {
+    let mut guard = match state.child.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(mut child) = guard.take() {
+        // start_kill is sync and doesn't await; sufficient to ensure the
+        // bun process gets a SIGKILL before the parent exits.
+        let _ = child.start_kill();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sidecar_state = Arc::new(SidecarState::default());
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![send_prompt, get_sidecar_status])
+        .on_window_event({
+            let state = sidecar_state.clone();
+            move |_window, event| {
+                if let WindowEvent::Destroyed = event {
+                    shutdown_sidecar(&state);
+                }
+            }
+        })
         .setup(move |app| {
             let app_handle = app.handle().clone();
             let state = sidecar_state.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(err) = spawn_sidecar(app_handle.clone(), state).await {
-                    eprintln!("sidecar startup failed: {}", err);
-                    let _ = app_handle.emit(
-                        SIDECAR_EVENT,
-                        serde_json::json!({
-                            "type": "error",
-                            "message": format!("sidecar startup failed: {}", err)
-                        }),
-                    );
+                if let Err(err) = spawn_sidecar(app_handle.clone(), state.clone()).await {
+                    record_error(&state, err, &app_handle);
                 }
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app, event| {
+        if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+            if let Some(state) = app.try_state::<Arc<SidecarState>>() {
+                shutdown_sidecar(state.inner());
+            }
+        }
+    });
 }

@@ -12,6 +12,11 @@ type SidecarEvent =
   | { type: "agent_end" }
   | { type: "error"; message: string };
 
+type SidecarStatus = {
+  ready: boolean;
+  error: string | null;
+};
+
 type Message = {
   id: string;
   role: "user" | "assistant";
@@ -27,11 +32,11 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   // Track the in-flight assistant message so streamed deltas land in the right place.
   const activeAssistantId = useRef<string | null>(null);
-
   const listRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll on new content.
@@ -44,11 +49,23 @@ function App() {
     let unlisten: UnlistenFn | undefined;
     let cancelled = false;
 
+    function finalizeActive() {
+      const id = activeAssistantId.current;
+      if (id) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, done: true } : m)),
+        );
+      }
+      activeAssistantId.current = null;
+      setSending(false);
+    }
+
     listen<SidecarEvent>("sidecar-event", (event) => {
       const payload = event.payload;
       switch (payload.type) {
         case "ready":
           setReady(true);
+          setError(null);
           break;
         case "text_delta": {
           const id = activeAssistantId.current;
@@ -68,41 +85,49 @@ function App() {
           );
           break;
         }
-        case "agent_end": {
-          activeAssistantId.current = null;
-          setSending(false);
+        case "agent_end":
+          finalizeActive();
           break;
-        }
         case "tool_start":
         case "tool_end":
-          // Invisible to the user; visible in the dev console.
-          // eslint-disable-next-line no-console
           console.debug("[sidecar tool]", payload);
           break;
         case "error":
-          // eslint-disable-next-line no-console
           console.error("[sidecar error]", payload.message);
-          activeAssistantId.current = null;
-          setSending(false);
+          setError(payload.message);
+          setReady(false);
+          finalizeActive();
           break;
+        default: {
+          // Compile-time exhaustiveness: a new variant in SidecarEvent must
+          // add a case here or the build fails.
+          const _exhaustive: never = payload;
+          console.warn("[sidecar] unhandled event", _exhaustive);
+        }
       }
-    }).then((fn) => {
-      // If the effect was already torn down (StrictMode dev double-mount,
-      // unmount during HMR, etc.), unsubscribe immediately so we don't
-      // leak a duplicate listener.
-      if (cancelled) {
-        fn();
-        return;
-      }
-      unlisten = fn;
-      // Listener is live now — query current state in case the sidecar
-      // emitted `ready` before we subscribed.
-      invoke<boolean>("get_sidecar_status")
-        .then((isReady) => {
-          if (!cancelled && isReady) setReady(true);
-        })
-        .catch((err) => console.error("get_sidecar_status failed", err));
-    });
+    })
+      .then((fn) => {
+        // If the effect was already torn down (StrictMode dev double-mount,
+        // HMR, etc.), unsubscribe immediately so we don't leak a duplicate.
+        if (cancelled) {
+          fn();
+          return;
+        }
+        unlisten = fn;
+        // Listener is live now — query current state in case ready/error
+        // already happened before we subscribed.
+        invoke<SidecarStatus>("get_sidecar_status")
+          .then((status) => {
+            if (cancelled) return;
+            if (status.ready) setReady(true);
+            if (status.error) setError(status.error);
+          })
+          .catch((err) => console.error("get_sidecar_status failed", err));
+      })
+      .catch((err) => {
+        console.error("sidecar-event listen() failed", err);
+        if (!cancelled) setError("Failed to attach to the sidecar.");
+      });
 
     return () => {
       cancelled = true;
@@ -126,8 +151,8 @@ function App() {
       text: "",
       done: false,
     };
-    activeAssistantId.current = assistantMsg.id;
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    activeAssistantId.current = assistantMsg.id;
     setInput("");
     setSending(true);
 
@@ -135,22 +160,35 @@ function App() {
       await invoke("send_prompt", { text });
     } catch (err) {
       console.error("send_prompt failed", err);
+      // Drop the orphaned assistant message; the user message stays visible.
+      setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
       activeAssistantId.current = null;
       setSending(false);
     }
   }
+
+  const statusLabel = error ? "error" : ready ? "ready" : "starting…";
+  const statusClass = error ? "err" : ready ? "ok" : "wait";
 
   return (
     <main className="app">
       <section className="chat">
         <header className="chat-header">
           <h1>Guide</h1>
-          <span className={`status ${ready ? "ok" : "wait"}`}>
-            {ready ? "ready" : "starting…"}
+          <span
+            className={`status ${statusClass}`}
+            title={error ?? undefined}
+          >
+            {statusLabel}
           </span>
         </header>
 
-        <div className="messages" ref={listRef}>
+        <div
+          className="messages"
+          ref={listRef}
+          aria-live="polite"
+          aria-label="Conversation"
+        >
           {messages.length === 0 && (
             <div className="empty">
               <p>Tell me what you'd like to build.</p>
@@ -177,6 +215,7 @@ function App() {
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
             disabled={!ready || sending}
+            aria-label="Message"
           />
           <button type="submit" disabled={!ready || sending || !input.trim()}>
             Send

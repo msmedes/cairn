@@ -75,6 +75,16 @@ body,
   color: #c89c2c;
 }
 
+.status.err::before {
+  content: "● ";
+  color: #c8442c;
+}
+
+.status.err {
+  color: #c8442c;
+  cursor: help;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;
