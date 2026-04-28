@@ -27,15 +27,19 @@ type OutMsg =
 	| { type: "ready" }
 	| { type: "text_delta"; delta: string }
 	| { type: "text_done" }
-	| { type: "tool_start"; name: string }
-	| { type: "tool_end"; name: string; ok: boolean }
 	| { type: "agent_end" }
 	| { type: "error"; message: string };
+
+type DevLogMsg =
+	| { type: "tool_start"; name: string }
+	| { type: "tool_end"; name: string; ok: boolean }
+	| { type: "assistant_error"; message: string };
 
 let session: AgentSession | null = null;
 let unsubscribeSession: (() => void) | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
+let streamedAssistantText = false;
 
 loadRepoLocalEnv();
 
@@ -43,9 +47,41 @@ function emit(msg: OutMsg) {
 	process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
+function emitDevLog(msg: DevLogMsg) {
+	process.stderr.write(JSON.stringify(msg) + "\n");
+}
+
 function formatError(err: unknown): string {
 	if (err instanceof Error) return err.message;
 	return String(err);
+}
+
+function extractAssistantText(content: unknown): string {
+	if (!Array.isArray(content)) return "";
+
+	return content
+		.flatMap((part) => {
+			if (
+				part &&
+				typeof part === "object" &&
+				"type" in part &&
+				part.type === "text" &&
+				"text" in part &&
+				typeof part.text === "string"
+			) {
+				return [part.text];
+			}
+			return [];
+		})
+		.join("");
+}
+
+function getAssistantErrorMessage(message: unknown): string | null {
+	if (!message || typeof message !== "object") return null;
+	if (!("errorMessage" in message) || typeof message.errorMessage !== "string") {
+		return null;
+	}
+	return message.errorMessage;
 }
 
 function disposeSession() {
@@ -53,6 +89,7 @@ function disposeSession() {
 	unsubscribeSession = null;
 	session?.dispose();
 	session = null;
+	streamedAssistantText = false;
 }
 
 function wireSessionEvents(nextSession: AgentSession) {
@@ -60,21 +97,40 @@ function wireSessionEvents(nextSession: AgentSession) {
 		switch (event.type) {
 			case "message_update":
 				switch (event.assistantMessageEvent.type) {
-					case "text_delta":
-						emit({ type: "text_delta", delta: event.assistantMessageEvent.delta });
-						break;
+				case "text_delta":
+					streamedAssistantText = true;
+					emit({ type: "text_delta", delta: event.assistantMessageEvent.delta });
+					break;
+			}
+			break;
+		case "message_end":
+			if (event.message.role === "assistant") {
+				const assistantError = getAssistantErrorMessage(event.message);
+				if (assistantError) {
+					streamedAssistantText = false;
+					emitDevLog({ type: "assistant_error", message: assistantError });
+					emit({
+						type: "error",
+						message: "I hit a snag while working on that.",
+					});
+					break;
 				}
-				break;
-			case "message_end":
-				if (event.message.role === "assistant") {
-					emit({ type: "text_done" });
+
+				if (!streamedAssistantText) {
+					const fullText = extractAssistantText(event.message.content);
+					if (fullText) {
+						emit({ type: "text_delta", delta: fullText });
+					}
 				}
-				break;
+				streamedAssistantText = false;
+				emit({ type: "text_done" });
+			}
+			break;
 			case "tool_execution_start":
-				emit({ type: "tool_start", name: event.toolName });
+				emitDevLog({ type: "tool_start", name: event.toolName });
 				break;
 			case "tool_execution_end":
-				emit({
+				emitDevLog({
 					type: "tool_end",
 					name: event.toolName,
 					ok: !event.isError,
@@ -94,6 +150,7 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	const cwd = resolve(workspacePath ?? process.cwd());
 	const resolvedPersonaPath = resolve(personaPath ?? "prompts/persona.md");
 	mkdirSync(cwd, { recursive: true });
+	process.chdir(cwd);
 	const personaContent = readFileSync(resolvedPersonaPath, "utf8");
 
 	const resourceLoader = new DefaultResourceLoader({

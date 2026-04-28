@@ -8,7 +8,7 @@
  */
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
@@ -61,6 +61,10 @@ function spawnSidecar(): SubprocessHandle {
 
 function createWorkspace(): string {
 	return mkdtempSync(join(tmpdir(), "guide-sidecar-"));
+}
+
+function createMissingWorkspacePath(): string {
+	return join(createWorkspace(), "nested", "workspace");
 }
 
 function createPersonaFile(contents = "You are the Guide. Ask one short scoping question at a time."): string {
@@ -217,6 +221,27 @@ test("malformed input emits an error event without killing the sidecar", async (
 		);
 		expect(readyEvents.at(-1)?.type).toBe("ready");
 	}
+});
+
+test("init creates a missing workspace path before reporting ready", async () => {
+	const proc = spawnSidecar();
+	const workspacePath = createMissingWorkspacePath();
+	const personaPath = createPersonaFile();
+
+	expect(existsSync(workspacePath)).toBe(false);
+
+	writeToSidecar(
+		proc,
+		JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
+	);
+
+	const readyEvents = await collectEvents(
+		proc,
+		(event) => event.type === "ready",
+		DEFAULT_TIMEOUT_MS,
+	);
+	expect(readyEvents.at(-1)?.type).toBe("ready");
+	expect(existsSync(workspacePath)).toBe(true);
 });
 
 test("init emits an error event when personaPath does not exist", async () => {

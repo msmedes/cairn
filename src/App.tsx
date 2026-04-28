@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
@@ -7,8 +7,6 @@ type SidecarEvent =
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
-  | { type: "tool_start"; name: string }
-  | { type: "tool_end"; name: string; ok: boolean }
   | { type: "agent_end" }
   | { type: "error"; message: string };
 
@@ -32,6 +30,8 @@ function newId() {
   return Math.random().toString(36).slice(2);
 }
 
+const MAX_INPUT_HEIGHT = 220;
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -42,12 +42,41 @@ function App() {
   // Track the in-flight assistant message so streamed deltas land in the right place.
   const activeAssistantId = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
+
+  function resizeInput() {
+    const el = inputRef.current;
+    if (!el) return;
+
+    // Reset first so both wrapping changes and deleted text can shrink the field.
+    el.style.height = "auto";
+    const nextHeight = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
+    el.style.height = `${nextHeight}px`;
+    el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden";
+  }
 
   // Auto-scroll on new content.
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  useLayoutEffect(() => {
+    resizeInput();
+  }, [input]);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+    if (!composer || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      resizeInput();
+    });
+    observer.observe(composer);
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!hasTauriRuntime()) {
@@ -97,10 +126,6 @@ function App() {
         }
         case "agent_end":
           finalizeActive();
-          break;
-        case "tool_start":
-        case "tool_end":
-          console.debug("[sidecar tool]", payload);
           break;
         case "error":
           console.error("[sidecar error]", payload.message);
@@ -184,11 +209,10 @@ function App() {
     <main className="app">
       <section className="chat">
         <header className="chat-header">
-          <h1>Guide</h1>
-          <span
-            className={`status ${statusClass}`}
-            title={error ?? undefined}
-          >
+          <div className="brand">
+            <h1>Guide</h1>
+          </div>
+          <span className={`status ${statusClass}`} title={error ?? undefined}>
             {statusLabel}
           </span>
         </header>
@@ -201,31 +225,42 @@ function App() {
         >
           {messages.length === 0 && (
             <div className="empty">
-              <p>Tell me what you'd like to build.</p>
-              <p className="hint">A quiz for work? A helper for your group?</p>
+              <p className="empty-kicker">Start with the rough version.</p>
+              <p>Tell me what you want this thing to do for people.</p>
+              <p className="hint">A quiz for work. A helper for your group. A tiny tool that saves time.</p>
             </div>
           )}
           {messages.map((m) => (
-            <div key={m.id} className={`msg msg-${m.role}`}>
-              {m.text || (m.role === "assistant" && !m.done ? "…" : "")}
+            <div key={m.id} className={`msg-row msg-row-${m.role}`}>
+              <div className={`msg msg-${m.role}`}>
+                {m.text || (m.role === "assistant" && !m.done ? "…" : "")}
+              </div>
             </div>
           ))}
         </div>
 
         <form
+          ref={composerRef}
           className="composer"
           onSubmit={(e) => {
             e.preventDefault();
             send();
           }}
         >
-          <input
-            type="text"
+          <textarea
+            ref={inputRef}
             placeholder={ready ? "Type a message…" : "Waking up…"}
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
             disabled={!ready || sending}
             aria-label="Message"
+            rows={1}
           />
           <button type="submit" disabled={!ready || sending || !input.trim()}>
             Send
@@ -238,9 +273,20 @@ function App() {
           <span className="tab tab-active">Project</span>
         </div>
         <div className="panel-body">
-          <p className="panel-empty">
-            Your project will show up here as we talk.
-          </p>
+          <section className="panel-placeholder">
+            <p className="panel-kicker">Working draft</p>
+            <h2>Your project brief will take shape here.</h2>
+            <p className="panel-empty">
+              As the conversation sharpens, this panel will turn your answers into a short readable plan.
+            </p>
+            <div className="panel-ghost">
+              <div className="ghost-line ghost-line-title" />
+              <div className="ghost-line ghost-line-wide" />
+              <div className="ghost-line ghost-line-mid" />
+              <div className="ghost-line ghost-line-wide" />
+              <div className="ghost-line ghost-line-short" />
+            </div>
+          </section>
         </div>
       </aside>
     </main>

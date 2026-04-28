@@ -35,6 +35,7 @@ struct SidecarStatus {
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
+const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
 
 fn sidecar_script_path() -> String {
     // Dev-time path; release/packaging is a later slice.
@@ -64,7 +65,10 @@ fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
     );
 }
 
-async fn write_json_line<W: AsyncWrite + Unpin>(writer: &mut W, value: &Value) -> Result<(), String> {
+async fn write_json_line<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    value: &Value,
+) -> Result<(), String> {
     let line = format!("{}\n", value);
     writer
         .write_all(line.as_bytes())
@@ -96,11 +100,7 @@ async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Resul
 
 #[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
-    let error = state
-        .last_error
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone());
+    let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
@@ -207,12 +207,28 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     }
 
     // stderr — dev log only.
-    tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            eprintln!("[sidecar:stderr] {}", line);
-        }
-    });
+    {
+        let app = app.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                match serde_json::from_str::<Value>(trimmed) {
+                    Ok(value) => {
+                        eprintln!("[sidecar:dev] {}", value);
+                        let _ = app.emit(SIDECAR_DEV_EVENT, value);
+                    }
+                    Err(_) => {
+                        eprintln!("[sidecar:stderr] {}", trimmed);
+                    }
+                }
+            }
+        });
+    }
 
     Ok(())
 }
