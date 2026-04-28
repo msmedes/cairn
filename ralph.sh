@@ -124,9 +124,9 @@ load_issue_by_number() {
 }
 
 select_issue_context() {
-  OPEN_ISSUES_JSON="$(mktemp "$TMP_ROOT/issues.XXXXXX.json")"
-  OPEN_PRS_JSON="$(mktemp "$TMP_ROOT/prs.XXXXXX.json")"
-  OPEN_ISSUE_NUMBERS_FILE="$(mktemp "$TMP_ROOT/open-issues.XXXXXX.txt")"
+  OPEN_ISSUES_JSON="$(mktemp "$TMP_ROOT/issues.XXXXXX")"
+  OPEN_PRS_JSON="$(mktemp "$TMP_ROOT/prs.XXXXXX")"
+  OPEN_ISSUE_NUMBERS_FILE="$(mktemp "$TMP_ROOT/open-issues.XXXXXX")"
 
   gh issue list --repo "$REPO" --state open --limit 200 --json number,title,body,url >"$OPEN_ISSUES_JSON"
   gh pr list --repo "$REPO" --state open --limit 200 --json number,headRefName,title,url >"$OPEN_PRS_JSON"
