@@ -4,6 +4,9 @@
   "additionalProperties": false,
   "required": [
     "outcome",
+    "issue_number",
+    "pr_number",
+    "branch",
     "summary"
   ],
   "properties": {

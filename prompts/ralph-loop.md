@@ -41,4 +41,4 @@ Stop conditions:
 Output requirements:
 - Return valid JSON matching the schema and nothing else in the final message.
 - Keep `summary` short and factual.
-- Set `issue_number`, `pr_number`, and `branch` when they exist.
+- Always include `issue_number`, `pr_number`, and `branch`; use `null` when a value does not exist.

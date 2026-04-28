@@ -10,10 +10,9 @@ USE_BYPASS="${RALPH_BYPASS_SANDBOX:-0}"
 CODEX_MODEL="${CODEX_MODEL:-}"
 EXTRA_PROMPT_FILE="${RALPH_EXTRA_PROMPT_FILE:-}"
 CODEX_SANDBOX_MODE="${RALPH_SANDBOX:-workspace-write}"
-WORKTREE_ROOT="${RALPH_WORKTREE_ROOT:-$(cd "$ROOT_DIR/.." && pwd)/$(basename "$ROOT_DIR")-ralph}"
+WORKTREE_ROOT="${RALPH_WORKTREE_ROOT:-$ROOT_DIR/.ralph-worktrees}"
 TMP_ROOT="$WORKTREE_ROOT/.tmp"
 OPERATOR_PROMPT="${*:-}"
-SANDBOX_CMD=(docker sandbox run codex)
 
 ACTIVE_ISSUE_NUMBER=""
 ACTIVE_ISSUE_TITLE=""
@@ -22,6 +21,7 @@ ACTIVE_BRANCH=""
 ACTIVE_WORKTREE=""
 ACTIVE_MODE=""
 ACTIVE_PR_NUMBER=""
+LAST_OUTCOME=""
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -71,6 +71,13 @@ json_field() {
 
 sync_control_repo() {
   git -C "$ROOT_DIR" fetch origin --prune
+
+  local current_branch
+  current_branch="$(git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true)"
+  if [[ "$current_branch" == "$BASE_BRANCH" ]] \
+    && [[ -z "$(git -C "$ROOT_DIR" status --short)" ]]; then
+    git -C "$ROOT_DIR" merge --ff-only "origin/$BASE_BRANCH" >/dev/null || true
+  fi
 }
 
 is_open_issue_number() {
@@ -173,6 +180,41 @@ select_issue_context() {
 
 ensure_worktree() {
   ACTIVE_WORKTREE="$WORKTREE_ROOT/$ACTIVE_BRANCH"
+  local existing_worktree=""
+
+  existing_worktree="$(
+    git -C "$ROOT_DIR" worktree list --porcelain \
+      | awk -v branch="refs/heads/$ACTIVE_BRANCH" '
+          /^worktree / { path=$2 }
+          /^branch / && $2 == branch { print path }
+        '
+  )"
+
+  if [[ "$ACTIVE_MODE" == "new" ]]; then
+    if [[ -n "$existing_worktree" ]]; then
+      if [[ -n "$(git -C "$existing_worktree" status --short)" ]]; then
+        echo "Existing worktree for $ACTIVE_BRANCH is dirty: $existing_worktree" >&2
+        echo "Clean it up manually before rerunning Ralph." >&2
+        exit 1
+      fi
+      git -C "$ROOT_DIR" worktree remove "$existing_worktree"
+      git -C "$ROOT_DIR" worktree prune
+    elif [[ -d "$ACTIVE_WORKTREE" ]] && git -C "$ACTIVE_WORKTREE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      if [[ -n "$(git -C "$ACTIVE_WORKTREE" status --short)" ]]; then
+        echo "Existing worktree for $ACTIVE_BRANCH is dirty: $ACTIVE_WORKTREE" >&2
+        echo "Clean it up manually before rerunning Ralph." >&2
+        exit 1
+      fi
+      git -C "$ROOT_DIR" worktree remove "$ACTIVE_WORKTREE"
+      git -C "$ROOT_DIR" worktree prune
+    elif [[ -e "$ACTIVE_WORKTREE" ]]; then
+      echo "Worktree path exists but is not a git worktree: $ACTIVE_WORKTREE" >&2
+      exit 1
+    fi
+
+    git -C "$ROOT_DIR" worktree add -B "$ACTIVE_BRANCH" "$ACTIVE_WORKTREE" "origin/$BASE_BRANCH"
+    return 0
+  fi
 
   if [[ -d "$ACTIVE_WORKTREE" ]] && git -C "$ACTIVE_WORKTREE" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -181,6 +223,21 @@ ensure_worktree() {
   if [[ -e "$ACTIVE_WORKTREE" ]]; then
     echo "Worktree path exists but is not a git worktree: $ACTIVE_WORKTREE" >&2
     exit 1
+  fi
+
+  if [[ -n "$existing_worktree" && "$existing_worktree" != "$ACTIVE_WORKTREE" ]]; then
+    if [[ "$existing_worktree" != "$ROOT_DIR/"* ]]; then
+      if [[ -n "$(git -C "$existing_worktree" status --short)" ]]; then
+        echo "Existing worktree for $ACTIVE_BRANCH is dirty: $existing_worktree" >&2
+        echo "Clean it up manually before rerunning Ralph." >&2
+        exit 1
+      fi
+      git -C "$ROOT_DIR" worktree remove "$existing_worktree"
+      git -C "$ROOT_DIR" worktree prune
+    else
+      ACTIVE_WORKTREE="$existing_worktree"
+      return 0
+    fi
   fi
 
   if git -C "$ROOT_DIR" show-ref --verify --quiet "refs/heads/$ACTIVE_BRANCH"; then
@@ -197,11 +254,20 @@ ensure_worktree() {
   git -C "$ROOT_DIR" worktree add -b "$ACTIVE_BRANCH" "$ACTIVE_WORKTREE" "origin/$BASE_BRANCH"
 }
 
-build_sandbox_name() {
-  local slug
-  slug="$(slugify "$ACTIVE_ISSUE_TITLE")"
-  slug="${slug:0:18}"
-  printf 'ralph-%s-%s\n' "$ACTIVE_ISSUE_NUMBER" "$slug"
+ensure_worktree_dependencies() {
+  if [[ -f "$ACTIVE_WORKTREE/package.json" && ! -d "$ACTIVE_WORKTREE/node_modules" ]]; then
+    (
+      cd "$ACTIVE_WORKTREE"
+      bun install
+    )
+  fi
+
+  if [[ -f "$ACTIVE_WORKTREE/sidecar/package.json" && ! -d "$ACTIVE_WORKTREE/sidecar/node_modules" ]]; then
+    (
+      cd "$ACTIVE_WORKTREE/sidecar"
+      bun install
+    )
+  fi
 }
 
 build_prompt() {
@@ -248,6 +314,7 @@ run_codex_iteration() {
 
   codex_args+=(
     exec
+    --cd "$ACTIVE_WORKTREE"
     --add-dir "$ROOT_DIR/.git"
     --output-schema "$SCHEMA_FILE"
     --output-last-message "$result_path"
@@ -263,10 +330,7 @@ run_codex_iteration() {
   echo "Branch: $ACTIVE_BRANCH"
   echo "Worktree: $ACTIVE_WORKTREE"
 
-  local sandbox_name
-  sandbox_name="$(build_sandbox_name)"
-
-  if ! "${SANDBOX_CMD[@]}" --name "$sandbox_name" "$ACTIVE_WORKTREE" "$ROOT_DIR/.git" -- "${codex_args[@]}" - <"$prompt_path"; then
+  if ! codex "${codex_args[@]}" - <"$prompt_path"; then
     echo "Codex exited non-zero on iteration $ITERATION." >&2
     return 1
   fi
@@ -293,7 +357,8 @@ cleanup_finished_worktree() {
 require_cmd git
 require_cmd gh
 require_cmd jq
-require_cmd docker
+require_cmd codex
+require_cmd bun
 
 if ! git -C "$ROOT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "ralph.sh must run inside a git repository." >&2
@@ -322,6 +387,10 @@ if ! gh auth status >/dev/null 2>&1; then
 fi
 
 mkdir -p "$WORKTREE_ROOT" "$TMP_ROOT"
+touch "$ROOT_DIR/.git/info/exclude"
+if ! grep -qxF '.ralph-worktrees/' "$ROOT_DIR/.git/info/exclude"; then
+  printf '\n.ralph-worktrees/\n' >>"$ROOT_DIR/.git/info/exclude"
+fi
 
 if [[ "$MAX_ITERS" -lt 1 ]]; then
   echo "MAX_ITERS must be at least 1." >&2
@@ -344,11 +413,13 @@ for ((ITERATION = 1; ITERATION <= MAX_ITERS; ITERATION++)); do
   esac
 
   ensure_worktree
+  ensure_worktree_dependencies
 
   RESULT_PATH=""
   run_codex_iteration
 
   outcome="$(jq -r '.outcome' "$RESULT_PATH")"
+  LAST_OUTCOME="$outcome"
   issue_number="$(jq -r '.issue_number // empty' "$RESULT_PATH")"
   pr_number="$(jq -r '.pr_number // empty' "$RESULT_PATH")"
   branch_name="$(jq -r '.branch // empty' "$RESULT_PATH")"
@@ -378,6 +449,10 @@ for ((ITERATION = 1; ITERATION <= MAX_ITERS; ITERATION++)); do
       ;;
   esac
 done
+
+if [[ "$LAST_OUTCOME" == "merged" || "$LAST_OUTCOME" == "closed_issue" ]]; then
+  exit 0
+fi
 
 echo "Reached MAX_ITERS=$MAX_ITERS before the queue emptied." >&2
 exit 1
