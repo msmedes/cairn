@@ -24,6 +24,10 @@ type Message = {
   done: boolean;
 };
 
+function hasTauriRuntime() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 function newId() {
   return Math.random().toString(36).slice(2);
 }
@@ -46,6 +50,12 @@ function App() {
   }, [messages]);
 
   useEffect(() => {
+    if (!hasTauriRuntime()) {
+      setError("This app must be launched with Tauri, not a plain browser tab.");
+      setReady(false);
+      return;
+    }
+
     let unlisten: UnlistenFn | undefined;
     let cancelled = false;
 

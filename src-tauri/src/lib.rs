@@ -2,6 +2,7 @@
 // Rust-to-frontend event fan-out. Frontend talks to us via Tauri commands;
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
+use std::fs;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -9,7 +10,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -41,6 +42,16 @@ fn sidecar_script_path() -> String {
     format!("{}/../sidecar/index.ts", manifest_dir)
 }
 
+fn workspace_path() -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    format!("{}/../.workspace", manifest_dir)
+}
+
+fn persona_path() -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    format!("{}/../prompts/persona.md", manifest_dir)
+}
+
 fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
     eprintln!("[sidecar:fatal] {}", message);
     state.ready.store(false, Ordering::Release);
@@ -53,24 +64,28 @@ fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
     );
 }
 
-async fn write_line(
-    stdin_slot: &AsyncMutex<Option<ChildStdin>>,
-    value: &Value,
-) -> Result<(), String> {
+async fn write_json_line<W: AsyncWrite + Unpin>(writer: &mut W, value: &Value) -> Result<(), String> {
     let line = format!("{}\n", value);
-    let mut guard = stdin_slot.lock().await;
-    let stdin = guard
-        .as_mut()
-        .ok_or_else(|| "sidecar not running".to_string())?;
-    stdin
+    writer
         .write_all(line.as_bytes())
         .await
         .map_err(|e| format!("write to sidecar: {}", e))?;
-    stdin
+    writer
         .flush()
         .await
         .map_err(|e| format!("flush sidecar stdin: {}", e))?;
     Ok(())
+}
+
+async fn write_line(
+    stdin_slot: &AsyncMutex<Option<ChildStdin>>,
+    value: &Value,
+) -> Result<(), String> {
+    let mut guard = stdin_slot.lock().await;
+    let stdin = guard
+        .as_mut()
+        .ok_or_else(|| "sidecar not running".to_string())?;
+    write_json_line(stdin, value).await
 }
 
 #[tauri::command]
@@ -94,6 +109,13 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
 
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
     let script = sidecar_script_path();
+    let workspace = workspace_path();
+    let persona = persona_path();
+
+    state.ready.store(false, Ordering::Release);
+    if let Ok(mut slot) = state.last_error.lock() {
+        *slot = None;
+    }
 
     let mut child = Command::new("bun")
         .arg("run")
@@ -109,9 +131,21 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar (bun in PATH?): {}", e))?;
 
-    let stdin = child.stdin.take().ok_or("no stdin pipe on sidecar")?;
+    fs::create_dir_all(&workspace)
+        .map_err(|e| format!("failed to create workspace directory {}: {}", workspace, e))?;
+
+    let mut stdin = child.stdin.take().ok_or("no stdin pipe on sidecar")?;
     let stdout = child.stdout.take().ok_or("no stdout pipe on sidecar")?;
     let stderr = child.stderr.take().ok_or("no stderr pipe on sidecar")?;
+
+    let init_payload = serde_json::json!({
+        "type": "init",
+        "workspacePath": workspace,
+        "personaPath": persona,
+    });
+    write_json_line(&mut stdin, &init_payload)
+        .await
+        .map_err(|e| format!("failed to initialize sidecar: {}", e))?;
 
     *state.stdin.lock().await = Some(stdin);
     if let Ok(mut slot) = state.child.lock() {
@@ -133,8 +167,24 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                         }
                         match serde_json::from_str::<Value>(trimmed) {
                             Ok(value) => {
-                                if value.get("type").and_then(|v| v.as_str()) == Some("ready") {
-                                    state.ready.store(true, Ordering::Release);
+                                match value.get("type").and_then(|v| v.as_str()) {
+                                    Some("ready") => {
+                                        state.ready.store(true, Ordering::Release);
+                                        if let Ok(mut slot) = state.last_error.lock() {
+                                            *slot = None;
+                                        }
+                                    }
+                                    Some("error") => {
+                                        state.ready.store(false, Ordering::Release);
+                                        if let Some(message) =
+                                            value.get("message").and_then(|v| v.as_str())
+                                        {
+                                            if let Ok(mut slot) = state.last_error.lock() {
+                                                *slot = Some(message.to_string());
+                                            }
+                                        }
+                                    }
+                                    _ => {}
                                 }
                                 let _ = app.emit(SIDECAR_EVENT, value);
                             }
