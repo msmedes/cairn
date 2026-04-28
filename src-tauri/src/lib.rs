@@ -3,6 +3,7 @@
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
 use std::fs;
+use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -51,6 +52,25 @@ fn workspace_path() -> String {
 fn persona_path() -> String {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     format!("{}/../prompts/persona.md", manifest_dir)
+}
+
+fn workspace_file_path(name: &str) -> Result<PathBuf, String> {
+    let relative = Path::new(name);
+
+    if relative.is_absolute() {
+        return Err("workspace file path must be relative".into());
+    }
+
+    for component in relative.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err("workspace file path must stay inside the workspace".into());
+            }
+        }
+    }
+
+    Ok(Path::new(&workspace_path()).join(relative))
 }
 
 fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
@@ -104,6 +124,16 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
+    }
+}
+
+#[tauri::command]
+fn read_workspace_file(name: String) -> Result<String, String> {
+    let path = workspace_file_path(&name)?;
+    match fs::read_to_string(&path) {
+        Ok(contents) => Ok(contents),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(err) => Err(format!("failed to read workspace file {}: {}", name, err)),
     }
 }
 
@@ -252,7 +282,11 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(sidecar_state.clone())
-        .invoke_handler(tauri::generate_handler![send_prompt, get_sidecar_status])
+        .invoke_handler(tauri::generate_handler![
+            send_prompt,
+            get_sidecar_status,
+            read_workspace_file
+        ])
         .on_window_event({
             let state = sidecar_state.clone();
             move |_window, event| {
