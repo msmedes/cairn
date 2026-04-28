@@ -7,14 +7,17 @@
  * back over the existing sidecar protocol.
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
 	createAgentSession,
+	DefaultResourceLoader,
+	getAgentDir,
 	SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import { loadRepoLocalEnv } from "./env";
 
 type InMsg =
 	| { type: "init"; workspacePath?: string; personaPath?: string }
@@ -33,6 +36,8 @@ let session: AgentSession | null = null;
 let unsubscribeSession: (() => void) | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
+
+loadRepoLocalEnv();
 
 function emit(msg: OutMsg) {
 	process.stdout.write(JSON.stringify(msg) + "\n");
@@ -85,12 +90,24 @@ function wireSessionEvents(nextSession: AgentSession) {
 async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	disposeSession();
 
-	const { workspacePath, personaPath: _personaPath } = msg;
+	const { workspacePath, personaPath } = msg;
 	const cwd = resolve(workspacePath ?? process.cwd());
+	const resolvedPersonaPath = resolve(personaPath ?? "prompts/persona.md");
 	mkdirSync(cwd, { recursive: true });
+	const personaContent = readFileSync(resolvedPersonaPath, "utf8");
+
+	const resourceLoader = new DefaultResourceLoader({
+		cwd,
+		agentDir: getAgentDir(),
+		systemPromptOverride: () => personaContent,
+		appendSystemPromptOverride: () => [],
+	});
+	await resourceLoader.reload();
 
 	const { session: nextSession } = await createAgentSession({
 		cwd,
+		agentDir: getAgentDir(),
+		resourceLoader,
 		sessionManager: SessionManager.inMemory(cwd),
 	});
 
