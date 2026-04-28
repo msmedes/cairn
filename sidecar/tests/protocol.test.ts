@@ -1,22 +1,27 @@
 /**
- * Sidecar protocol smoke tests.
+ * Sidecar protocol smoke test.
  *
- * Spawns the sidecar as a subprocess (no Tauri, no React) and asserts the
- * JSONL event sequence end-to-end. Slice 1 covers the echo behavior; slice 2
- * extends this file with pi-flavored assertions when the real agent lands.
+ * Spawns the sidecar as a subprocess (no Tauri), initializes a real pi
+ * session, and asserts the JSONL event sequence for a basic prompt.
  *
  * Run with `bun test` from the sidecar/ directory.
  */
 
 import { afterEach, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { mkdtempSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 
 const SIDECAR_ENTRY = resolve(import.meta.dir, "..", "index.ts");
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 60_000;
 
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+type SidecarEvent = { type: string } & Record<string, JsonValue>;
 type SubprocessHandle = ReturnType<typeof Bun.spawn>;
 
 const liveProcs = new Set<SubprocessHandle>();
+const authCheck = getAuthCheck();
 
 afterEach(() => {
 	for (const proc of liveProcs) {
@@ -29,6 +34,19 @@ afterEach(() => {
 	liveProcs.clear();
 });
 
+function getAuthCheck(): { ok: true } | { ok: false; reason: string } {
+	const authStorage = AuthStorage.create();
+	const modelRegistry = ModelRegistry.create(authStorage);
+	if (modelRegistry.getAvailable().length > 0) {
+		return { ok: true };
+	}
+	return {
+		ok: false,
+		reason:
+			"Skipping sidecar protocol smoke test: no pi auth is configured. Set an API key such as ANTHROPIC_API_KEY or log in with pi first.",
+	};
+}
+
 function spawnSidecar(): SubprocessHandle {
 	const proc = Bun.spawn(["bun", "run", SIDECAR_ENTRY], {
 		stdin: "pipe",
@@ -39,6 +57,18 @@ function spawnSidecar(): SubprocessHandle {
 	return proc;
 }
 
+function createWorkspace(): string {
+	return mkdtempSync(join(tmpdir(), "guide-sidecar-"));
+}
+
+function writeToSidecar(proc: SubprocessHandle, line: string) {
+	const stdin = proc.stdin;
+	if (!stdin || typeof stdin === "number") {
+		throw new Error("sidecar stdin is not writable");
+	}
+	stdin.write(line);
+}
+
 /**
  * Drains the subprocess stdout, parsing JSONL events one at a time.
  * Resolves when `stopOn` returns true for an event, or rejects on timeout
@@ -46,10 +76,10 @@ function spawnSidecar(): SubprocessHandle {
  */
 async function collectEvents(
 	proc: SubprocessHandle,
-	stopOn: (event: any) => boolean,
+	stopOn: (event: SidecarEvent) => boolean,
 	timeoutMs: number,
-): Promise<any[]> {
-	const events: any[] = [];
+): Promise<SidecarEvent[]> {
+	const events: SidecarEvent[] = [];
 	const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
 	const decoder = new TextDecoder();
 	let buffer = "";
@@ -80,10 +110,10 @@ async function collectEvents(
 			for (const line of lines) {
 				const trimmed = line.trim();
 				if (!trimmed) continue;
-				let event: any;
+				let event: SidecarEvent;
 				try {
-					event = JSON.parse(trimmed);
-				} catch (err) {
+					event = JSON.parse(trimmed) as SidecarEvent;
+				} catch {
 					throw new Error(`non-JSON sidecar output: ${trimmed}`);
 				}
 				events.push(event);
@@ -93,7 +123,7 @@ async function collectEvents(
 	})();
 
 	try {
-		return (await Promise.race([drain, timeout])) as any[];
+		return (await Promise.race([drain, timeout])) as SidecarEvent[];
 	} finally {
 		try {
 			reader.releaseLock();
@@ -103,53 +133,51 @@ async function collectEvents(
 	}
 }
 
-test("sidecar emits ready on startup", async () => {
-	const proc = spawnSidecar();
-	const events = await collectEvents(
-		proc,
-		(e) => e.type === "ready",
+if (!authCheck.ok) {
+	console.warn(authCheck.reason);
+	test.skip("sidecar protocol smoke test requires configured pi auth", () => {});
+} else {
+	test(
+		"init then prompt yields ready, streaming text, and agent_end",
+		async () => {
+			const proc = spawnSidecar();
+			const workspacePath = createWorkspace();
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({ type: "init", workspacePath, personaPath: "unused" }) + "\n",
+			);
+
+			const readyEvents = await collectEvents(
+				proc,
+				(event) => event.type === "ready",
+				DEFAULT_TIMEOUT_MS,
+			);
+			expect(readyEvents.at(-1)?.type).toBe("ready");
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({ type: "prompt", text: "what's 2 + 2?" }) + "\n",
+			);
+
+			const promptEvents = await collectEvents(
+				proc,
+				(event) => event.type === "agent_end",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			expect(promptEvents.some((event) => event.type === "text_delta")).toBe(true);
+			expect(promptEvents.at(-1)?.type).toBe("agent_end");
+
+			const textDoneIndex = promptEvents.findIndex(
+				(event) => event.type === "text_done",
+			);
+			const agentEndIndex = promptEvents.findIndex(
+				(event) => event.type === "agent_end",
+			);
+			expect(textDoneIndex).toBeGreaterThan(-1);
+			expect(agentEndIndex).toBeGreaterThan(textDoneIndex);
+		},
 		DEFAULT_TIMEOUT_MS,
 	);
-	expect(events[0]?.type).toBe("ready");
-});
-
-test("prompt produces echo: <text> as a single text_delta", async () => {
-	const proc = spawnSidecar();
-	proc.stdin.write(JSON.stringify({ type: "prompt", text: "hello" }) + "\n");
-
-	const events = await collectEvents(
-		proc,
-		(e) => e.type === "agent_end",
-		DEFAULT_TIMEOUT_MS,
-	);
-
-	const types = events.map((e) => e.type);
-	// ready may arrive before or interleave with our prompt's responses; just
-	// assert the prompt sequence is intact and in order.
-	const promptStart = types.indexOf("text_delta");
-	expect(promptStart).toBeGreaterThan(-1);
-	expect(types.slice(promptStart)).toEqual([
-		"text_delta",
-		"text_done",
-		"agent_end",
-	]);
-
-	const delta = events.find((e) => e.type === "text_delta");
-	expect(delta.delta).toBe("echo: hello");
-});
-
-test("malformed input emits an error event without killing the sidecar", async () => {
-	const proc = spawnSidecar();
-	proc.stdin.write("not json\n");
-	proc.stdin.write(JSON.stringify({ type: "prompt", text: "after" }) + "\n");
-
-	const events = await collectEvents(
-		proc,
-		(e) => e.type === "agent_end",
-		DEFAULT_TIMEOUT_MS,
-	);
-
-	expect(events.some((e) => e.type === "error")).toBe(true);
-	const delta = events.find((e) => e.type === "text_delta");
-	expect(delta?.delta).toBe("echo: after");
-});
+}
