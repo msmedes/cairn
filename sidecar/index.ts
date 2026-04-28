@@ -58,9 +58,11 @@ function wireSessionEvents(nextSession: AgentSession) {
 					case "text_delta":
 						emit({ type: "text_delta", delta: event.assistantMessageEvent.delta });
 						break;
-					case "text_end":
-						emit({ type: "text_done" });
-						break;
+				}
+				break;
+			case "message_end":
+				if (event.message.role === "assistant") {
+					emit({ type: "text_done" });
 				}
 				break;
 			case "tool_execution_start":
@@ -83,7 +85,8 @@ function wireSessionEvents(nextSession: AgentSession) {
 async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	disposeSession();
 
-	const cwd = resolve(msg.workspacePath ?? process.cwd());
+	const { workspacePath, personaPath: _personaPath } = msg;
+	const cwd = resolve(workspacePath ?? process.cwd());
 	mkdirSync(cwd, { recursive: true });
 
 	const { session: nextSession } = await createAgentSession({
@@ -147,9 +150,13 @@ process.stdin.on("data", (chunk: string) => {
 	}
 });
 
-process.stdin.on("end", () => {
-	disposeSession();
-	process.exit(0);
+process.stdin.on("end", async () => {
+	try {
+		await inputQueue;
+	} finally {
+		disposeSession();
+		process.exit(0);
+	}
 });
 
 process.stdin.resume();

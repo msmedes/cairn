@@ -181,3 +181,29 @@ if (!authCheck.ok) {
 		DEFAULT_TIMEOUT_MS,
 	);
 }
+
+test("malformed input emits an error event without killing the sidecar", async () => {
+	const proc = spawnSidecar();
+	writeToSidecar(proc, "not json\n");
+
+	const errorEvents = await collectEvents(
+		proc,
+		(event) => event.type === "error",
+		DEFAULT_TIMEOUT_MS,
+	);
+	expect(errorEvents.at(-1)?.type).toBe("error");
+
+	if (authCheck.ok) {
+		const workspacePath = createWorkspace();
+		writeToSidecar(
+			proc,
+			JSON.stringify({ type: "init", workspacePath, personaPath: "unused" }) + "\n",
+		);
+		const readyEvents = await collectEvents(
+			proc,
+			(event) => event.type === "ready",
+			DEFAULT_TIMEOUT_MS,
+		);
+		expect(readyEvents.at(-1)?.type).toBe("ready");
+	}
+});
