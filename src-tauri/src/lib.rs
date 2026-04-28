@@ -101,6 +101,11 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        // Belt-and-suspenders: explicit shutdown handlers cover normal close,
+        // but kill_on_drop catches the early-error paths (e.g. take()-ing one
+        // of the stdio pipes returns None and we bail) where the Child handle
+        // drops before the handlers see it.
+        .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar (bun in PATH?): {}", e))?;
 
