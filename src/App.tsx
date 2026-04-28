@@ -3,10 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
 import { buildSlidesDocument } from "./projectSlides";
+import { applyAssistantDelta, markAssistantDone, type ChatMessage } from "./chat-stream";
 import { useProjectFile } from "./useProjectFile";
 
 type SidecarEvent =
-  | { type: "hydrate"; messages: Message[] }
+  | { type: "hydrate"; messages: ChatMessage[] }
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
@@ -16,14 +17,7 @@ type SidecarEvent =
 type SidecarStatus = {
   ready: boolean;
   error: string | null;
-  hydrate: Message[] | null;
-};
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  done: boolean;
+  hydrate: ChatMessage[] | null;
 };
 
 function hasTauriRuntime() {
@@ -83,7 +77,7 @@ function htmlToMarkdown(html: string): string {
 }
 
 function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,9 +222,7 @@ function App() {
     function finalizeActive() {
       const id = activeAssistantId.current;
       if (id) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === id ? { ...m, done: true } : m)),
-        );
+        setMessages((prev) => markAssistantDone(prev, id));
       }
       activeAssistantId.current = null;
       setSending(false);
@@ -250,21 +242,23 @@ function App() {
           setError(null);
           break;
         case "text_delta": {
-          const id = activeAssistantId.current;
-          if (!id) break;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === id ? { ...m, text: m.text + payload.delta } : m,
-            ),
-          );
+          setSending(true);
+          setMessages((prev) => {
+            const next = applyAssistantDelta(
+              prev,
+              activeAssistantId.current,
+              payload.delta,
+              newId,
+            );
+            activeAssistantId.current = next.activeAssistantId;
+            return next.messages;
+          });
           break;
         }
         case "text_done": {
           const id = activeAssistantId.current;
           if (!id) break;
-          setMessages((prev) =>
-            prev.map((m) => (m.id === id ? { ...m, done: true } : m)),
-          );
+          setMessages((prev) => markAssistantDone(prev, id));
           break;
         }
         case "agent_end":
@@ -325,13 +319,13 @@ function App() {
     const text = input.trim();
     if (!text || sending || !ready) return;
 
-    const userMsg: Message = {
+    const userMsg: ChatMessage = {
       id: newId(),
       role: "user",
       text,
       done: true,
     };
-    const assistantMsg: Message = {
+    const assistantMsg: ChatMessage = {
       id: newId(),
       role: "assistant",
       text: "",
