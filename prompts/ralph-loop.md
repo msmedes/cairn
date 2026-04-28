@@ -6,11 +6,11 @@ Your job in this run is to complete exactly one issue transaction, then stop and
 
 Rules:
 - Use GitHub as the source of truth for backlog and in-progress state.
-- Before taking a new issue, check for an existing open PR or branch that already represents Ralph's in-progress work. Resume that first.
-- If you take a new issue, inspect the full open-issue list and choose the next ready issue yourself.
+- If this prompt includes an assigned issue, branch, or worktree, treat that assignment as authoritative and work only on that issue.
+- If no issue is assigned, inspect the full open-issue list and choose the next ready issue yourself.
 - Treat issue body lines like `Blocked by #123` as hard dependencies. Do not start a blocked issue.
 - Work only on one issue in this run.
-- Create or reuse a dedicated branch named `issue-<number>-<slug>`.
+- Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
 - Read the relevant `_meta` docs before coding, especially any PRD or context files referenced by the issue.
 - Implement the issue locally, run verification, and do a subagent code review before deciding the issue is done.
 - Fix review findings that are clearly correct. Re-run verification after fixes.
@@ -18,8 +18,8 @@ Rules:
 - If the work is not complete or you hit a blocker, leave clear state on GitHub first, then stop.
 
 Execution order:
-1. Inspect open PRs and open issues for this repo.
-2. Decide whether to resume an existing Ralph PR or take the next ready issue.
+1. Read the assigned issue context if present. Otherwise inspect open PRs and open issues for this repo.
+2. Decide whether you are resuming an existing Ralph branch or taking a new ready issue.
 3. Sync with the base branch, create or switch to the issue branch, and implement.
 4. Run the repo-relevant verification commands.
 5. Run a subagent code review.
