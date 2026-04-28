@@ -5,7 +5,7 @@ function hasTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-export function useWorkspaceFile(name: string, intervalMs = 1000): string {
+export function useProjectFile(name: string, intervalMs = 1000): string {
   const [content, setContent] = useState("");
   const pollingRef = useRef(false);
 
@@ -22,13 +22,13 @@ export function useWorkspaceFile(name: string, intervalMs = 1000): string {
       pollingRef.current = true;
 
       try {
-        const next = await invoke<string>("read_workspace_file", { name });
+        const next = await invoke<string>("read_project_file", { name });
         if (!cancelled) {
           setContent((prev) => (prev === next ? prev : next));
         }
       } catch (err) {
         if (!cancelled) {
-          console.error("read_workspace_file failed", err);
+          console.error("read_project_file failed", err);
         }
       } finally {
         pollingRef.current = false;

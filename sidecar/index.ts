@@ -1,14 +1,15 @@
 /**
- * Guide sidecar — slice 2: real pi session plumbing.
+ * Guide sidecar — slice 2: persisted single-project sessions.
  *
  * Communicates with the Tauri host over LF-delimited JSON on stdio.
- * `init` creates an in-memory pi session rooted at the requested workspace.
- * `prompt` forwards user text to that session and streams translated events
- * back over the existing sidecar protocol.
+ * `init` opens the fixed default project under `~/.guide/projects/default`,
+ * emits a one-shot hydrate event for the saved conversation, then readies the
+ * persisted pi session for new prompts.
  */
 
-import { mkdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -18,12 +19,17 @@ import {
 	SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { loadRepoLocalEnv } from "./env";
+import {
+	type HydrateEvent,
+	translateSessionEntriesToHydrateEvent,
+} from "./hydrate";
 
 type InMsg =
-	| { type: "init"; workspacePath?: string; personaPath?: string }
+	| { type: "init"; personaPath?: string }
 	| { type: "prompt"; text: string };
 
 type OutMsg =
+	| HydrateEvent
 	| { type: "ready" }
 	| { type: "text_delta"; delta: string }
 	| { type: "text_done" }
@@ -36,12 +42,29 @@ type DevLogMsg =
 	| { type: "assistant_error"; message: string };
 
 let session: AgentSession | null = null;
+let sessionManager: SessionManager | null = null;
 let unsubscribeSession: (() => void) | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
 let streamedAssistantText = false;
 
 loadRepoLocalEnv();
+
+function getProjectRoot() {
+	return join(homedir(), ".guide", "projects", "default");
+}
+
+function getSessionDir() {
+	return join(getProjectRoot(), "sessions");
+}
+
+function hasExistingSession(sessionDir: string) {
+	try {
+		return readdirSync(sessionDir).some((name) => name.endsWith(".jsonl"));
+	} catch {
+		return false;
+	}
+}
 
 function emit(msg: OutMsg) {
 	process.stdout.write(JSON.stringify(msg) + "\n");
@@ -89,6 +112,7 @@ function disposeSession() {
 	unsubscribeSession = null;
 	session?.dispose();
 	session = null;
+	sessionManager = null;
 	streamedAssistantText = false;
 }
 
@@ -146,10 +170,12 @@ function wireSessionEvents(nextSession: AgentSession) {
 async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	disposeSession();
 
-	const { workspacePath, personaPath } = msg;
-	const cwd = resolve(workspacePath ?? process.cwd());
+	const { personaPath } = msg;
+	const cwd = getProjectRoot();
+	const sessionDir = getSessionDir();
 	const resolvedPersonaPath = resolve(personaPath ?? "prompts/persona.md");
 	mkdirSync(cwd, { recursive: true });
+	mkdirSync(sessionDir, { recursive: true });
 	process.chdir(cwd);
 	const personaContent = readFileSync(resolvedPersonaPath, "utf8");
 
@@ -161,15 +187,21 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	});
 	await resourceLoader.reload();
 
+	const nextSessionManager = hasExistingSession(sessionDir)
+		? SessionManager.continueRecent(cwd, sessionDir)
+		: SessionManager.create(cwd, sessionDir);
+
 	const { session: nextSession } = await createAgentSession({
 		cwd,
 		agentDir: getAgentDir(),
 		resourceLoader,
-		sessionManager: SessionManager.inMemory(cwd),
+		sessionManager: nextSessionManager,
 	});
 
 	session = nextSession;
+	sessionManager = nextSessionManager;
 	wireSessionEvents(nextSession);
+	emit(translateSessionEntriesToHydrateEvent(nextSessionManager.getEntries()));
 	emit({ type: "ready" });
 }
 

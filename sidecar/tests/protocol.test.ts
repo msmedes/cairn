@@ -2,7 +2,7 @@
  * Sidecar protocol smoke test.
  *
  * Spawns the sidecar as a subprocess (no Tauri), initializes a real pi
- * session, and asserts the JSONL event sequence for a basic prompt.
+ * session, and asserts the JSONL event sequence for init, hydrate, and prompt.
  *
  * Run with `bun test` from the sidecar/ directory.
  */
@@ -49,29 +49,33 @@ function getAuthCheck(): { ok: true } | { ok: false; reason: string } {
 	};
 }
 
-function spawnSidecar(): SubprocessHandle {
+function spawnSidecar(homeDir?: string): SubprocessHandle {
 	const proc = Bun.spawn(["bun", "run", SIDECAR_ENTRY], {
 		stdin: "pipe",
 		stdout: "pipe",
 		stderr: "ignore",
+		env: homeDir ? { ...process.env, HOME: homeDir } : process.env,
 	});
 	liveProcs.add(proc);
 	return proc;
 }
 
-function createWorkspace(): string {
-	return mkdtempSync(join(tmpdir(), "guide-sidecar-"));
+function createTempDir(prefix: string): string {
+	return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function createMissingWorkspacePath(): string {
-	return join(createWorkspace(), "nested", "workspace");
+function createGuideHome(): string {
+	return createTempDir("guide-home-");
 }
 
 function createPersonaFile(contents = "You are the Guide. Ask one short scoping question at a time."): string {
-	const workspacePath = createWorkspace();
-	const personaPath = join(workspacePath, "persona.md");
+	const personaPath = join(createTempDir("guide-persona-"), "persona.md");
 	writeFileSync(personaPath, contents, "utf8");
 	return personaPath;
+}
+
+function projectRootFor(homeDir: string): string {
+	return join(homeDir, ".guide", "projects", "default");
 }
 
 function writeToSidecar(proc: SubprocessHandle, line: string) {
@@ -151,15 +155,15 @@ if (!authCheck.ok) {
 	test.skip("sidecar protocol smoke test requires configured pi auth", () => {});
 } else {
 	test(
-		"init then prompt yields ready, streaming text, and agent_end",
+		"init then prompt yields hydrate, ready, streaming text, and agent_end",
 		async () => {
-			const proc = spawnSidecar();
-			const workspacePath = createWorkspace();
+			const guideHome = createGuideHome();
+			const proc = spawnSidecar(guideHome);
 			const personaPath = createPersonaFile();
 
 			writeToSidecar(
 				proc,
-				JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
+				JSON.stringify({ type: "init", personaPath }) + "\n",
 			);
 
 			const readyEvents = await collectEvents(
@@ -167,6 +171,11 @@ if (!authCheck.ok) {
 				(event) => event.type === "ready",
 				DEFAULT_TIMEOUT_MS,
 			);
+			expect(readyEvents.filter((event) => event.type === "hydrate")).toHaveLength(1);
+			expect(readyEvents.find((event) => event.type === "hydrate")).toEqual({
+				type: "hydrate",
+				messages: [],
+			});
 			expect(readyEvents.at(-1)?.type).toBe("ready");
 
 			writeToSidecar(
@@ -194,6 +203,61 @@ if (!authCheck.ok) {
 		},
 		DEFAULT_TIMEOUT_MS,
 	);
+
+	test(
+		"respawn hydrates the previous user message from the persisted default project",
+		async () => {
+			const guideHome = createGuideHome();
+			const personaPath = createPersonaFile();
+
+			const firstProc = spawnSidecar(guideHome);
+			writeToSidecar(
+				firstProc,
+				JSON.stringify({ type: "init", personaPath }) + "\n",
+			);
+			await collectEvents(
+				firstProc,
+				(event) => event.type === "ready",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			writeToSidecar(
+				firstProc,
+				JSON.stringify({ type: "prompt", text: "remember this idea" }) + "\n",
+			);
+			await collectEvents(
+				firstProc,
+				(event) => event.type === "agent_end",
+				DEFAULT_TIMEOUT_MS,
+			);
+			firstProc.kill();
+			liveProcs.delete(firstProc);
+
+			const secondProc = spawnSidecar(guideHome);
+			writeToSidecar(
+				secondProc,
+				JSON.stringify({ type: "init", personaPath }) + "\n",
+			);
+			const restartEvents = await collectEvents(
+				secondProc,
+				(event) => event.type === "ready",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			const hydrateEvents = restartEvents.filter((event) => event.type === "hydrate");
+			expect(hydrateEvents).toHaveLength(1);
+			expect(hydrateEvents[0]?.messages).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						role: "user",
+						text: "remember this idea",
+						done: true,
+					}),
+				]),
+			);
+		},
+		DEFAULT_TIMEOUT_MS,
+	);
 }
 
 test("malformed input emits an error event without killing the sidecar", async () => {
@@ -208,14 +272,15 @@ test("malformed input emits an error event without killing the sidecar", async (
 	expect(errorEvents.at(-1)?.type).toBe("error");
 
 	if (authCheck.ok) {
-		const workspacePath = createWorkspace();
+		const guideHome = createGuideHome();
 		const personaPath = createPersonaFile();
+		const readyProc = spawnSidecar(guideHome);
 		writeToSidecar(
-			proc,
-			JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
+			readyProc,
+			JSON.stringify({ type: "init", personaPath }) + "\n",
 		);
 		const readyEvents = await collectEvents(
-			proc,
+			readyProc,
 			(event) => event.type === "ready",
 			DEFAULT_TIMEOUT_MS,
 		);
@@ -223,16 +288,17 @@ test("malformed input emits an error event without killing the sidecar", async (
 	}
 });
 
-test("init creates a missing workspace path before reporting ready", async () => {
-	const proc = spawnSidecar();
-	const workspacePath = createMissingWorkspacePath();
+test("init creates the fixed default project path before reporting ready", async () => {
+	const guideHome = createGuideHome();
+	const proc = spawnSidecar(guideHome);
 	const personaPath = createPersonaFile();
+	const projectRoot = projectRootFor(guideHome);
 
-	expect(existsSync(workspacePath)).toBe(false);
+	expect(existsSync(projectRoot)).toBe(false);
 
 	writeToSidecar(
 		proc,
-		JSON.stringify({ type: "init", workspacePath, personaPath }) + "\n",
+		JSON.stringify({ type: "init", personaPath }) + "\n",
 	);
 
 	const readyEvents = await collectEvents(
@@ -241,19 +307,18 @@ test("init creates a missing workspace path before reporting ready", async () =>
 		DEFAULT_TIMEOUT_MS,
 	);
 	expect(readyEvents.at(-1)?.type).toBe("ready");
-	expect(existsSync(workspacePath)).toBe(true);
+	expect(existsSync(projectRoot)).toBe(true);
 });
 
 test("init emits an error event when personaPath does not exist", async () => {
-	const proc = spawnSidecar();
-	const workspacePath = createWorkspace();
-	const missingPersonaPath = join(workspacePath, "missing-persona.md");
+	const guideHome = createGuideHome();
+	const proc = spawnSidecar(guideHome);
+	const missingPersonaPath = join(createTempDir("guide-persona-missing-"), "missing-persona.md");
 
 	writeToSidecar(
 		proc,
 		JSON.stringify({
 			type: "init",
-			workspacePath,
 			personaPath: missingPersonaPath,
 		}) + "\n",
 	);

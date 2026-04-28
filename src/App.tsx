@@ -3,9 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
 import { buildSlidesDocument } from "./projectSlides";
-import { useWorkspaceFile } from "./useWorkspaceFile";
+import { useProjectFile } from "./useProjectFile";
 
 type SidecarEvent =
+  | { type: "hydrate"; messages: Message[] }
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
@@ -15,6 +16,7 @@ type SidecarEvent =
 type SidecarStatus = {
   ready: boolean;
   error: string | null;
+  hydrate: Message[] | null;
 };
 
 type Message = {
@@ -88,8 +90,8 @@ function App() {
   const [sending, setSending] = useState(false);
   const [chatPanePercent, setChatPanePercent] = useState(DEFAULT_CHAT_PANE_PERCENT);
   const [isResizing, setIsResizing] = useState(false);
-  const projectSlidesHtml = useWorkspaceFile("project-brief.html");
-  const projectBriefMarkdown = useWorkspaceFile("project-brief.md");
+  const projectSlidesHtml = useProjectFile("brief.html");
+  const projectBriefMarkdown = useProjectFile("brief.md");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
   const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;
   const normalizedProjectBrief = hasProjectBriefMarkdown
@@ -108,6 +110,12 @@ function App() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
   const resizingRef = useRef(false);
+  const hydratedFromStartupRef = useRef(false);
+  const messageCountRef = useRef(0);
+
+  useEffect(() => {
+    messageCountRef.current = messages.length;
+  }, [messages.length]);
 
   function updatePaneSplit(clientX: number) {
     const el = appRef.current;
@@ -231,6 +239,12 @@ function App() {
     listen<SidecarEvent>("sidecar-event", (event) => {
       const payload = event.payload;
       switch (payload.type) {
+        case "hydrate":
+          activeAssistantId.current = null;
+          setSending(false);
+          hydratedFromStartupRef.current = true;
+          setMessages(payload.messages);
+          break;
         case "ready":
           setReady(true);
           setError(null);
@@ -283,6 +297,14 @@ function App() {
         invoke<SidecarStatus>("get_sidecar_status")
           .then((status) => {
             if (cancelled) return;
+            if (
+              status.hydrate &&
+              !hydratedFromStartupRef.current &&
+              messageCountRef.current === 0
+            ) {
+              hydratedFromStartupRef.current = true;
+              setMessages(status.hydrate);
+            }
             if (status.ready) setReady(true);
             if (status.error) setError(status.error);
           })
