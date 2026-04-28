@@ -197,6 +197,13 @@ ensure_worktree() {
   git -C "$ROOT_DIR" worktree add -b "$ACTIVE_BRANCH" "$ACTIVE_WORKTREE" "origin/$BASE_BRANCH"
 }
 
+build_sandbox_name() {
+  local slug
+  slug="$(slugify "$ACTIVE_ISSUE_TITLE")"
+  slug="${slug:0:18}"
+  printf 'ralph-%s-%s\n' "$ACTIVE_ISSUE_NUMBER" "$slug"
+}
+
 build_prompt() {
   local prompt_path="$1"
 
@@ -257,7 +264,10 @@ run_codex_iteration() {
   echo "Branch: $ACTIVE_BRANCH"
   echo "Worktree: $ACTIVE_WORKTREE"
 
-  if ! "${SANDBOX_CMD[@]}" "$ACTIVE_WORKTREE" -- "${codex_args[@]}" - <"$prompt_path"; then
+  local sandbox_name
+  sandbox_name="$(build_sandbox_name)"
+
+  if ! "${SANDBOX_CMD[@]}" --name "$sandbox_name" "$ACTIVE_WORKTREE" -- "${codex_args[@]}" - <"$prompt_path"; then
     echo "Codex exited non-zero on iteration $ITERATION." >&2
     return 1
   fi
