@@ -6,6 +6,8 @@ Your job in this run is to complete exactly one issue transaction, then stop and
 
 Rules:
 - Use GitHub as the source of truth for backlog and in-progress state.
+- Do not use GitHub MCP / connector tools for GitHub operations in this run.
+- Use the `gh` CLI for GitHub work instead: issue reads, issue comments, PR creation, PR updates, PR merge, and status checks.
 - If this prompt includes an assigned issue, branch, or worktree, treat that assignment as authoritative and work only on that issue.
 - If no issue is assigned, inspect the full open-issue list and choose the next ready issue yourself.
 - Treat issue body lines like `Blocked by #123` as hard dependencies. Do not start a blocked issue.
