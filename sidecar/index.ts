@@ -8,7 +8,7 @@
  */
 
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import {
 	type AgentSession,
 	type AgentSessionEvent,
@@ -18,6 +18,7 @@ import {
 	SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { loadRepoLocalEnv } from "./env";
+import { createGuideTools } from "./guide-tools";
 import {
 	type HydrateEvent,
 	translateSessionEntriesToHydrateEvent,
@@ -197,6 +198,45 @@ function emitActiveProject(project: Project) {
 	});
 }
 
+function retargetActiveRuntimeAfterRename(previousProject: Project, nextProject: Project) {
+	process.chdir(nextProject.path);
+
+	if (sessionManager) {
+		const mutableManager = sessionManager as unknown as {
+			cwd: string;
+			sessionDir: string;
+			sessionFile?: string;
+			getSessionFile?: () => string | undefined;
+		};
+		const previousSessionDir = getSessionDir(previousProject);
+		const currentSessionFile = mutableManager.getSessionFile?.();
+		mutableManager.cwd = nextProject.path;
+		mutableManager.sessionDir = getSessionDir(nextProject);
+		if (currentSessionFile?.startsWith(previousSessionDir)) {
+			mutableManager.sessionFile = join(
+				mutableManager.sessionDir,
+				basename(currentSessionFile),
+			);
+		}
+	}
+
+	if (session) {
+		const mutableSession = session as unknown as {
+			_cwd: string;
+			getActiveToolNames: () => string[];
+			_buildRuntime: (options: {
+				activeToolNames: string[];
+				includeAllExtensionTools: boolean;
+			}) => void;
+		};
+		mutableSession._cwd = nextProject.path;
+		mutableSession._buildRuntime({
+			activeToolNames: mutableSession.getActiveToolNames(),
+			includeAllExtensionTools: true,
+		});
+	}
+}
+
 async function openProject(
 	project: Project,
 	personaPath: string,
@@ -230,6 +270,15 @@ async function openProject(
 		agentDir: getAgentDir(),
 		resourceLoader,
 		sessionManager: nextSessionManager,
+		customTools: createGuideTools({
+			getActiveProject: () => activeProject,
+			renameProject: (id, displayName) => projectStore.rename(id, displayName),
+			onRenameSuccess: (previousProject, nextProject) => {
+				activeProject = nextProject;
+				retargetActiveRuntimeAfterRename(previousProject, nextProject);
+			},
+			onProjectUpdate: emitActiveProject,
+		}),
 	});
 
 	session = nextSession;

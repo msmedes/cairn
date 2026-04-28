@@ -3,6 +3,7 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
@@ -22,14 +23,25 @@ export type Project = ProjectJson & {
 	displayName: string;
 };
 
+export type ProjectRenameResult =
+	| { ok: true; project: Project; message: string }
+	| { ok: false; project: Project | null; message: string };
+
 function defaultProjectsRoot() {
 	return join(homedir(), ".guide", "projects");
 }
 
 function cleanDisplayName(input: string): string {
 	const compact = input.replace(/\s+/g, " ").trim();
-	if (!compact || slugify(compact) === "untitled") return "Untitled";
+	if (!compact || (slugify(compact) === "untitled" && !/[\p{L}\p{N}]/u.test(compact))) {
+		return "Untitled";
+	}
 	return compact.slice(0, 80).trimEnd();
+}
+
+function isBlankDisplayName(input: string): boolean {
+	const compact = input.replace(/\s+/g, " ").trim();
+	return !compact;
 }
 
 function parseProjectJson(value: unknown): ProjectJson | null {
@@ -134,6 +146,75 @@ export class ProjectStore {
 		};
 		this.writeProjectJson(project.path, metadata);
 		return this.enrich(metadata, project.path);
+	}
+
+	rename(id: string, displayName: string): ProjectRenameResult {
+		const project = this.read(id);
+		if (!project) {
+			return {
+				ok: false,
+				project: null,
+				message: "I could not find the current project to name it.",
+			};
+		}
+
+		if (isBlankDisplayName(displayName)) {
+			return {
+				ok: false,
+				project,
+				message: "I need a real project name before I can save that.",
+			};
+		}
+
+		const cleanedName = cleanDisplayName(displayName);
+		const nextId = disambiguate(
+			slugify(cleanedName, { maxLength: 80 }),
+			this.existingProjectIds().filter((existingId) => existingId !== id),
+		);
+		if (nextId === project.id && cleanedName === project.name) {
+			return {
+				ok: true,
+				project,
+				message: `I'll call it ${project.displayName}.`,
+			};
+		}
+
+		const nextPath = join(this.projectsRoot, nextId);
+		const metadata: ProjectJson = {
+			id: nextId,
+			name: cleanedName,
+			createdAt: project.createdAt,
+			lastOpenedAt: new Date().toISOString(),
+		};
+
+		try {
+			this.writeProjectJson(project.path, metadata);
+			renameSync(project.path, nextPath);
+			return {
+				ok: true,
+				project: this.enrich(metadata, nextPath),
+				message: `I'll call it ${cleanedName}.`,
+			};
+		} catch {
+			try {
+				if (existsSync(project.path)) {
+					this.writeProjectJson(project.path, {
+						id: project.id,
+						name: project.name,
+						createdAt: project.createdAt,
+						lastOpenedAt: project.lastOpenedAt,
+					});
+				}
+			} catch {
+				// Keep the user-facing failure short; the next read/list will ignore
+				// malformed or mismatched metadata rather than exposing internals.
+			}
+			return {
+				ok: false,
+				project,
+				message: "I could not rename the project just now, so I'll keep going with the current name.",
+			};
+		}
 	}
 
 	private existingProjectIds(): string[] {
