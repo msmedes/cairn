@@ -30,6 +30,8 @@ struct SidecarState {
     // Latest hydrate payload so the frontend can recover if it subscribes
     // after the sidecar emits the one-shot startup event.
     last_hydrate: StdMutex<Option<Vec<HydratedMessage>>>,
+    // Empty on a fresh install until the first prompt creates a project.
+    active_project: StdMutex<Option<ActiveProject>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -41,10 +43,26 @@ struct HydratedMessage {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SidecarStatus {
     ready: bool,
     error: Option<String>,
     hydrate: Option<Vec<HydratedMessage>>,
+    active_project: Option<ActiveProject>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActiveProject {
+    id: String,
+    name: String,
+    path: String,
+    display_name: String,
+}
+
+#[derive(Deserialize)]
+struct ActiveProjectEvent {
+    project: ActiveProject,
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
@@ -56,40 +74,12 @@ fn sidecar_script_path() -> String {
     format!("{}/../sidecar/index.ts", manifest_dir)
 }
 
-fn user_home_dir() -> Result<PathBuf, String> {
-    if let Some(home) = std::env::var_os("HOME") {
-        return Ok(PathBuf::from(home));
-    }
-
-    if let Some(user_profile) = std::env::var_os("USERPROFILE") {
-        return Ok(PathBuf::from(user_profile));
-    }
-
-    let home_drive = std::env::var_os("HOMEDRIVE");
-    let home_path = std::env::var_os("HOMEPATH");
-    match (home_drive, home_path) {
-        (Some(drive), Some(path)) => {
-            let mut combined = PathBuf::from(drive);
-            combined.push(path);
-            Ok(combined)
-        }
-        _ => Err("could not resolve the user home directory".to_string()),
-    }
-}
-
-fn project_root_path() -> Result<PathBuf, String> {
-    Ok(user_home_dir()?
-        .join(".guide")
-        .join("projects")
-        .join("default"))
-}
-
 fn persona_path() -> String {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     format!("{}/../prompts/persona.md", manifest_dir)
 }
 
-fn project_file_path(name: &str) -> Result<PathBuf, String> {
+fn project_file_path(name: &str, active_project: &ActiveProject) -> Result<PathBuf, String> {
     let relative = Path::new(name);
 
     if relative.is_absolute() {
@@ -105,7 +95,7 @@ fn project_file_path(name: &str) -> Result<PathBuf, String> {
         }
     }
 
-    Ok(project_root_path()?.join(relative))
+    Ok(PathBuf::from(&active_project.path).join(relative))
 }
 
 fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
@@ -156,17 +146,45 @@ async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Resul
 #[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
-    let hydrate = state.last_hydrate.lock().ok().and_then(|guard| guard.clone());
+    let hydrate = state
+        .last_hydrate
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
+    let active_project = state
+        .active_project
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
         hydrate,
+        active_project,
     }
 }
 
 #[tauri::command]
-fn read_project_file(name: String) -> Result<String, String> {
-    let path = project_file_path(&name)?;
+fn get_active_project(state: State<'_, Arc<SidecarState>>) -> Option<ActiveProject> {
+    state
+        .active_project
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+#[tauri::command]
+fn read_project_file(name: String, state: State<'_, Arc<SidecarState>>) -> Result<String, String> {
+    let active_project = match state
+        .active_project
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+    {
+        Some(project) => project,
+        None => return Ok(String::new()),
+    };
+    let path = project_file_path(&name, &active_project)?;
     match fs::read_to_string(&path) {
         Ok(contents) => Ok(contents),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
@@ -176,7 +194,6 @@ fn read_project_file(name: String) -> Result<String, String> {
 
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
     let script = sidecar_script_path();
-    let project_root = project_root_path()?;
     let persona = persona_path();
 
     state.ready.store(false, Ordering::Release);
@@ -184,6 +201,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         *slot = None;
     }
     if let Ok(mut slot) = state.last_hydrate.lock() {
+        *slot = None;
+    }
+    if let Ok(mut slot) = state.active_project.lock() {
         *slot = None;
     }
 
@@ -200,14 +220,6 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("failed to spawn sidecar (bun in PATH?): {}", e))?;
-
-    fs::create_dir_all(&project_root).map_err(|e| {
-        format!(
-            "failed to create project directory {}: {}",
-            project_root.display(),
-            e
-        )
-    })?;
 
     let mut stdin = child.stdin.take().ok_or("no stdin pipe on sidecar")?;
     let stdout = child.stdout.take().ok_or("no stdout pipe on sidecar")?;
@@ -260,13 +272,25 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                     }
                                     Some("hydrate") => {
                                         if let Some(messages) = value.get("messages") {
-                                            if let Ok(parsed) = serde_json::from_value::<
-                                                Vec<HydratedMessage>,
-                                            >(messages.clone())
+                                            if let Ok(parsed) =
+                                                serde_json::from_value::<Vec<HydratedMessage>>(
+                                                    messages.clone(),
+                                                )
                                             {
                                                 if let Ok(mut slot) = state.last_hydrate.lock() {
                                                     *slot = Some(parsed);
                                                 }
+                                            }
+                                        }
+                                    }
+                                    Some("active_project") => {
+                                        if let Ok(parsed) =
+                                            serde_json::from_value::<ActiveProjectEvent>(
+                                                value.clone(),
+                                            )
+                                        {
+                                            if let Ok(mut slot) = state.active_project.lock() {
+                                                *slot = Some(parsed.project);
                                             }
                                         }
                                     }
@@ -340,6 +364,7 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
+            get_active_project,
             get_sidecar_status,
             read_project_file
         ])

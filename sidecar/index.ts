@@ -2,13 +2,12 @@
  * Guide sidecar — slice 2: persisted single-project sessions.
  *
  * Communicates with the Tauri host over LF-delimited JSON on stdio.
- * `init` opens the fixed default project under `~/.guide/projects/default`,
- * emits a one-shot hydrate event for the saved conversation, then readies the
- * persisted pi session for new prompts.
+ * `init` resumes the most recently opened project under `~/.guide/projects`.
+ * If no project exists yet, startup stays empty; the first user prompt creates
+ * a project from that message and persists the pi session inside it.
  */
 
 import { mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
 	type AgentSession,
@@ -24,6 +23,7 @@ import {
 	translateSessionEntriesToHydrateEvent,
 } from "./hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
+import { type Project, ProjectStore } from "./project-store";
 
 type InMsg =
 	| { type: "init"; personaPath?: string }
@@ -31,6 +31,10 @@ type InMsg =
 
 type OutMsg =
 	| HydrateEvent
+	| {
+			type: "active_project";
+			project: Pick<Project, "id" | "name" | "path" | "displayName">;
+	  }
 	| { type: "ready" }
 	| { type: "text_delta"; delta: string }
 	| { type: "text_done" }
@@ -45,19 +49,19 @@ type DevLogMsg =
 let session: AgentSession | null = null;
 let sessionManager: SessionManager | null = null;
 let unsubscribeSession: (() => void) | null = null;
+let projectStore = new ProjectStore();
+let activeProject: Project | null = null;
+let activePersonaPath: string | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
 let streamedAssistantText = false;
 let suppressAssistantError = false;
+const startupCwd = process.cwd();
 
 loadRepoLocalEnv();
 
-function getProjectRoot() {
-	return join(homedir(), ".guide", "projects", "default");
-}
-
-function getSessionDir() {
-	return join(getProjectRoot(), "sessions");
+function getSessionDir(project: Project) {
+	return join(project.path, "sessions");
 }
 
 function hasExistingSession(sessionDir: string) {
@@ -181,17 +185,33 @@ function wireSessionEvents(nextSession: AgentSession) {
 	});
 }
 
-async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
-	disposeSession();
+function emitActiveProject(project: Project) {
+	emit({
+		type: "active_project",
+		project: {
+			id: project.id,
+			name: project.name,
+			path: project.path,
+			displayName: project.displayName,
+		},
+	});
+}
 
-	const { personaPath } = msg;
-	const cwd = getProjectRoot();
-	const sessionDir = getSessionDir();
-	const resolvedPersonaPath = resolve(personaPath ?? "prompts/persona.md");
+async function openProject(
+	project: Project,
+	personaPath: string,
+	options: { emitHydrate: boolean },
+) {
+	disposeSession();
+	activeProject = project;
+	emitActiveProject(project);
+
+	const cwd = project.path;
+	const sessionDir = getSessionDir(project);
 	mkdirSync(cwd, { recursive: true });
 	mkdirSync(sessionDir, { recursive: true });
 	process.chdir(cwd);
-	const personaContent = readFileSync(resolvedPersonaPath, "utf8");
+	const personaContent = readFileSync(personaPath, "utf8");
 
 	const resourceLoader = new DefaultResourceLoader({
 		cwd,
@@ -215,21 +235,53 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 	session = nextSession;
 	sessionManager = nextSessionManager;
 	wireSessionEvents(nextSession);
-	suppressAssistantError = true;
-	await emitHydrateAndMaybeResumeRecap(nextSession, nextSessionManager, {
-		emitHydrate: (event) => emit(event),
-		onRecapError: (err) => {
-			emitDevLog({
-				type: "assistant_error",
-				message: `resume recap failed: ${formatError(err)}`,
-			});
-		},
-	});
-	suppressAssistantError = false;
+
+	if (options.emitHydrate) {
+		suppressAssistantError = true;
+		await emitHydrateAndMaybeResumeRecap(nextSession, nextSessionManager, {
+			emitHydrate: (event) => emit(event),
+			onRecapError: (err) => {
+				emitDevLog({
+					type: "assistant_error",
+					message: `resume recap failed: ${formatError(err)}`,
+				});
+			},
+		});
+		suppressAssistantError = false;
+	}
+}
+
+async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
+	disposeSession();
+	activeProject = null;
+
+	const { personaPath } = msg;
+	const resolvedPersonaPath = resolve(startupCwd, personaPath ?? "prompts/persona.md");
+	readFileSync(resolvedPersonaPath, "utf8");
+	activePersonaPath = resolvedPersonaPath;
+
+	projectStore = new ProjectStore();
+	const recentProject = projectStore.findMostRecent();
+	if (recentProject) {
+		const touchedProject = projectStore.touch(recentProject.id);
+		await openProject(touchedProject, resolvedPersonaPath, { emitHydrate: true });
+	} else {
+		emit({ type: "hydrate", messages: [] });
+	}
 	emit({ type: "ready" });
 }
 
 async function handlePrompt(text: string) {
+	if (!activePersonaPath) {
+		throw new Error("sidecar not initialized");
+	}
+	if (!activeProject) {
+		const project = projectStore.create(text);
+		await openProject(project, activePersonaPath, { emitHydrate: false });
+	} else {
+		activeProject = projectStore.touch(activeProject.id);
+		emitActiveProject(activeProject);
+	}
 	if (!session) {
 		throw new Error("session not initialized");
 	}

@@ -8,6 +8,7 @@ import { useProjectFile } from "./useProjectFile";
 
 type SidecarEvent =
   | { type: "hydrate"; messages: ChatMessage[] }
+  | { type: "active_project"; project: ActiveProject }
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
@@ -18,6 +19,14 @@ type SidecarStatus = {
   ready: boolean;
   error: string | null;
   hydrate: ChatMessage[] | null;
+  activeProject: ActiveProject | null;
+};
+
+type ActiveProject = {
+  id: string;
+  name: string;
+  path: string;
+  displayName: string;
 };
 
 function hasTauriRuntime() {
@@ -240,6 +249,8 @@ function App() {
         case "ready":
           setReady(true);
           setError(null);
+          break;
+        case "active_project":
           break;
         case "text_delta": {
           setSending(true);
