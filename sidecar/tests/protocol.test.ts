@@ -17,10 +17,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import {
+  AuthStorage,
+  DefaultResourceLoader,
+  getAgentDir,
+  ModelRegistry,
+} from "@mariozechner/pi-coding-agent";
 import { loadRepoLocalEnv } from "../env";
 
 const SIDECAR_ENTRY = resolve(import.meta.dir, "..", "index.ts");
+const REPO_ROOT = resolve(import.meta.dir, "..", "..");
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 type JsonValue =
@@ -323,6 +329,27 @@ Do not write files for this test.
     DEFAULT_TIMEOUT_MS,
   );
 }
+
+test("Guide-bundled slicing skills are discoverable by the sidecar resource loader", async () => {
+  const loader = new DefaultResourceLoader({
+    cwd: createTempDir("guide-skill-loader-"),
+    agentDir: getAgentDir(),
+    additionalSkillPaths: [resolve(REPO_ROOT, "prompts/skills")],
+    noSkills: true,
+  });
+  await loader.reload();
+
+  const { skills, diagnostics } = loader.getSkills();
+  const skillByName = new Map(skills.map((skill) => [skill.name, skill]));
+
+  expect(diagnostics).toEqual([]);
+  for (const name of ["write-prd", "write-issue"]) {
+    const skill = skillByName.get(name);
+    expect(skill).toBeDefined();
+    expect(skill?.description.trim().length).toBeGreaterThan(0);
+    expect(skill?.disableModelInvocation).toBe(false);
+  }
+});
 
 test("malformed input emits an error event without killing the sidecar", async () => {
   const proc = spawnSidecar();
