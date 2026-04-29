@@ -51,7 +51,8 @@ type OutMsg =
 type DevLogMsg =
   | { type: "tool_start"; name: string }
   | { type: "tool_end"; name: string; ok: boolean }
-  | { type: "assistant_error"; message: string };
+  | { type: "assistant_error"; message: string }
+  | { type: "session_event"; event: AgentSessionEvent };
 
 let session: AgentSession | null = null;
 let sessionManager: SessionManager | null = null;
@@ -136,6 +137,7 @@ function disposeSession() {
 
 function wireSessionEvents(nextSession: AgentSession) {
   unsubscribeSession = nextSession.subscribe((event: AgentSessionEvent) => {
+    emitDevLog({ type: "session_event", event });
     switch (event.type) {
       case "message_update":
         switch (event.assistantMessageEvent.type) {
