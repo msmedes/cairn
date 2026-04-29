@@ -1,6 +1,8 @@
 import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import "./App.css";
+import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { buildSlidesDocument } from "./projectSlides";
+import { useActivePanelTab } from "./useActivePanelTab";
 import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import { useAutoScroll } from "./useAutoScroll";
 import { useCreatingIndicator } from "./useCreatingIndicator";
@@ -53,19 +55,28 @@ function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
   const projectSlidesHtml = useProjectFile("brief.html");
+  const planSlidesHtml = useProjectFile("plan.html");
   const projectBriefMarkdown = useProjectFile("brief.md");
   const projectPrdsListing = useProjectFile(".guide/prds");
   const projectIssuesListing = useProjectFile(".guide/issues");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
+  const hasPlanSlidesHtml = planSlidesHtml.trim().length > 0;
   const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;
   const normalizedProjectBrief = hasProjectBriefMarkdown
     ? projectBriefMarkdown
     : hasProjectSlidesHtml
       ? htmlToMarkdown(projectSlidesHtml)
       : "";
+  const normalizedPlan = hasPlanSlidesHtml
+    ? htmlToMarkdown(planSlidesHtml)
+    : "";
   const projectSlidesDoc = normalizedProjectBrief
     ? buildSlidesDocument(normalizedProjectBrief)
     : "";
+  const planSlidesDoc = normalizedPlan
+    ? buildSlidesDocument(normalizedPlan)
+    : "";
+  const { activeTab, setActiveTab } = useActivePanelTab(hasPlanSlidesHtml);
   const creatingContent = useMemo(
     () => ({
       brief: normalizedProjectBrief,
@@ -110,11 +121,18 @@ function App() {
 
   const statusLabel = error ? "error" : ready ? "ready" : "starting…";
   const statusClass = error ? "err" : ready ? "ok" : "wait";
+  const panelTabs: PanelTab[] = [
+    { key: "project", label: "Project", available: true },
+    { key: "plan", label: "Plan", available: true },
+  ];
+  const activeSlidesDoc =
+    activeTab === "project" ? projectSlidesDoc : planSlidesDoc;
+  const showPlanEmptyState = activeTab === "plan" && !planSlidesDoc;
+  const placeholderCreating = activeSlidesDoc ? null : creating;
   const appStyle: CSSProperties = {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
   };
-  const placeholderCreating = projectSlidesDoc ? null : creating;
 
   return (
     <main
@@ -231,18 +249,24 @@ function App() {
       </div>
 
       <aside className="panel">
-        <div className="panel-tabs">
-          <span className="tab tab-active">Project</span>
-        </div>
+        <PanelTabs
+          tabs={panelTabs}
+          activeKey={activeTab}
+          onSelect={(key) => setActiveTab(key === "plan" ? "plan" : "project")}
+        />
         <div className="panel-body">
-          {projectSlidesDoc ? (
+          {activeSlidesDoc ? (
             <div
               className={`project-slides-shell${creating ? " project-slides-shell-creating" : ""}`}
             >
               <iframe
                 className="project-slides-frame"
-                title="Project plan slideshow"
-                srcDoc={projectSlidesDoc}
+                title={
+                  activeTab === "project"
+                    ? "Project brief slideshow"
+                    : "Project plan slideshow"
+                }
+                srcDoc={activeSlidesDoc}
                 sandbox="allow-scripts"
               />
               {creating && (
@@ -252,6 +276,26 @@ function App() {
                 </section>
               )}
             </div>
+          ) : showPlanEmptyState ? (
+            <section
+              className={`panel-placeholder${placeholderCreating ? " panel-placeholder-creating" : ""}`}
+            >
+              <p className="panel-kicker">
+                {placeholderCreating ? "Working draft" : "Plan"}
+              </p>
+              <h2>
+                {placeholderCreating
+                  ? placeholderCreating.message
+                  : "Once we agree on what to build first, the plan will show up here."}
+              </h2>
+              <div className="panel-ghost">
+                <div className="ghost-line ghost-line-title" />
+                <div className="ghost-line ghost-line-wide" />
+                <div className="ghost-line ghost-line-mid" />
+                <div className="ghost-line ghost-line-wide" />
+                <div className="ghost-line ghost-line-short" />
+              </div>
+            </section>
           ) : (
             <section
               className={`panel-placeholder${placeholderCreating ? " panel-placeholder-creating" : ""}`}

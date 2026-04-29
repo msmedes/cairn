@@ -549,15 +549,38 @@ body {
 .tab {
   display: inline-flex;
   align-items: center;
+  border: 0;
   min-height: 40px;
   padding: 0 14px;
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-soft);
+  font: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   letter-spacing: -0.01em;
-  cursor: default;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.tab:hover:not(:disabled),
+.tab:focus-visible {
+  background: rgba(42, 42, 55, 0.56);
+  color: var(--text);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(126, 156, 216, 0.2);
+}
+
+.tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .tab-active {
