@@ -82,8 +82,14 @@ function App() {
       brief: normalizedProjectBrief,
       prd: projectPrdsListing,
       issues: projectIssuesListing,
+      plan: normalizedPlan,
     }),
-    [normalizedProjectBrief, projectPrdsListing, projectIssuesListing],
+    [
+      normalizedProjectBrief,
+      normalizedPlan,
+      projectPrdsListing,
+      projectIssuesListing,
+    ],
   );
   const {
     creating,

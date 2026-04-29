@@ -2,7 +2,7 @@ import { Type } from "@mariozechner/pi-ai";
 import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { Project, ProjectRenameResult } from "./project-store";
 
-export type CreatingTarget = "brief" | "prd" | "issues";
+export type CreatingTarget = "brief" | "prd" | "issues" | "plan";
 
 export type GuideToolsOptions = {
   getActiveProject: () => Project | null;
@@ -79,7 +79,12 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
       ],
       parameters: Type.Object({
         target: Type.Union(
-          [Type.Literal("brief"), Type.Literal("prd"), Type.Literal("issues")],
+          [
+            Type.Literal("brief"),
+            Type.Literal("prd"),
+            Type.Literal("issues"),
+            Type.Literal("plan"),
+          ],
           {
             description: "The kind of user-visible artifact being created.",
           },

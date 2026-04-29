@@ -97,6 +97,7 @@ test.each([
   "brief",
   "prd",
   "issues",
+  "plan",
 ] as const)("set_creating tool accepts target %s and emits it once", async (target) => {
   const creatingEvents: Array<{ target: CreatingTarget; message: string }> = [];
   const setCreating = createGuideTools({
