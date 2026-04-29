@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import "./App.css";
 import { buildSlidesDocument } from "./projectSlides";
 import { applyAssistantDelta, markAssistantDone, type ChatMessage } from "./chat-stream";
+import { useCreatingIndicator } from "./useCreatingIndicator";
 import { useProjectFile } from "./useProjectFile";
 
 type SidecarEvent =
@@ -12,6 +13,7 @@ type SidecarEvent =
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
+  | { type: "creating_started"; target: "brief"; message: string }
   | { type: "agent_end" }
   | { type: "error"; message: string };
 
@@ -105,6 +107,17 @@ function App() {
   const projectSlidesDoc = normalizedProjectBrief
     ? buildSlidesDocument(normalizedProjectBrief)
     : "";
+  const creatingContent = useMemo(
+    () => ({ brief: normalizedProjectBrief }),
+    [normalizedProjectBrief],
+  );
+  const {
+    creating,
+    creating_started: startCreating,
+    agent_end: clearCreatingOnAgentEnd,
+    hydrate: clearCreatingOnHydrate,
+    error: clearCreatingOnError,
+  } = useCreatingIndicator(creatingContent);
 
   // Track the in-flight assistant message so streamed deltas land in the right place.
   const activeAssistantId = useRef<string | null>(null);
@@ -241,6 +254,7 @@ function App() {
       const payload = event.payload;
       switch (payload.type) {
         case "hydrate":
+          clearCreatingOnHydrate();
           activeAssistantId.current = null;
           setSending(false);
           hydratedFromStartupRef.current = true;
@@ -272,10 +286,15 @@ function App() {
           setMessages((prev) => markAssistantDone(prev, id));
           break;
         }
+        case "creating_started":
+          startCreating(payload.target, payload.message);
+          break;
         case "agent_end":
+          clearCreatingOnAgentEnd();
           finalizeActive();
           break;
         case "error":
+          clearCreatingOnError();
           console.error("[sidecar error]", payload.message);
           setError(payload.message);
           setReady(false);
@@ -308,6 +327,7 @@ function App() {
               messageCountRef.current === 0
             ) {
               hydratedFromStartupRef.current = true;
+              clearCreatingOnHydrate();
               setMessages(status.hydrate);
             }
             if (status.ready) setReady(true);
@@ -324,7 +344,12 @@ function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, []);
+  }, [
+    clearCreatingOnAgentEnd,
+    clearCreatingOnError,
+    clearCreatingOnHydrate,
+    startCreating,
+  ]);
 
   async function send() {
     const text = input.trim();
@@ -364,6 +389,7 @@ function App() {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
   };
+  const placeholderCreating = projectSlidesDoc ? null : creating;
 
   return (
     <main
@@ -477,12 +503,20 @@ function App() {
               />
             </div>
           ) : (
-            <section className="panel-placeholder">
+            <section
+              className={`panel-placeholder${placeholderCreating ? " panel-placeholder-creating" : ""}`}
+            >
               <p className="panel-kicker">Working draft</p>
-              <h2>Your project will show up here as we talk.</h2>
-              <p className="panel-empty">
-                As the conversation sharpens, this panel will turn your answers into a short readable plan.
-              </p>
+              <h2>
+                {placeholderCreating
+                  ? placeholderCreating.message
+                  : "Your project will show up here as we talk."}
+              </h2>
+              {!placeholderCreating && (
+                <p className="panel-empty">
+                  As the conversation sharpens, this panel will turn your answers into a short readable plan.
+                </p>
+              )}
               <div className="panel-ghost">
                 <div className="ghost-line ghost-line-title" />
                 <div className="ghost-line ghost-line-wide" />
