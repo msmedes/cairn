@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { applyAssistantDelta, markAssistantDone, type ChatMessage } from "./chat-stream";
+import { useEffect, useRef, useState } from "react";
+import {
+  applyAssistantDelta,
+  type ChatMessage,
+  markAssistantDone,
+} from "./chat-stream";
 
 type ActiveProject = {
   id: string;
@@ -20,12 +24,17 @@ type SidecarEvent =
   | { type: "agent_end" }
   | { type: "error"; message: string };
 
-type SidecarStatus = {
+type SidecarStatusSnapshot = {
   ready: boolean;
   error: string | null;
   hydrate: ChatMessage[] | null;
   activeProject: ActiveProject | null;
 };
+
+type SessionStatus =
+  | { type: "starting" }
+  | { type: "ready" }
+  | { type: "error"; message: string };
 
 type SidecarSessionHandlers = {
   onCreatingStarted: (target: "brief", message: string) => void;
@@ -49,12 +58,12 @@ export function useSidecarSession({
   onError,
 }: SidecarSessionHandlers) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<SessionStatus>({ type: "starting" });
   const [sending, setSending] = useState(false);
   const activeAssistantId = useRef<string | null>(null);
   const hydratedFromStartupRef = useRef(false);
   const messageCountRef = useRef(0);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     messageCountRef.current = messages.length;
@@ -62,8 +71,11 @@ export function useSidecarSession({
 
   useEffect(() => {
     if (!hasTauriRuntime()) {
-      setError("This app must be launched with Tauri, not a plain browser tab.");
-      setReady(false);
+      setStatus({
+        type: "error",
+        message:
+          "This app must be launched with Tauri, not a plain browser tab.",
+      });
       return;
     }
 
@@ -76,6 +88,7 @@ export function useSidecarSession({
         setMessages((prev) => markAssistantDone(prev, id));
       }
       activeAssistantId.current = null;
+      sendingRef.current = false;
       setSending(false);
     }
 
@@ -85,17 +98,18 @@ export function useSidecarSession({
         case "hydrate":
           onHydrate();
           activeAssistantId.current = null;
+          sendingRef.current = false;
           setSending(false);
           hydratedFromStartupRef.current = true;
           setMessages(payload.messages);
           break;
         case "ready":
-          setReady(true);
-          setError(null);
+          setStatus({ type: "ready" });
           break;
         case "active_project":
           break;
         case "text_delta": {
+          sendingRef.current = true;
           setSending(true);
           setMessages((prev) => {
             const next = applyAssistantDelta(
@@ -125,8 +139,7 @@ export function useSidecarSession({
         case "error":
           onError();
           console.error("[sidecar error]", payload.message);
-          setError(payload.message);
-          setReady(false);
+          setStatus({ type: "error", message: payload.message });
           finalizeActive();
           break;
         default: {
@@ -141,26 +154,34 @@ export function useSidecarSession({
           return;
         }
         unlisten = fn;
-        invoke<SidecarStatus>("get_sidecar_status")
-          .then((status) => {
+        invoke<SidecarStatusSnapshot>("get_sidecar_status")
+          .then((snapshot) => {
             if (cancelled) return;
             if (
-              status.hydrate &&
+              snapshot.hydrate &&
               !hydratedFromStartupRef.current &&
               messageCountRef.current === 0
             ) {
               hydratedFromStartupRef.current = true;
               onHydrate();
-              setMessages(status.hydrate);
+              setMessages(snapshot.hydrate);
             }
-            if (status.ready) setReady(true);
-            if (status.error) setError(status.error);
+            if (snapshot.error) {
+              setStatus({ type: "error", message: snapshot.error });
+            } else if (snapshot.ready) {
+              setStatus({ type: "ready" });
+            }
           })
           .catch((err) => console.error("get_sidecar_status failed", err));
       })
       .catch((err) => {
         console.error("sidecar-event listen() failed", err);
-        if (!cancelled) setError("Failed to attach to the sidecar.");
+        if (!cancelled) {
+          setStatus({
+            type: "error",
+            message: "Failed to attach to the sidecar.",
+          });
+        }
       });
 
     return () => {
@@ -170,7 +191,7 @@ export function useSidecarSession({
   }, [onAgentEnd, onCreatingStarted, onError, onHydrate]);
 
   async function sendPrompt(text: string) {
-    if (!text || sending || !ready) return;
+    if (!text || sendingRef.current || status.type !== "ready") return;
 
     const userMsg: ChatMessage = {
       id: newId(),
@@ -186,6 +207,7 @@ export function useSidecarSession({
     };
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     activeAssistantId.current = assistantMsg.id;
+    sendingRef.current = true;
     setSending(true);
 
     try {
@@ -194,14 +216,15 @@ export function useSidecarSession({
       console.error("send_prompt failed", err);
       setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
       activeAssistantId.current = null;
+      sendingRef.current = false;
       setSending(false);
     }
   }
 
   return {
     messages,
-    ready,
-    error,
+    ready: status.type === "ready",
+    error: status.type === "error" ? status.message : null,
     sending,
     sendPrompt,
   };

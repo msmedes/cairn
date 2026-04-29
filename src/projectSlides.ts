@@ -30,7 +30,10 @@ function slugify(text: string): string {
 }
 
 function stripHtml(text: string): string {
-  return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function decodeEntities(text: string): string {
@@ -58,7 +61,7 @@ function createDraftSection(title: string): DraftSection {
 function finalizeSections(markdown: string) {
   const lines = markdown.split(/\r?\n/);
   let docTitle = "Project plan";
-  let intro = createDraftSection("Overview");
+  const intro = createDraftSection("Overview");
   const drafts: DraftSection[] = [];
   let currentSection: DraftSection | null = null;
   let paragraph: string[] = [];
@@ -118,7 +121,9 @@ function finalizeSections(markdown: string) {
       }
 
       const section = targetSection();
-      section.blocks.push(`<h${Math.min(level, 4)}>${escapeHtml(headingText)}</h${Math.min(level, 4)}>`);
+      section.blocks.push(
+        `<h${Math.min(level, 4)}>${escapeHtml(headingText)}</h${Math.min(level, 4)}>`,
+      );
       section.plain.push(headingText);
       continue;
     }
@@ -172,13 +177,18 @@ function finalizeSections(markdown: string) {
   }
 
   if (sections.length === 0) {
-    pushSection("Overview", [`<p>${escapeHtml(markdown.trim() || "Your project will show up here as we talk.")}</p>`], [
-      markdown.trim() || "Your project will show up here as we talk.",
-    ]);
+    pushSection(
+      "Overview",
+      [
+        `<p>${escapeHtml(markdown.trim() || "Your project will show up here as we talk.")}</p>`,
+      ],
+      [markdown.trim() || "Your project will show up here as we talk."],
+    );
   }
 
-  const introSummary =
-    sections[0] ? stripHtml(sections[0].body).slice(0, 180) : "Your project will show up here as we talk.";
+  const introSummary = sections[0]
+    ? stripHtml(sections[0].body).slice(0, 180)
+    : "Your project will show up here as we talk.";
 
   return { docTitle, introSummary, sections };
 }

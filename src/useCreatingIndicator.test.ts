@@ -4,17 +4,13 @@ import { useCreatingIndicator } from "./useCreatingIndicator";
 
 describe("useCreatingIndicator", () => {
   test("initial state is null", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     expect(result.current.creating).toBeNull();
   });
 
   test("creating_started sets the current creating state", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     act(() => {
       result.current.creating_started("brief", "Putting your plan together");
@@ -81,9 +77,7 @@ describe("useCreatingIndicator", () => {
   });
 
   test("agent_end after creating_started with no file change clears state", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     act(() => {
       result.current.creating_started("brief", "Writing the brief");
@@ -94,9 +88,7 @@ describe("useCreatingIndicator", () => {
   });
 
   test("hydrate mid-creating clears state", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     act(() => {
       result.current.creating_started("brief", "Writing the brief");
@@ -107,9 +99,7 @@ describe("useCreatingIndicator", () => {
   });
 
   test("error mid-creating clears state", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     act(() => {
       result.current.creating_started("brief", "Writing the brief");
@@ -120,9 +110,7 @@ describe("useCreatingIndicator", () => {
   });
 
   test("two creating_started calls in sequence use the second one", () => {
-    const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "" }),
-    );
+    const { result } = renderHook(() => useCreatingIndicator({ brief: "" }));
 
     act(() => {
       result.current.creating_started("brief", "First message");

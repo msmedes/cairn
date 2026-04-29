@@ -7,16 +7,33 @@ export const MAX_CHAT_PANE_PERCENT = 62;
 const PANE_SPLIT_STORAGE_KEY = "guide-pane-split";
 
 function clampPaneSplit(value: number) {
-  return Math.min(MAX_CHAT_PANE_PERCENT, Math.max(MIN_CHAT_PANE_PERCENT, value));
+  return Math.min(
+    MAX_CHAT_PANE_PERCENT,
+    Math.max(MIN_CHAT_PANE_PERCENT, value),
+  );
+}
+
+function readStoredPaneSplit() {
+  if (typeof window === "undefined") return DEFAULT_CHAT_PANE_PERCENT;
+
+  const stored = window.localStorage.getItem(PANE_SPLIT_STORAGE_KEY);
+  if (!stored) return DEFAULT_CHAT_PANE_PERCENT;
+
+  const parsed = Number(stored);
+  return Number.isFinite(parsed)
+    ? clampPaneSplit(parsed)
+    : DEFAULT_CHAT_PANE_PERCENT;
 }
 
 export function usePaneSplit() {
   const appRef = useRef<HTMLElement | null>(null);
   const resizingRef = useRef(false);
-  const [chatPanePercent, setChatPanePercent] = useState(DEFAULT_CHAT_PANE_PERCENT);
+  const [chatPanePercent, setChatPanePercent] = useState(readStoredPaneSplit);
   const [isResizing, setIsResizing] = useState(false);
 
-  function setClampedChatPanePercent(value: number | ((previous: number) => number)) {
+  function setClampedChatPanePercent(
+    value: number | ((previous: number) => number),
+  ) {
     setChatPanePercent((previous) => {
       const next = typeof value === "function" ? value(previous) : value;
       return clampPaneSplit(next);
@@ -34,14 +51,6 @@ export function usePaneSplit() {
     setClampedChatPanePercent(next);
   }
 
-  function stopResizing() {
-    if (!resizingRef.current) return;
-    resizingRef.current = false;
-    setIsResizing(false);
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }
-
   function startResizing(clientX: number) {
     resizingRef.current = true;
     setIsResizing(true);
@@ -52,28 +61,32 @@ export function usePaneSplit() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const stored = window.localStorage.getItem(PANE_SPLIT_STORAGE_KEY);
-    if (!stored) return;
-
-    const parsed = Number(stored);
-    if (!Number.isFinite(parsed)) return;
-    setClampedChatPanePercent(parsed);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(PANE_SPLIT_STORAGE_KEY, String(chatPanePercent));
+    window.localStorage.setItem(
+      PANE_SPLIT_STORAGE_KEY,
+      String(chatPanePercent),
+    );
   }, [chatPanePercent]);
 
   useEffect(() => {
     function handlePointerMove(event: PointerEvent) {
       if (!resizingRef.current) return;
-      updatePaneSplit(event.clientX);
+
+      const el = appRef.current;
+      if (!el) return;
+
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0) return;
+
+      const next = ((event.clientX - rect.left) / rect.width) * 100;
+      setChatPanePercent(clampPaneSplit(next));
     }
 
     function handlePointerUp() {
-      stopResizing();
+      if (!resizingRef.current) return;
+      resizingRef.current = false;
+      setIsResizing(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     }
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -84,7 +97,7 @@ export function usePaneSplit() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
-      stopResizing();
+      handlePointerUp();
     };
   }, []);
 

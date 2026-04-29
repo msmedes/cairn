@@ -14,7 +14,9 @@ type CreatingState = CreatingIndicator & {
 };
 
 export function useCreatingIndicator(content: CreatingIndicatorContent) {
-  const [creatingState, setCreatingState] = useState<CreatingState | null>(null);
+  const [creatingState, setCreatingState] = useState<CreatingState | null>(
+    null,
+  );
   const contentRef = useRef(content);
   contentRef.current = content;
 

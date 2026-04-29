@@ -7,15 +7,9 @@
   --text: #dcd7ba;
   --text-muted: #c8c093;
   --text-soft: #938aa9;
-  --shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.16),
-    0 12px 30px rgba(0, 0, 0, 0.18);
-  --shadow-md:
-    0 2px 6px rgba(0, 0, 0, 0.2),
-    0 20px 48px rgba(0, 0, 0, 0.24);
-  --shadow-lg:
-    0 2px 8px rgba(0, 0, 0, 0.22),
-    0 28px 60px rgba(0, 0, 0, 0.28);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.16), 0 12px 30px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.2), 0 20px 48px rgba(0, 0, 0, 0.24);
+  --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.22), 0 28px 60px rgba(0, 0, 0, 0.28);
   --user-bg: #2d4f67;
   --user-bg-soft: #223249;
   --user-text: #f2ecbc;
@@ -40,8 +34,16 @@ body,
   margin: 0;
   padding: 0;
   background:
-    radial-gradient(circle at top left, rgba(126, 156, 216, 0.22), transparent 28%),
-    radial-gradient(circle at 86% 18%, rgba(255, 160, 102, 0.12), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(126, 156, 216, 0.22),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 86% 18%,
+      rgba(255, 160, 102, 0.12),
+      transparent 24%
+    ),
     linear-gradient(180deg, #1f1f28 0%, var(--bg) 100%);
   color: var(--text);
   font-family:
@@ -117,8 +119,12 @@ body {
   height: 44px;
   transform: translate(-50%, -50%);
   border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(220, 215, 186, 0.10), rgba(220, 215, 186, 0.16), rgba(220, 215, 186, 0.10));
+  background: linear-gradient(
+    180deg,
+    rgba(220, 215, 186, 0.1),
+    rgba(220, 215, 186, 0.16),
+    rgba(220, 215, 186, 0.1)
+  );
   opacity: 0.45;
   transition:
     width 180ms cubic-bezier(0.2, 0, 0, 1),
@@ -134,8 +140,12 @@ body {
   width: 8px;
   height: 120px;
   opacity: 1;
-  background:
-    linear-gradient(180deg, rgba(126, 156, 216, 0.2), rgba(255, 160, 102, 0.18), rgba(126, 156, 216, 0.2));
+  background: linear-gradient(
+    180deg,
+    rgba(126, 156, 216, 0.2),
+    rgba(255, 160, 102, 0.18),
+    rgba(126, 156, 216, 0.2)
+  );
   box-shadow:
     inset 0 0 0 1px rgba(220, 215, 186, 0.12),
     0 0 0 1px rgba(126, 156, 216, 0.18),
@@ -238,7 +248,13 @@ body {
   flex-direction: column;
   gap: 18px;
   padding: 4px 28px 28px;
-  mask-image: linear-gradient(to bottom, transparent 0, black 18px, black calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 18px,
+    black calc(100% - 18px),
+    transparent 100%
+  );
 }
 
 .messages > * {
@@ -258,7 +274,11 @@ body {
   max-width: 28rem;
   padding: 32px 30px;
   border-radius: var(--radius-card);
-  background: linear-gradient(180deg, rgba(42, 42, 55, 0.96), rgba(31, 31, 40, 0.94));
+  background: linear-gradient(
+    180deg,
+    rgba(42, 42, 55, 0.96),
+    rgba(31, 31, 40, 0.94)
+  );
   box-shadow: var(--shadow-md);
   outline: 1px solid var(--line);
   text-align: center;
@@ -316,8 +336,7 @@ body {
   max-width: min(54rem, 80%);
   padding: 16px 18px;
   border-radius: 8px 8px 3px 8px;
-  background:
-    linear-gradient(180deg, var(--user-bg-soft), var(--user-bg));
+  background: linear-gradient(180deg, var(--user-bg-soft), var(--user-bg));
   color: var(--user-text);
   box-shadow:
     0 1px 1px rgba(255, 255, 255, 0.04) inset,
@@ -360,7 +379,7 @@ body {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  mask-composite: exclude;
   pointer-events: none;
   animation: recap-sweep 2.6s linear infinite;
   transition: opacity 700ms ease;
@@ -482,8 +501,7 @@ body {
   padding: 0 18px;
   border: 0;
   border-radius: 4px;
-  background:
-    linear-gradient(180deg, #7e9cd8, #658594);
+  background: linear-gradient(180deg, #7e9cd8, #658594);
   color: #16161d;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -562,8 +580,11 @@ body {
   justify-content: center;
   padding: 28px;
   border-radius: var(--radius-card);
-  background:
-    linear-gradient(180deg, rgba(42, 42, 55, 0.96), rgba(31, 31, 40, 0.94));
+  background: linear-gradient(
+    180deg,
+    rgba(42, 42, 55, 0.96),
+    rgba(31, 31, 40, 0.94)
+  );
   box-shadow: var(--shadow-md);
   outline: 1px solid var(--line);
   animation: rise-in 580ms cubic-bezier(0.2, 0, 0, 1) 90ms both;
@@ -625,8 +646,12 @@ body {
 .ghost-line {
   height: 11px;
   border-radius: 4px;
-  background:
-    linear-gradient(90deg, rgba(126, 156, 216, 0.12), rgba(220, 215, 186, 0.34), rgba(126, 156, 216, 0.12));
+  background: linear-gradient(
+    90deg,
+    rgba(126, 156, 216, 0.12),
+    rgba(220, 215, 186, 0.34),
+    rgba(126, 156, 216, 0.12)
+  );
   background-size: 220% 100%;
   animation: shimmer 2.8s linear infinite;
 }

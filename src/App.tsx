@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import "./App.css";
 import { buildSlidesDocument } from "./projectSlides";
+import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import { useAutoScroll } from "./useAutoScroll";
 import { useCreatingIndicator } from "./useCreatingIndicator";
-import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import {
   DEFAULT_CHAT_PANE_PERCENT,
   MAX_CHAT_PANE_PERCENT,
@@ -23,9 +23,7 @@ function htmlToMarkdown(html: string): string {
   }
 
   const doc = new window.DOMParser().parseFromString(html, "text/html");
-  const blocks = Array.from(
-    doc.body.querySelectorAll("h1, h2, h3, h4, p, li"),
-  );
+  const blocks = Array.from(doc.body.querySelectorAll("h1, h2, h3, h4, p, li"));
 
   return blocks
     .map((node) => {
@@ -87,8 +85,8 @@ function App() {
     onHydrate: handleHydrate,
     onError: clearCreatingOnError,
   });
-  const listRef = useAutoScroll(messages);
-  const { composerRef, inputRef } = useAutoResizingTextarea(input);
+  const listRef = useAutoScroll();
+  const { composerRef, inputRef } = useAutoResizingTextarea();
   const {
     appRef,
     chatPanePercent,
@@ -131,6 +129,7 @@ function App() {
         <div
           className="messages"
           ref={listRef}
+          role="log"
           aria-live="polite"
           aria-label="Conversation"
         >
@@ -138,7 +137,10 @@ function App() {
             <div className="empty">
               <p className="empty-kicker">Start with the rough version.</p>
               <p>Tell me what you want this thing to do for people.</p>
-              <p className="hint">A quiz for work. A helper for your group. A tiny tool that saves time.</p>
+              <p className="hint">
+                A quiz for work. A helper for your group. A tiny tool that saves
+                time.
+              </p>
             </div>
           )}
           {messages.map((m) => {
@@ -188,11 +190,15 @@ function App() {
         </form>
       </section>
 
+      {/* biome-ignore lint/a11y/useSemanticElements: The splitter is keyboard-focusable and owns a visual grip child. */}
       <div
         className="pane-divider"
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize chat and project panels"
+        aria-valuemin={MIN_CHAT_PANE_PERCENT}
+        aria-valuemax={MAX_CHAT_PANE_PERCENT}
+        aria-valuenow={Math.round(chatPanePercent)}
         tabIndex={0}
         onDoubleClick={() => setChatPanePercent(DEFAULT_CHAT_PANE_PERCENT)}
         onPointerDown={(event) => {
@@ -244,7 +250,8 @@ function App() {
               </h2>
               {!placeholderCreating && (
                 <p className="panel-empty">
-                  As the conversation sharpens, this panel will turn your answers into a short readable plan.
+                  As the conversation sharpens, this panel will turn your
+                  answers into a short readable plan.
                 </p>
               )}
               <div className="panel-ghost">
