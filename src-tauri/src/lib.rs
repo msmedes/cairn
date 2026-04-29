@@ -187,6 +187,21 @@ fn read_project_file(name: String, state: State<'_, Arc<SidecarState>>) -> Resul
         None => return Ok(String::new()),
     };
     let path = project_file_path(&name, &active_project)?;
+    if path.is_dir() {
+        let mut entries = fs::read_dir(&path)
+            .map_err(|err| format!("failed to read project directory {}: {}", name, err))?
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let file_type = entry.file_type().ok()?;
+                if !file_type.is_file() {
+                    return None;
+                }
+                entry.file_name().into_string().ok()
+            })
+            .collect::<Vec<_>>();
+        entries.sort();
+        return Ok(entries.join("\n"));
+    }
     match fs::read_to_string(&path) {
         Ok(contents) => Ok(contents),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),

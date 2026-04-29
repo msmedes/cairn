@@ -54,6 +54,8 @@ function App() {
   const [recapInteracted, setRecapInteracted] = useState(false);
   const projectSlidesHtml = useProjectFile("brief.html");
   const projectBriefMarkdown = useProjectFile("brief.md");
+  const projectPrdsListing = useProjectFile(".guide/prds");
+  const projectIssuesListing = useProjectFile(".guide/issues");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
   const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;
   const normalizedProjectBrief = hasProjectBriefMarkdown
@@ -65,8 +67,12 @@ function App() {
     ? buildSlidesDocument(normalizedProjectBrief)
     : "";
   const creatingContent = useMemo(
-    () => ({ brief: normalizedProjectBrief }),
-    [normalizedProjectBrief],
+    () => ({
+      brief: normalizedProjectBrief,
+      prd: projectPrdsListing,
+      issues: projectIssuesListing,
+    }),
+    [normalizedProjectBrief, projectPrdsListing, projectIssuesListing],
   );
   const {
     creating,
@@ -230,13 +236,21 @@ function App() {
         </div>
         <div className="panel-body">
           {projectSlidesDoc ? (
-            <div className="project-slides-shell">
+            <div
+              className={`project-slides-shell${creating ? " project-slides-shell-creating" : ""}`}
+            >
               <iframe
                 className="project-slides-frame"
                 title="Project plan slideshow"
                 srcDoc={projectSlidesDoc}
                 sandbox="allow-scripts"
               />
+              {creating && (
+                <section className="panel-creating-overlay" aria-live="polite">
+                  <p className="panel-kicker">Working draft</p>
+                  <h2>{creating.message}</h2>
+                </section>
+              )}
             </div>
           ) : (
             <section

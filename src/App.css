@@ -179,7 +179,8 @@ body {
 }
 
 .chat-header h1,
-.panel-placeholder h2 {
+.panel-placeholder h2,
+.panel-creating-overlay h2 {
   margin: 0;
   font-family:
     "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
@@ -591,6 +592,7 @@ body {
 }
 
 .project-slides-shell {
+  position: relative;
   flex: 1;
   height: 100%;
   min-height: 0;
@@ -608,6 +610,31 @@ body {
   min-height: 0;
   border: 0;
   background: transparent;
+}
+
+.project-slides-shell-creating .project-slides-frame {
+  filter: saturate(0.82) brightness(0.72);
+}
+
+.panel-creating-overlay {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  max-width: 32rem;
+  padding: 22px 24px;
+  border-radius: var(--radius-card);
+  background: rgba(31, 31, 40, 0.92);
+  box-shadow: var(--shadow-md);
+  outline: 1px solid var(--line);
+  animation: panel-creating-text-in 320ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.panel-creating-overlay h2 {
+  margin: 0;
+  font-size: clamp(1.25rem, 1.06rem + 0.58vw, 1.58rem);
+  line-height: 1.12;
+  max-width: 24ch;
 }
 
 .panel-placeholder h2 {
