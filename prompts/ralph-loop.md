@@ -13,7 +13,7 @@ Rules:
 - Treat issue body lines like `Blocked by #123` as hard dependencies only while the referenced issue is still open. If the referenced issue is closed, treat that dependency as satisfied.
 - Work only on one issue in this run.
 - Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
-- Read the relevant `_meta` docs before coding, especially any PRD or context files referenced by the issue.
+- Read the relevant in-repo design docs before coding — PRDs in `_meta/prds/`, ADRs in `_meta/adr/`, and the root `CONTEXT.md` — especially anything referenced by the issue's `Source` section.
 - Implement the issue locally, run verification, and do a subagent code review before deciding the issue is done.
 - Fix review findings that are clearly correct. Re-run verification after fixes.
 - If the work is complete, open or update a PR, merge it, and make sure the issue is closed via GitHub state.
