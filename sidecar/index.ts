@@ -7,7 +7,7 @@
  * a project from that message and persists the pi session inside it.
  */
 
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -48,11 +48,20 @@ type OutMsg =
   | { type: "agent_end" }
   | { type: "error"; message: string };
 
+type ProjectPhase = "scoping" | "scoped" | "slicing-prd-done" | "sliced";
+
 type DevLogMsg =
   | { type: "tool_start"; name: string }
   | { type: "tool_end"; name: string; ok: boolean }
   | { type: "assistant_error"; message: string }
-  | { type: "session_event"; event: AgentSessionEvent };
+  | { type: "session_event"; event: AgentSessionEvent }
+  | {
+      type: "project_state";
+      brief: boolean;
+      prds: string[];
+      issues: string[];
+      phase: ProjectPhase;
+    };
 
 let session: AgentSession | null = null;
 let sessionManager: SessionManager | null = null;
@@ -87,6 +96,35 @@ function emit(msg: OutMsg) {
 
 function emitDevLog(msg: DevLogMsg) {
   process.stderr.write(`${JSON.stringify(msg)}\n`);
+}
+
+function listMarkdown(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".md"))
+    .sort();
+}
+
+function emitProjectState() {
+  if (!activeProject) return;
+  const guideDir = join(activeProject.path, ".guide");
+  const briefExists = existsSync(join(activeProject.path, "brief.html"));
+  const prds = listMarkdown(join(guideDir, "prds"));
+  const issues = listMarkdown(join(guideDir, "issues"));
+
+  let phase: ProjectPhase;
+  if (!briefExists) phase = "scoping";
+  else if (prds.length === 0) phase = "scoped";
+  else if (issues.length === 0) phase = "slicing-prd-done";
+  else phase = "sliced";
+
+  emitDevLog({
+    type: "project_state",
+    brief: briefExists,
+    prds,
+    issues,
+    phase,
+  });
 }
 
 function formatError(err: unknown): string {
@@ -196,6 +234,7 @@ function wireSessionEvents(nextSession: AgentSession) {
       case "agent_end":
         suppressAssistantError = false;
         emit({ type: "agent_end" });
+        emitProjectState();
         break;
     }
   });
@@ -320,6 +359,8 @@ async function openProject(
     });
     suppressAssistantError = false;
   }
+
+  emitProjectState();
 }
 
 async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
