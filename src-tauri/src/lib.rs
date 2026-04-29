@@ -40,6 +40,8 @@ struct HydratedMessage {
     role: String,
     text: String,
     done: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    kind: Option<String>,
 }
 
 #[derive(Serialize)]

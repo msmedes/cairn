@@ -93,6 +93,7 @@ function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [recapInteracted, setRecapInteracted] = useState(false);
   const [chatPanePercent, setChatPanePercent] = useState(DEFAULT_CHAT_PANE_PERCENT);
   const [isResizing, setIsResizing] = useState(false);
   const projectSlidesHtml = useProjectFile("brief.html");
@@ -259,6 +260,7 @@ function App() {
           setSending(false);
           hydratedFromStartupRef.current = true;
           setMessages(payload.messages);
+          setRecapInteracted(false);
           break;
         case "ready":
           setReady(true);
@@ -420,13 +422,21 @@ function App() {
               <p className="hint">A quiz for work. A helper for your group. A tiny tool that saves time.</p>
             </div>
           )}
-          {messages.map((m) => (
-            <div key={m.id} className={`msg-row msg-row-${m.role}`}>
-              <div className={`msg msg-${m.role}`}>
-                {m.text || (m.role === "assistant" && !m.done ? "…" : "")}
+          {messages.map((m) => {
+            const recapClass =
+              m.kind === "recap"
+                ? recapInteracted
+                  ? " msg-recap msg-recap-faded"
+                  : " msg-recap"
+                : "";
+            return (
+              <div key={m.id} className={`msg-row msg-row-${m.role}`}>
+                <div className={`msg msg-${m.role}${recapClass}`}>
+                  {m.text || (m.role === "assistant" && !m.done ? "…" : "")}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <form
@@ -441,6 +451,7 @@ function App() {
             ref={inputRef}
             placeholder={ready ? "Type a message…" : "Waking up…"}
             value={input}
+            onFocus={() => setRecapInteracted(true)}
             onChange={(e) => setInput(e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

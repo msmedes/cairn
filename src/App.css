@@ -334,6 +334,86 @@ body {
   line-height: 1.6;
 }
 
+.msg-recap {
+  position: relative;
+  isolation: isolate;
+  animation: recap-glow 2.4s ease-in-out infinite;
+  transition: box-shadow 700ms ease;
+}
+
+.msg-recap::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 160, 102, 0.32) 0%,
+    rgba(255, 160, 102, 0.32) 30%,
+    rgba(255, 232, 188, 1) 50%,
+    rgba(255, 160, 102, 0.32) 70%,
+    rgba(255, 160, 102, 0.32) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: recap-sweep 2.6s linear infinite;
+  transition: opacity 700ms ease;
+}
+
+.msg-recap-faded {
+  animation: none;
+  box-shadow:
+    var(--shadow-sm),
+    0 0 14px -8px rgba(255, 160, 102, 0.22);
+}
+
+.msg-recap-faded::before {
+  animation-play-state: paused;
+  background: linear-gradient(
+    0deg,
+    rgba(255, 160, 102, 0.22),
+    rgba(255, 160, 102, 0.22)
+  );
+}
+
+@keyframes recap-glow {
+  0%,
+  100% {
+    box-shadow:
+      var(--shadow-sm),
+      0 0 12px -2px rgba(255, 160, 102, 0.22);
+  }
+
+  50% {
+    box-shadow:
+      var(--shadow-sm),
+      0 0 30px -2px rgba(255, 180, 120, 0.6);
+  }
+}
+
+@keyframes recap-sweep {
+  0% {
+    background-position: 220% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-recap,
+  .msg-recap::before {
+    animation: none;
+  }
+}
+
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

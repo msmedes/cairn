@@ -20,9 +20,16 @@ export async function emitHydrateAndMaybeResumeRecap(
 	try {
 		const fired = await maybeSendResumeRecap(session, sessionManager);
 		if (fired) {
-			hooks.emitHydrate(
-				translateSessionEntriesToHydrateEvent(sessionManager.getEntries()),
+			const event = translateSessionEntriesToHydrateEvent(
+				sessionManager.getEntries(),
 			);
+			for (let i = event.messages.length - 1; i >= 0; i--) {
+				if (event.messages[i].role === "assistant") {
+					event.messages[i] = { ...event.messages[i], kind: "recap" };
+					break;
+				}
+			}
+			hooks.emitHydrate(event);
 		}
 	} catch (error) {
 		hooks.onRecapError(error);
