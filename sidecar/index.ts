@@ -39,6 +39,7 @@ type OutMsg =
 	| { type: "ready" }
 	| { type: "text_delta"; delta: string }
 	| { type: "text_done" }
+	| { type: "creating_started"; target: "brief"; message: string }
 	| { type: "agent_end" }
 	| { type: "error"; message: string };
 
@@ -278,6 +279,9 @@ async function openProject(
 				retargetActiveRuntimeAfterRename(previousProject, nextProject);
 			},
 			onProjectUpdate: emitActiveProject,
+			onCreatingStart: (target, message) => {
+				emit({ type: "creating_started", target, message });
+			},
 		}),
 	});
 

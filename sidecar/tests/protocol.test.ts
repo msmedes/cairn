@@ -274,6 +274,51 @@ if (!authCheck.ok) {
 		},
 		DEFAULT_TIMEOUT_MS,
 	);
+
+	test(
+		"set_creating emits creating_started over stdio",
+		async () => {
+			const guideHome = createGuideHome();
+			const proc = spawnSidecar(guideHome);
+			const personaPath = createPersonaFile(`
+You are the Guide.
+When the user asks you to create a brief, first call set_creating with target "brief" and message "Putting your project plan together".
+In the same turn, say one short matching line in chat.
+Do not write files for this test.
+`);
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({ type: "init", personaPath }) + "\n",
+			);
+			await collectEvents(
+				proc,
+				(event) => event.type === "ready",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			writeToSidecar(
+				proc,
+				JSON.stringify({
+					type: "prompt",
+					text: "Create the brief now.",
+				}) + "\n",
+			);
+
+			const promptEvents = await collectEvents(
+				proc,
+				(event) => event.type === "creating_started",
+				DEFAULT_TIMEOUT_MS,
+			);
+
+			expect(promptEvents.at(-1)).toEqual({
+				type: "creating_started",
+				target: "brief",
+				message: "Putting your project plan together",
+			});
+		},
+		DEFAULT_TIMEOUT_MS,
+	);
 }
 
 test("malformed input emits an error event without killing the sidecar", async () => {

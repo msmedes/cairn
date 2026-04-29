@@ -2,11 +2,14 @@ import { Type } from "@mariozechner/pi-ai";
 import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { Project, ProjectRenameResult } from "./project-store";
 
+export type CreatingTarget = "brief";
+
 export type GuideToolsOptions = {
 	getActiveProject: () => Project | null;
 	renameProject: (id: string, displayName: string) => ProjectRenameResult;
 	onRenameSuccess: (previousProject: Project, nextProject: Project) => void;
 	onProjectUpdate: (project: Project) => void;
+	onCreatingStart: (target: CreatingTarget, message: string) => void;
 };
 
 export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
@@ -60,6 +63,42 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
 						projectId: result.project?.id ?? null,
 						displayName: result.project?.displayName ?? null,
 					},
+				};
+			},
+		}),
+		defineTool({
+			name: "set_creating",
+			label: "Show Creating Indicator",
+			description:
+				"Tell the project panel that the Guide is creating a user-visible artifact. Use this only immediately before making something the user can see, and never for hidden thinking or ordinary tool work.",
+			promptSnippet: "Show that the Guide is creating a user-visible artifact",
+			promptGuidelines: [
+				"Call set_creating only before creating a user-visible artifact such as the brief; do not use it for hidden work or thinking.",
+				"Pair the tool call with one short chat line in the same turn, written in your Guide voice.",
+				"Set message to the panel text the user should see: under about 80 characters, conversational, no paths, files, tools, or implementation details.",
+				"The indicator auto-clears when the artifact appears; there is no clear_creating tool.",
+			],
+			parameters: Type.Object({
+				target: Type.Union([Type.Literal("brief")], {
+					description: "The kind of user-visible artifact being created.",
+				}),
+				message: Type.String({
+					description:
+						"Short Guide-voice text to show while the artifact is being created.",
+				}),
+			}),
+			executionMode: "sequential",
+			async execute(_toolCallId, params) {
+				options.onCreatingStart(params.target, params.message);
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Creating indicator is showing.",
+						},
+					],
+					details: { ok: true, target: params.target },
 				};
 			},
 		}),
