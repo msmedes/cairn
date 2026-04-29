@@ -8,7 +8,8 @@
  */
 
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type AgentSession,
   type AgentSessionEvent,
@@ -59,6 +60,7 @@ let inputQueue = Promise.resolve();
 let streamedAssistantText = false;
 let suppressAssistantError = false;
 const startupCwd = process.cwd();
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 loadRepoLocalEnv();
 
@@ -266,6 +268,7 @@ async function openProject(
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),
+    additionalSkillPaths: [resolve(repoRoot, "prompts/skills")],
     systemPromptOverride: () => personaContent,
     appendSystemPromptOverride: () => [],
   });
