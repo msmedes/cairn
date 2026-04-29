@@ -5,7 +5,7 @@ import { useCreatingIndicator } from "./useCreatingIndicator";
 describe("useCreatingIndicator", () => {
   test("initial state is null", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     expect(result.current.creating).toBeNull();
@@ -13,7 +13,7 @@ describe("useCreatingIndicator", () => {
 
   test("creating_started sets the current creating state", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {
@@ -28,7 +28,8 @@ describe("useCreatingIndicator", () => {
 
   test("unchanged target content after creating_started keeps state", () => {
     const { result, rerender } = renderHook(
-      ({ brief }) => useCreatingIndicator({ brief, prd: "", issues: "" }),
+      ({ brief }) =>
+        useCreatingIndicator({ brief, prd: "", issues: "", plan: "" }),
       { initialProps: { brief: "draft" } },
     );
 
@@ -45,7 +46,8 @@ describe("useCreatingIndicator", () => {
 
   test("target content change after creating_started clears state", async () => {
     const { result, rerender } = renderHook(
-      ({ brief }) => useCreatingIndicator({ brief, prd: "", issues: "" }),
+      ({ brief }) =>
+        useCreatingIndicator({ brief, prd: "", issues: "", plan: "" }),
       { initialProps: { brief: "draft" } },
     );
 
@@ -61,7 +63,8 @@ describe("useCreatingIndicator", () => {
 
   test("target content change before creating_started does not create or clear state", () => {
     const { result, rerender } = renderHook(
-      ({ brief }) => useCreatingIndicator({ brief, prd: "", issues: "" }),
+      ({ brief }) =>
+        useCreatingIndicator({ brief, prd: "", issues: "", plan: "" }),
       { initialProps: { brief: "" } },
     );
 
@@ -82,7 +85,7 @@ describe("useCreatingIndicator", () => {
 
   test("agent_end after creating_started with no file change clears state", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {
@@ -95,7 +98,7 @@ describe("useCreatingIndicator", () => {
 
   test("hydrate mid-creating clears state", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {
@@ -108,7 +111,7 @@ describe("useCreatingIndicator", () => {
 
   test("error mid-creating clears state", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {
@@ -121,7 +124,7 @@ describe("useCreatingIndicator", () => {
 
   test("two creating_started calls in sequence use the second one", () => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {
@@ -146,10 +149,15 @@ describe("useCreatingIndicator", () => {
       contentKey: "issues" as const,
       nextContent: "01-first-issue.md",
     },
+    {
+      target: "plan" as const,
+      contentKey: "plan" as const,
+      nextContent: "<h1>Plan</h1>",
+    },
   ])("$target clears when matching guide artifact appears", async (entry) => {
     const { result, rerender } = renderHook(
       (content) => useCreatingIndicator(content),
-      { initialProps: { brief: "", prd: "", issues: "" } },
+      { initialProps: { brief: "", prd: "", issues: "", plan: "" } },
     );
 
     act(() => {
@@ -159,6 +167,7 @@ describe("useCreatingIndicator", () => {
       brief: "",
       prd: entry.contentKey === "prd" ? entry.nextContent : "",
       issues: entry.contentKey === "issues" ? entry.nextContent : "",
+      plan: entry.contentKey === "plan" ? entry.nextContent : "",
     });
 
     await waitFor(() => {
@@ -169,14 +178,14 @@ describe("useCreatingIndicator", () => {
   test("mixed-target overlap replacement uses the latest target", async () => {
     const { result, rerender } = renderHook(
       (content) => useCreatingIndicator(content),
-      { initialProps: { brief: "", prd: "", issues: "" } },
+      { initialProps: { brief: "", prd: "", issues: "", plan: "" } },
     );
 
     act(() => {
       result.current.creating_started("brief", "Writing the brief");
       result.current.creating_started("prd", "Writing the PRD");
     });
-    rerender({ brief: "done", prd: "", issues: "" });
+    rerender({ brief: "done", prd: "", issues: "", plan: "" });
 
     expect(result.current.creating).toEqual({
       target: "prd",
@@ -185,15 +194,26 @@ describe("useCreatingIndicator", () => {
 
     act(() => {
       result.current.creating_started("issues", "Writing the issues");
+      result.current.creating_started("plan", "Writing the plan");
     });
-    rerender({ brief: "done", prd: "01-slice.md", issues: "" });
+    rerender({
+      brief: "done",
+      prd: "01-slice.md",
+      issues: "01-task.md",
+      plan: "",
+    });
 
     expect(result.current.creating).toEqual({
-      target: "issues",
-      message: "Writing the issues",
+      target: "plan",
+      message: "Writing the plan",
     });
 
-    rerender({ brief: "done", prd: "01-slice.md", issues: "01-task.md" });
+    rerender({
+      brief: "done",
+      prd: "01-slice.md",
+      issues: "01-task.md",
+      plan: "<h1>Plan</h1>",
+    });
 
     await waitFor(() => {
       expect(result.current.creating).toBeNull();
@@ -203,9 +223,10 @@ describe("useCreatingIndicator", () => {
   test.each([
     "prd",
     "issues",
+    "plan",
   ] as const)("agent_end clears abandoned %s creation", (target) => {
     const { result } = renderHook(() =>
-      useCreatingIndicator({ brief: "", prd: "", issues: "" }),
+      useCreatingIndicator({ brief: "", prd: "", issues: "", plan: "" }),
     );
 
     act(() => {

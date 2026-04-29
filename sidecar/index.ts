@@ -42,7 +42,7 @@ type OutMsg =
   | { type: "text_done" }
   | {
       type: "creating_started";
-      target: "brief" | "prd" | "issues";
+      target: "brief" | "prd" | "issues" | "plan";
       message: string;
     }
   | { type: "agent_end" }
