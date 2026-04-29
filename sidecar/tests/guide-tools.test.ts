@@ -52,16 +52,19 @@ test("set_project_name tool renames the active project and reports the updated p
   );
 
   expect(toolText(result)).toBe("I'll call it Quiz Tool.");
+  const originalId = renamedPairs[0]?.[0].id;
+  expect(originalId).toBeDefined();
   expect(result.details).toMatchObject({
     ok: true,
-    projectId: "quiz-tool",
+    projectId: originalId,
     displayName: "Quiz Tool",
   });
-  expect(activeProject?.id).toBe("quiz-tool");
-  expect(store.read("quiz-tool")?.displayName).toBe("Quiz Tool");
+  expect(activeProject?.id).toBe(originalId);
+  expect(activeProject?.path).toBe(renamedPairs[0]?.[0].path);
+  expect(store.read(originalId as string)?.displayName).toBe("Quiz Tool");
   expect(renamedPairs).toHaveLength(1);
   expect(emittedProjects).toHaveLength(1);
-  expect(emittedProjects[0].id).toBe("quiz-tool");
+  expect(emittedProjects[0].id).toBe(originalId);
 });
 
 test("set_project_name tool keeps voice-safe failure messages inside the tool result", async () => {

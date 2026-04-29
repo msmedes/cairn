@@ -75,7 +75,7 @@ test("touch updates lastOpenedAt without changing createdAt", () => {
   expect(store.read(project.id)?.lastOpenedAt).toBe("2026-04-28T13:00:00.000Z");
 });
 
-test("rename uses a clean display name, renames the folder, and updates metadata", () => {
+test("rename updates display name in metadata while keeping the on-disk folder stable", () => {
   const store = new ProjectStore(tempProjectsRoot());
   const project = store.create(
     "Temporary quiz idea",
@@ -86,24 +86,24 @@ test("rename uses a clean display name, renames the folder, and updates metadata
   expect(renamed.ok).toBe(true);
   if (!renamed.ok) throw new Error(renamed.message);
   expect(renamed.project).toMatchObject({
-    id: "training-quiz-tool",
+    id: project.id,
+    path: project.path,
     name: "Training Quiz Tool",
     displayName: "Training Quiz Tool",
     createdAt: "2026-04-28T10:00:00.000Z",
   });
-  expect(existsSync(project.path)).toBe(false);
-  expect(existsSync(renamed.project.path)).toBe(true);
+  expect(existsSync(project.path)).toBe(true);
   expect(
     JSON.parse(
       readFileSync(join(renamed.project.path, "project.json"), "utf8"),
     ),
   ).toMatchObject({
-    id: "training-quiz-tool",
+    id: project.id,
     name: "Training Quiz Tool",
   });
 });
 
-test("rename silently disambiguates duplicate chosen names", () => {
+test("rename allows the same display name across projects without folder collisions", () => {
   const root = tempProjectsRoot();
   const store = new ProjectStore(root);
   const first = store.create(
@@ -118,10 +118,11 @@ test("rename silently disambiguates duplicate chosen names", () => {
   const firstRenamed = store.rename(first.id, "Quiz Tool");
   const secondRenamed = store.rename(second.id, "Quiz Tool");
 
-  expect(firstRenamed.ok && firstRenamed.project.id).toBe("quiz-tool");
-  expect(secondRenamed.ok && secondRenamed.project.id).toBe("quiz-tool-2");
-  expect(store.read("quiz-tool")?.name).toBe("Quiz Tool");
-  expect(store.read("quiz-tool-2")?.name).toBe("Quiz Tool");
+  expect(firstRenamed.ok && firstRenamed.project.id).toBe(first.id);
+  expect(secondRenamed.ok && secondRenamed.project.id).toBe(second.id);
+  expect(first.id).not.toBe(second.id);
+  expect(store.read(first.id)?.name).toBe("Quiz Tool");
+  expect(store.read(second.id)?.name).toBe("Quiz Tool");
 });
 
 test("rename handles empty names without changing the project folder", () => {
@@ -138,7 +139,7 @@ test("rename handles empty names without changing the project folder", () => {
   expect(store.read(project.id)?.name).toBe("Temporary quiz idea");
 });
 
-test("rename preserves non-Latin display names while falling back to an untitled slug", () => {
+test("rename preserves non-Latin display names while keeping the original id", () => {
   const store = new ProjectStore(tempProjectsRoot());
   const project = store.create(
     "Temporary quiz idea",
@@ -146,9 +147,9 @@ test("rename preserves non-Latin display names while falling back to an untitled
   );
   const renamed = store.rename(project.id, "東京の予定表");
 
-  expect(renamed.ok && renamed.project.id).toBe("untitled");
+  expect(renamed.ok && renamed.project.id).toBe(project.id);
   expect(renamed.ok && renamed.project.displayName).toBe("東京の予定表");
-  expect(store.read("untitled")?.name).toBe("東京の予定表");
+  expect(store.read(project.id)?.name).toBe("東京の予定表");
 });
 
 test("read rejects metadata ids that mismatch the containing folder", () => {

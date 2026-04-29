@@ -1,4 +1,11 @@
-import { type CSSProperties, useCallback, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import "./App.css";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { buildSlidesDocument } from "./projectSlides";
@@ -124,6 +131,20 @@ function App() {
     setInput("");
     void sendPrompt(text);
   }
+
+  useEffect(() => {
+    function handler(event: KeyboardEvent) {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (isMod && event.shiftKey && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        invoke("new_project").catch((err) => {
+          console.error("new_project failed", err);
+        });
+      }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const statusLabel = error ? "error" : ready ? "ready" : "starting…";
   const statusClass = error ? "err" : ready ? "ok" : "wait";

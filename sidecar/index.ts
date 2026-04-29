@@ -8,7 +8,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type AgentSession,
@@ -29,7 +29,8 @@ import { type Project, ProjectStore } from "./project-store";
 
 type InMsg =
   | { type: "init"; personaPath?: string }
-  | { type: "prompt"; text: string };
+  | { type: "prompt"; text: string }
+  | { type: "new_project" };
 
 type OutMsg =
   | HydrateEvent
@@ -252,48 +253,6 @@ function emitActiveProject(project: Project) {
   });
 }
 
-function retargetActiveRuntimeAfterRename(
-  previousProject: Project,
-  nextProject: Project,
-) {
-  process.chdir(nextProject.path);
-
-  if (sessionManager) {
-    const mutableManager = sessionManager as unknown as {
-      cwd: string;
-      sessionDir: string;
-      sessionFile?: string;
-      getSessionFile?: () => string | undefined;
-    };
-    const previousSessionDir = getSessionDir(previousProject);
-    const currentSessionFile = mutableManager.getSessionFile?.();
-    mutableManager.cwd = nextProject.path;
-    mutableManager.sessionDir = getSessionDir(nextProject);
-    if (currentSessionFile?.startsWith(previousSessionDir)) {
-      mutableManager.sessionFile = join(
-        mutableManager.sessionDir,
-        basename(currentSessionFile),
-      );
-    }
-  }
-
-  if (session) {
-    const mutableSession = session as unknown as {
-      _cwd: string;
-      getActiveToolNames: () => string[];
-      _buildRuntime: (options: {
-        activeToolNames: string[];
-        includeAllExtensionTools: boolean;
-      }) => void;
-    };
-    mutableSession._cwd = nextProject.path;
-    mutableSession._buildRuntime({
-      activeToolNames: mutableSession.getActiveToolNames(),
-      includeAllExtensionTools: true,
-    });
-  }
-}
-
 async function openProject(
   project: Project,
   personaPath: string,
@@ -331,9 +290,8 @@ async function openProject(
     customTools: createGuideTools({
       getActiveProject: () => activeProject,
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
-      onRenameSuccess: (previousProject, nextProject) => {
+      onRenameSuccess: (_previousProject, nextProject) => {
         activeProject = nextProject;
-        retargetActiveRuntimeAfterRename(previousProject, nextProject);
       },
       onProjectUpdate: emitActiveProject,
       onCreatingStart: (target, message) => {
@@ -405,6 +363,14 @@ async function handlePrompt(text: string) {
   await session.prompt(text);
 }
 
+async function handleNewProject() {
+  disposeSession();
+  activeProject = null;
+  process.chdir(startupCwd);
+  emit({ type: "hydrate", messages: [] });
+  emitProjectState();
+}
+
 async function handleLine(line: string) {
   const trimmed = line.trim();
   if (!trimmed) return;
@@ -423,6 +389,9 @@ async function handleLine(line: string) {
       break;
     case "prompt":
       await handlePrompt(msg.text);
+      break;
+    case "new_project":
+      await handleNewProject();
       break;
   }
 }

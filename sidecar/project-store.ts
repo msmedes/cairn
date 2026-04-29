@@ -3,7 +3,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -152,6 +151,12 @@ export class ProjectStore {
   }
 
   rename(id: string, displayName: string): ProjectRenameResult {
+    // Renaming updates displayName in metadata only. The on-disk directory
+    // and project id stay fixed at their create-time slug so any path the
+    // running agent has already learned (brief.html absolute path, the
+    // project root passed into skills) remains valid for the rest of the
+    // session. Without this, a rename mid-session would orphan subsequent
+    // writes into a phantom directory recreated at the old path.
     const project = this.read(id);
     if (!project) {
       return {
@@ -170,11 +175,7 @@ export class ProjectStore {
     }
 
     const cleanedName = cleanDisplayName(displayName);
-    const nextId = disambiguate(
-      slugify(cleanedName, { maxLength: 80 }),
-      this.existingProjectIds().filter((existingId) => existingId !== id),
-    );
-    if (nextId === project.id && cleanedName === project.name) {
+    if (cleanedName === project.name) {
       return {
         ok: true,
         project,
@@ -182,9 +183,8 @@ export class ProjectStore {
       };
     }
 
-    const nextPath = join(this.projectsRoot, nextId);
     const metadata: ProjectJson = {
-      id: nextId,
+      id: project.id,
       name: cleanedName,
       createdAt: project.createdAt,
       lastOpenedAt: new Date().toISOString(),
@@ -192,26 +192,12 @@ export class ProjectStore {
 
     try {
       this.writeProjectJson(project.path, metadata);
-      renameSync(project.path, nextPath);
       return {
         ok: true,
-        project: this.enrich(metadata, nextPath),
+        project: this.enrich(metadata, project.path),
         message: `I'll call it ${cleanedName}.`,
       };
     } catch {
-      try {
-        if (existsSync(project.path)) {
-          this.writeProjectJson(project.path, {
-            id: project.id,
-            name: project.name,
-            createdAt: project.createdAt,
-            lastOpenedAt: project.lastOpenedAt,
-          });
-        }
-      } catch {
-        // Keep the user-facing failure short; the next read/list will ignore
-        // malformed or mismatched metadata rather than exposing internals.
-      }
       return {
         ok: false,
         project,

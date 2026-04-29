@@ -146,6 +146,18 @@ async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Resul
 }
 
 #[tauri::command]
+async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
+    if let Ok(mut guard) = state.active_project.lock() {
+        *guard = None;
+    }
+    if let Ok(mut guard) = state.last_hydrate.lock() {
+        *guard = Some(vec![]);
+    }
+    let payload = serde_json::json!({ "type": "new_project" });
+    write_line(&state.stdin, &payload).await
+}
+
+#[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
     let hydrate = state
@@ -381,6 +393,7 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
+            new_project,
             get_active_project,
             get_sidecar_status,
             read_project_file
