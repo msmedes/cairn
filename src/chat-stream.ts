@@ -3,6 +3,7 @@ export type ChatMessage = {
 	role: "user" | "assistant";
 	text: string;
 	done: boolean;
+	kind?: "recap";
 };
 
 export type AssistantDeltaResult = {

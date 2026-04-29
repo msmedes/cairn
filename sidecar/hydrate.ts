@@ -5,6 +5,7 @@ export type HydrateMessage = {
 	role: "user" | "assistant";
 	text: string;
 	done: true;
+	kind?: "recap";
 };
 
 export type HydrateEvent = {

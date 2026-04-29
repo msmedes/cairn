@@ -168,6 +168,7 @@ test("emitHydrateAndMaybeResumeRecap emits an updated hydrate after a recap fire
 					role: "assistant",
 					text: "Last time we were sketching the quiz flow. Want to pick that up or change direction?",
 					done: true,
+					kind: "recap",
 				},
 			],
 		},
