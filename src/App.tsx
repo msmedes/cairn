@@ -1,53 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import "./App.css";
 import { buildSlidesDocument } from "./projectSlides";
-import { applyAssistantDelta, markAssistantDone, type ChatMessage } from "./chat-stream";
+import { useAutoScroll } from "./useAutoScroll";
 import { useCreatingIndicator } from "./useCreatingIndicator";
+import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
+import {
+  DEFAULT_CHAT_PANE_PERCENT,
+  MAX_CHAT_PANE_PERCENT,
+  MIN_CHAT_PANE_PERCENT,
+  usePaneSplit,
+} from "./usePaneSplit";
 import { useProjectFile } from "./useProjectFile";
-
-type SidecarEvent =
-  | { type: "hydrate"; messages: ChatMessage[] }
-  | { type: "active_project"; project: ActiveProject }
-  | { type: "ready" }
-  | { type: "text_delta"; delta: string }
-  | { type: "text_done" }
-  | { type: "creating_started"; target: "brief"; message: string }
-  | { type: "agent_end" }
-  | { type: "error"; message: string };
-
-type SidecarStatus = {
-  ready: boolean;
-  error: string | null;
-  hydrate: ChatMessage[] | null;
-  activeProject: ActiveProject | null;
-};
-
-type ActiveProject = {
-  id: string;
-  name: string;
-  path: string;
-  displayName: string;
-};
-
-function hasTauriRuntime() {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
-
-function newId() {
-  return Math.random().toString(36).slice(2);
-}
-
-const MAX_INPUT_HEIGHT = 220;
-const DEFAULT_CHAT_PANE_PERCENT = 41;
-const MIN_CHAT_PANE_PERCENT = 28;
-const MAX_CHAT_PANE_PERCENT = 62;
-const PANE_SPLIT_STORAGE_KEY = "guide-pane-split";
-
-function clampPaneSplit(value: number) {
-  return Math.min(MAX_CHAT_PANE_PERCENT, Math.max(MIN_CHAT_PANE_PERCENT, value));
-}
+import { useSidecarSession } from "./useSidecarSession";
 
 function htmlToMarkdown(html: string): string {
   if (
@@ -88,14 +52,8 @@ function htmlToMarkdown(html: string): string {
 }
 
 function App() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
   const [recapInteracted, setRecapInteracted] = useState(false);
-  const [chatPanePercent, setChatPanePercent] = useState(DEFAULT_CHAT_PANE_PERCENT);
-  const [isResizing, setIsResizing] = useState(false);
   const projectSlidesHtml = useProjectFile("brief.html");
   const projectBriefMarkdown = useProjectFile("brief.md");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
@@ -119,270 +77,31 @@ function App() {
     hydrate: clearCreatingOnHydrate,
     error: clearCreatingOnError,
   } = useCreatingIndicator(creatingContent);
+  const handleHydrate = useCallback(() => {
+    clearCreatingOnHydrate();
+    setRecapInteracted(false);
+  }, [clearCreatingOnHydrate]);
+  const { messages, ready, error, sending, sendPrompt } = useSidecarSession({
+    onCreatingStarted: startCreating,
+    onAgentEnd: clearCreatingOnAgentEnd,
+    onHydrate: handleHydrate,
+    onError: clearCreatingOnError,
+  });
+  const listRef = useAutoScroll(messages);
+  const { composerRef, inputRef } = useAutoResizingTextarea(input);
+  const {
+    appRef,
+    chatPanePercent,
+    isResizing,
+    setChatPanePercent,
+    startResizing,
+  } = usePaneSplit();
 
-  // Track the in-flight assistant message so streamed deltas land in the right place.
-  const activeAssistantId = useRef<string | null>(null);
-  const appRef = useRef<HTMLElement | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const composerRef = useRef<HTMLFormElement | null>(null);
-  const resizingRef = useRef(false);
-  const hydratedFromStartupRef = useRef(false);
-  const messageCountRef = useRef(0);
-
-  useEffect(() => {
-    messageCountRef.current = messages.length;
-  }, [messages.length]);
-
-  function updatePaneSplit(clientX: number) {
-    const el = appRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    if (rect.width <= 0) return;
-
-    const next = ((clientX - rect.left) / rect.width) * 100;
-    setChatPanePercent(clampPaneSplit(next));
-  }
-
-  function stopResizing() {
-    if (!resizingRef.current) return;
-    resizingRef.current = false;
-    setIsResizing(false);
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }
-
-  function startResizing(clientX: number) {
-    resizingRef.current = true;
-    setIsResizing(true);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    updatePaneSplit(clientX);
-  }
-
-  function resizeInput() {
-    const el = inputRef.current;
-    if (!el) return;
-
-    // Reset first so both wrapping changes and deleted text can shrink the field.
-    el.style.height = "auto";
-    const nextHeight = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT);
-    el.style.height = `${nextHeight}px`;
-    el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden";
-  }
-
-  // Auto-scroll on new content.
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
-
-  useLayoutEffect(() => {
-    resizeInput();
-  }, [input]);
-
-  useEffect(() => {
-    const composer = composerRef.current;
-    if (!composer || typeof ResizeObserver === "undefined") return;
-
-    const observer = new ResizeObserver(() => {
-      resizeInput();
-    });
-    observer.observe(composer);
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const stored = window.localStorage.getItem(PANE_SPLIT_STORAGE_KEY);
-    if (!stored) return;
-
-    const parsed = Number(stored);
-    if (!Number.isFinite(parsed)) return;
-    setChatPanePercent(clampPaneSplit(parsed));
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(PANE_SPLIT_STORAGE_KEY, String(chatPanePercent));
-  }, [chatPanePercent]);
-
-  useEffect(() => {
-    function handlePointerMove(event: PointerEvent) {
-      if (!resizingRef.current) return;
-      updatePaneSplit(event.clientX);
-    }
-
-    function handlePointerUp() {
-      stopResizing();
-    }
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-      stopResizing();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!hasTauriRuntime()) {
-      setError("This app must be launched with Tauri, not a plain browser tab.");
-      setReady(false);
-      return;
-    }
-
-    let unlisten: UnlistenFn | undefined;
-    let cancelled = false;
-
-    function finalizeActive() {
-      const id = activeAssistantId.current;
-      if (id) {
-        setMessages((prev) => markAssistantDone(prev, id));
-      }
-      activeAssistantId.current = null;
-      setSending(false);
-    }
-
-    listen<SidecarEvent>("sidecar-event", (event) => {
-      const payload = event.payload;
-      switch (payload.type) {
-        case "hydrate":
-          clearCreatingOnHydrate();
-          activeAssistantId.current = null;
-          setSending(false);
-          hydratedFromStartupRef.current = true;
-          setMessages(payload.messages);
-          setRecapInteracted(false);
-          break;
-        case "ready":
-          setReady(true);
-          setError(null);
-          break;
-        case "active_project":
-          break;
-        case "text_delta": {
-          setSending(true);
-          setMessages((prev) => {
-            const next = applyAssistantDelta(
-              prev,
-              activeAssistantId.current,
-              payload.delta,
-              newId,
-            );
-            activeAssistantId.current = next.activeAssistantId;
-            return next.messages;
-          });
-          break;
-        }
-        case "text_done": {
-          const id = activeAssistantId.current;
-          if (!id) break;
-          setMessages((prev) => markAssistantDone(prev, id));
-          break;
-        }
-        case "creating_started":
-          startCreating(payload.target, payload.message);
-          break;
-        case "agent_end":
-          clearCreatingOnAgentEnd();
-          finalizeActive();
-          break;
-        case "error":
-          clearCreatingOnError();
-          console.error("[sidecar error]", payload.message);
-          setError(payload.message);
-          setReady(false);
-          finalizeActive();
-          break;
-        default: {
-          // Compile-time exhaustiveness: a new variant in SidecarEvent must
-          // add a case here or the build fails.
-          const _exhaustive: never = payload;
-          console.warn("[sidecar] unhandled event", _exhaustive);
-        }
-      }
-    })
-      .then((fn) => {
-        // If the effect was already torn down (StrictMode dev double-mount,
-        // HMR, etc.), unsubscribe immediately so we don't leak a duplicate.
-        if (cancelled) {
-          fn();
-          return;
-        }
-        unlisten = fn;
-        // Listener is live now — query current state in case ready/error
-        // already happened before we subscribed.
-        invoke<SidecarStatus>("get_sidecar_status")
-          .then((status) => {
-            if (cancelled) return;
-            if (
-              status.hydrate &&
-              !hydratedFromStartupRef.current &&
-              messageCountRef.current === 0
-            ) {
-              hydratedFromStartupRef.current = true;
-              clearCreatingOnHydrate();
-              setMessages(status.hydrate);
-            }
-            if (status.ready) setReady(true);
-            if (status.error) setError(status.error);
-          })
-          .catch((err) => console.error("get_sidecar_status failed", err));
-      })
-      .catch((err) => {
-        console.error("sidecar-event listen() failed", err);
-        if (!cancelled) setError("Failed to attach to the sidecar.");
-      });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [
-    clearCreatingOnAgentEnd,
-    clearCreatingOnError,
-    clearCreatingOnHydrate,
-    startCreating,
-  ]);
-
-  async function send() {
+  function send() {
     const text = input.trim();
     if (!text || sending || !ready) return;
-
-    const userMsg: ChatMessage = {
-      id: newId(),
-      role: "user",
-      text,
-      done: true,
-    };
-    const assistantMsg: ChatMessage = {
-      id: newId(),
-      role: "assistant",
-      text: "",
-      done: false,
-    };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
-    activeAssistantId.current = assistantMsg.id;
     setInput("");
-    setSending(true);
-
-    try {
-      await invoke("send_prompt", { text });
-    } catch (err) {
-      console.error("send_prompt failed", err);
-      // Drop the orphaned assistant message; the user message stays visible.
-      setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
-      activeAssistantId.current = null;
-      setSending(false);
-    }
+    void sendPrompt(text);
   }
 
   const statusLabel = error ? "error" : ready ? "ready" : "starting…";
@@ -483,10 +202,10 @@ function App() {
         onKeyDown={(event) => {
           if (event.key === "ArrowLeft") {
             event.preventDefault();
-            setChatPanePercent((prev) => clampPaneSplit(prev - 3));
+            setChatPanePercent((prev) => prev - 3);
           } else if (event.key === "ArrowRight") {
             event.preventDefault();
-            setChatPanePercent((prev) => clampPaneSplit(prev + 3));
+            setChatPanePercent((prev) => prev + 3);
           } else if (event.key === "Home") {
             event.preventDefault();
             setChatPanePercent(MIN_CHAT_PANE_PERCENT);

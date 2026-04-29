@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type CreatingTarget = "brief";
 
@@ -41,13 +41,12 @@ export function useCreatingIndicator(content: CreatingIndicatorContent) {
     }
   }, [content, creatingState]);
 
-  const creating = useMemo<CreatingIndicator | null>(() => {
-    if (!creatingState) return null;
-    return {
-      target: creatingState.target,
-      message: creatingState.message,
-    };
-  }, [creatingState]);
+  const creating: CreatingIndicator | null = creatingState
+    ? {
+        target: creatingState.target,
+        message: creatingState.message,
+      }
+    : null;
 
   return {
     creating,
