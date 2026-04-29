@@ -40,7 +40,11 @@ type OutMsg =
   | { type: "ready" }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
-  | { type: "creating_started"; target: "brief"; message: string }
+  | {
+      type: "creating_started";
+      target: "brief" | "prd" | "issues";
+      message: string;
+    }
   | { type: "agent_end" }
   | { type: "error"; message: string };
 

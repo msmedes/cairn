@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Value } from "typebox/value";
+import type { CreatingTarget } from "../guide-tools";
 import { createGuideTools } from "../guide-tools";
 import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
@@ -91,8 +93,12 @@ test("set_project_name tool keeps voice-safe failure messages inside the tool re
   expect(toolText(result)).not.toContain("/");
 });
 
-test("set_creating tool emits the parsed creating target and message once", async () => {
-  const creatingEvents: Array<{ target: "brief"; message: string }> = [];
+test.each([
+  "brief",
+  "prd",
+  "issues",
+] as const)("set_creating tool accepts target %s and emits it once", async (target) => {
+  const creatingEvents: Array<{ target: CreatingTarget; message: string }> = [];
   const setCreating = createGuideTools({
     getActiveProject: () => null,
     renameProject: () => {
@@ -119,7 +125,7 @@ test("set_creating tool emits the parsed creating target and message once", asyn
   const result = await setCreating.execute(
     "tool-call-1",
     {
-      target: "brief",
+      target,
       message: "Putting your project plan together",
     },
     undefined,
@@ -129,9 +135,43 @@ test("set_creating tool emits the parsed creating target and message once", asyn
 
   expect(creatingEvents).toEqual([
     {
-      target: "brief",
+      target,
       message: "Putting your project plan together",
     },
   ]);
   expect(toolText(result)).toBe("Creating indicator is showing.");
+});
+
+test("set_creating tool rejects unknown targets by schema", () => {
+  const setCreating = createGuideTools({
+    getActiveProject: () => null,
+    renameProject: () => {
+      throw new Error("should not rename while setting creating state");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while setting creating state");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while setting creating state",
+      );
+    },
+    onCreatingStart: (target, message) => {
+      throw new Error(
+        `should not emit creating state for ${target}: ${message}`,
+      );
+    },
+  }).find((tool) => tool.name === "set_creating");
+
+  expect(setCreating).toBeDefined();
+  if (!setCreating) {
+    throw new Error("set_creating tool was not registered");
+  }
+
+  expect(
+    Value.Check(setCreating.parameters, {
+      target: "wireframe",
+      message: "Putting this together",
+    }),
+  ).toBe(false);
 });

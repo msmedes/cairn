@@ -2,7 +2,7 @@ import { Type } from "@mariozechner/pi-ai";
 import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { Project, ProjectRenameResult } from "./project-store";
 
-export type CreatingTarget = "brief";
+export type CreatingTarget = "brief" | "prd" | "issues";
 
 export type GuideToolsOptions = {
   getActiveProject: () => Project | null;
@@ -16,9 +16,8 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
   // Guide-specific tools live beside pi's filesystem tools via `customTools`.
   // Keep each tool thin: validate/write domain state in deep modules, update
   // sidecar runtime state through explicit callbacks, and return a short phrase
-  // the persona can fold into its own voice. Future Guide tools such as
-  // write_prd or write_issue should follow this same sidecar-local pattern
-  // instead of leaking paths or implementation details into the persona prompt.
+  // the persona can fold into its own voice. Artifact-writing work such as PRDs
+  // and issues ships as skills; tools stay reserved for declared side effects.
   return [
     defineTool({
       name: "set_project_name",
@@ -73,15 +72,18 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Tell the project panel that the Guide is creating a user-visible artifact. Use this only immediately before making something the user can see, and never for hidden thinking or ordinary tool work.",
       promptSnippet: "Show that the Guide is creating a user-visible artifact",
       promptGuidelines: [
-        "Call set_creating only before creating a user-visible artifact such as the brief; do not use it for hidden work or thinking.",
+        "Call set_creating only before creating a user-visible artifact such as the brief, a PRD, or issues; do not use it for hidden work or thinking.",
         "Pair the tool call with one short chat line in the same turn, written in your Guide voice.",
         "Set message to the panel text the user should see: under about 80 characters, conversational, no paths, files, tools, or implementation details.",
         "The indicator auto-clears when the artifact appears; there is no clear_creating tool.",
       ],
       parameters: Type.Object({
-        target: Type.Union([Type.Literal("brief")], {
-          description: "The kind of user-visible artifact being created.",
-        }),
+        target: Type.Union(
+          [Type.Literal("brief"), Type.Literal("prd"), Type.Literal("issues")],
+          {
+            description: "The kind of user-visible artifact being created.",
+          },
+        ),
         message: Type.String({
           description:
             "Short Guide-voice text to show while the artifact is being created.",
