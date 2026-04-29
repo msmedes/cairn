@@ -24,17 +24,25 @@ _Avoid_: chat, thread, dialogue
 The first phase. A conversation in which the Guide figures out what the user wants to build, who it's for, and what "done" feels like. Ends when the Brief is written.
 
 **Slicing**:
-The second phase. The Guide breaks the Project into the smallest meaningful first chunk worth building. Produces a PRD and issues, written silently in the Guide's voice.
+The second phase. The Guide breaks the Project into the smallest meaningful first chunk worth building. Produces the **Plan** (user-visible, the slice's plain-language summary) and **Engineering scaffolding** (hidden PRD and issues for sub-agents to implement against).
 
 **Implementing**:
 The third phase. Sub-agents do the actual coding while the Guide narrates calmly and translates technical mess into plain language.
 
 **Brief**:
-The plain-language plan the Guide writes near the end of Scoping. The user-visible source of truth for what the Project is.
+The plain-language plan the Guide writes near the end of Scoping. The user-visible source of truth for what the Project is. One kind of **User-visible artifact**.
+
+**Plan**:
+The plain-language summary of the current Slice that the Guide writes at the end of Slicing — what's being built first, how it'll come together, and what's coming next. Lives at `<project>/plan.html`; renders in the Plan tab of the project panel. Distinguished from the PRD, which is engineering content hidden under `.guide/`. Overwritten when re-slicing; the latest is canonical.
+_Avoid_: roadmap, slice doc, plan-doc
 
 **User-visible artifact**:
-Anything the user can see — the Brief now, the PRD and issues later, eventually the app itself. Distinguished from hidden engineering work, which the Guide handles silently.
+Anything the user sees rendered in the Guide's panel: the Brief now, the Plan once Slicing lands, eventually the app itself. Lives at the Project root and is navigated via panel tabs (`Project | Plan | …`). Distinguished from **Engineering scaffolding**, which the Guide handles silently.
 _Avoid_: deliverable, output
+
+**Engineering scaffolding**:
+Hidden internal artifacts that the Guide and Sub-agents read but the user never sees in the panel. Lives under `<project>/.guide/`. Includes the **PRD** (engineering interpretation of a Slice) and **issues** (implementation tasks). The persona may translate sections of these into plain language only if the user explicitly asks; the raw files are never surfaced in the UI. See ADR 0003.
+_Avoid_: internal artifacts, hidden files
 
 **Recap greeting**:
 The Guide's opening turn when the user returns after a meaningful gap, summarizing where they left off so the conversation can continue naturally.
@@ -43,8 +51,8 @@ The Guide's opening turn when the user returns after a meaningful gap, summarizi
 
 - A **Project** contains exactly one **Session** (in v0).
 - A **Session** moves through **Scoping** → **Slicing** → **Implementing**, in that order, one slice at a time.
-- **Scoping** ends with a **Brief**. **Slicing** ends with a PRD and issues. **Implementing** ends with working software.
-- A **Brief** is one kind of **User-visible artifact**; the PRD, the issues, and the app itself are others.
+- **Scoping** ends with a **Brief**. **Slicing** ends with the **Plan** (user-visible) and **Engineering scaffolding** (hidden). **Implementing** ends with working software.
+- A **Brief** and the **Plan** are kinds of **User-visible artifact**; the app itself becomes one once Implementing produces it. The **PRD** and **issues** are **Engineering scaffolding**, not user-visible.
 - The **Guide** is the only voice the user hears; **Sub-agents** are silent and invisible.
 - A **Recap greeting** opens a returning **Session** when enough time has elapsed.
 
