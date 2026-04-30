@@ -22,7 +22,7 @@ type SidecarEvent =
   | { type: "text_done" }
   | {
       type: "creating_started";
-      target: "brief" | "prd" | "issues" | "plan";
+      target: "brief" | "prd" | "issues" | "plan" | "tasks";
       message: string;
     }
   | { type: "agent_end" }
@@ -42,7 +42,7 @@ type SessionStatus =
 
 type SidecarSessionHandlers = {
   onCreatingStarted: (
-    target: "brief" | "prd" | "issues" | "plan",
+    target: "brief" | "prd" | "issues" | "plan" | "tasks",
     message: string,
   ) => void;
   onAgentEnd: () => void;

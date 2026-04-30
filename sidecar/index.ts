@@ -7,7 +7,7 @@
  * a project from that message and persists the pi session inside it.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -25,6 +25,7 @@ import {
   translateSessionEntriesToHydrateEvent,
 } from "./hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
+import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 
 type InMsg =
@@ -43,13 +44,11 @@ type OutMsg =
   | { type: "text_done" }
   | {
       type: "creating_started";
-      target: "brief" | "prd" | "issues" | "plan";
+      target: "brief" | "prd" | "issues" | "plan" | "tasks";
       message: string;
     }
   | { type: "agent_end" }
   | { type: "error"; message: string };
-
-type ProjectPhase = "scoping" | "scoped" | "slicing-prd-done" | "sliced";
 
 type DevLogMsg =
   | { type: "tool_start"; name: string }
@@ -100,31 +99,13 @@ function emitDevLog(msg: DevLogMsg) {
   process.stderr.write(`${JSON.stringify(msg)}\n`);
 }
 
-function listMarkdown(dir: string): string[] {
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((name) => name.endsWith(".md"))
-    .sort();
-}
-
 function emitProjectState() {
   if (!activeProject) return;
-  const briefExists = existsSync(join(activeProject.path, "brief.html"));
-  const prds = listMarkdown(join(activeProject.path, "prds"));
-  const issues = listMarkdown(join(activeProject.path, "issues"));
-
-  let phase: ProjectPhase;
-  if (!briefExists) phase = "scoping";
-  else if (prds.length === 0) phase = "scoped";
-  else if (issues.length === 0) phase = "slicing-prd-done";
-  else phase = "sliced";
+  const state = getProjectState(activeProject.path);
 
   emitDevLog({
     type: "project_state",
-    brief: briefExists,
-    prds,
-    issues,
-    phase,
+    ...state,
   });
 }
 

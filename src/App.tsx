@@ -63,11 +63,13 @@ function App() {
   const [recapInteracted, setRecapInteracted] = useState(false);
   const projectSlidesHtml = useProjectFile("brief.html");
   const planSlidesHtml = useProjectFile("plan.html");
+  const tasksHtml = useProjectFile("tasks.html");
   const projectBriefMarkdown = useProjectFile("brief.md");
   const projectPrdsListing = useProjectFile("prds");
   const projectIssuesListing = useProjectFile("issues");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
   const hasPlanSlidesHtml = planSlidesHtml.trim().length > 0;
+  const hasTasksHtml = tasksHtml.trim().length > 0;
   const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;
   const normalizedProjectBrief = hasProjectBriefMarkdown
     ? projectBriefMarkdown
@@ -83,19 +85,24 @@ function App() {
   const planSlidesDoc = normalizedPlan
     ? buildSlidesDocument(normalizedPlan)
     : "";
-  const { activeTab, setActiveTab } = useActivePanelTab(hasPlanSlidesHtml);
+  const { activeTab, setActiveTab } = useActivePanelTab(
+    hasPlanSlidesHtml,
+    hasTasksHtml,
+  );
   const creatingContent = useMemo(
     () => ({
       brief: normalizedProjectBrief,
       prd: projectPrdsListing,
       issues: projectIssuesListing,
       plan: normalizedPlan,
+      tasks: tasksHtml,
     }),
     [
       normalizedProjectBrief,
       normalizedPlan,
       projectPrdsListing,
       projectIssuesListing,
+      tasksHtml,
     ],
   );
   const {
@@ -151,9 +158,16 @@ function App() {
   const panelTabs: PanelTab[] = [
     { key: "project", label: "Project", available: true },
     { key: "plan", label: "Plan", available: true },
+    ...(hasTasksHtml
+      ? [{ key: "tasks", label: "Tasks", available: true }]
+      : []),
   ];
   const activeSlidesDoc =
-    activeTab === "project" ? projectSlidesDoc : planSlidesDoc;
+    activeTab === "project"
+      ? projectSlidesDoc
+      : activeTab === "plan"
+        ? planSlidesDoc
+        : tasksHtml;
   const showPlanEmptyState = activeTab === "plan" && !planSlidesDoc;
   const placeholderCreating = activeSlidesDoc ? null : creating;
   const appStyle: CSSProperties = {
@@ -279,7 +293,11 @@ function App() {
         <PanelTabs
           tabs={panelTabs}
           activeKey={activeTab}
-          onSelect={(key) => setActiveTab(key === "plan" ? "plan" : "project")}
+          onSelect={(key) =>
+            setActiveTab(
+              key === "tasks" ? "tasks" : key === "plan" ? "plan" : "project",
+            )
+          }
         />
         <div className="panel-body">
           {activeSlidesDoc ? (
@@ -291,7 +309,9 @@ function App() {
                 title={
                   activeTab === "project"
                     ? "Project brief slideshow"
-                    : "Project plan slideshow"
+                    : activeTab === "plan"
+                      ? "Project plan slideshow"
+                      : "Project tasks checklist"
                 }
                 srcDoc={activeSlidesDoc}
                 sandbox="allow-scripts"
