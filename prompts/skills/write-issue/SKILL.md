@@ -48,7 +48,9 @@ Use this naming convention:
 
 ## Issue breakdown
 
-Draft vertical slices, not horizontal tasks. Each issue should describe a narrow but complete path through the relevant layers, with its own verification surface. Prefer a handful of small issues over one broad issue.
+Draft vertical slices, not horizontal tasks. Each issue should describe a narrow but complete path through the relevant layers, with its own verification surface. For user-project slicing, create exactly 3-6 issues per slice. This is a hard cap that keeps the Plan's pieces and the Tasks tab's task list aligned one-to-one.
+
+If the PRD does not support 3-6 useful vertical slices, apply the Bubble-up rule instead of padding weak issues or compressing unrelated work into artificial issues.
 
 Use these rules:
 
