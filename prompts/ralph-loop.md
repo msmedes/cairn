@@ -14,7 +14,7 @@ Rules:
 - Work only on one issue in this run.
 - Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
 - Read the relevant in-repo design docs before coding — PRDs in `_meta/prds/`, ADRs in `_meta/adr/`, and the root `CONTEXT.md` — especially anything referenced by the issue's `Source` section.
-- Implement the issue locally, run verification, and do a subagent code review before deciding the issue is done.
+- Implement the issue locally using red-green TDD: for each acceptance criterion, write a failing test first, run it and confirm it actually fails for the right reason, then add the minimum code to make it pass. Do not skip the failing-run step — a test that has never been observed to fail is not a real test. Run verification and do a subagent code review before deciding the issue is done.
 - Fix review findings that are clearly correct. Re-run verification after fixes.
 - If the work is complete, open or update a PR, merge it, and make sure the issue is closed via GitHub state.
 - If the work is not complete or you hit a blocker, leave clear state on GitHub first, then stop.
