@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted; amended 2026-04-30 (see Amendment below).
 
 ## Context
 
@@ -70,3 +70,20 @@ The dot-folder convention (`.guide/`) signals "internal" the same way `.git/` do
 - **Persona prompt updates in slice 05** to clarify that `set_creating(target="prd"|"issues")` bracket the *planning phase moments* in user-friendly messages — not literal engineering artifact creation. No code changes to slice 04-2's enum extension are needed; the framing is in the persona's prompt.
 - **CONTEXT.md is updated** to introduce `Plan` and `Engineering scaffolding` as canonical terms and to correct the `User-visible artifact` entry's outdated *"the PRD and issues later"* listing.
 - **The line between categories is judgment, not enforcement.** No schema or build check stops a future contributor from writing engineering markdown to project root or user-visible HTML to `.guide/`. The convention is documented here and in CONTEXT.md; correctness is reviewed via PRD-level ADR references and code review.
+
+## Amendment — 2026-04-30
+
+The path scheme above (`<project>/.guide/prds/...` and `<project>/.guide/issues/...`) was superseded in commit `66e8853 refactor(skills): flatten project artifact paths to <project>/{prds,issues}`. Engineering-scaffolding artifacts now live at the Project root:
+
+- `<project>/prds/<NN>-<slug>.md`
+- `<project>/issues/<NN>-<slug>.md`
+
+The reasoning: a Guide Project already lives under `~/.guide/projects/<project>/`, which is itself hidden by the OS default. Adding a second `.guide/` segment inside each project added no real hiding — it duplicated the dot-folder convention without gaining anything — and made paths visually ugly (`~/.guide/projects/foo/.guide/issues/...`). The Finder-exposure scenario the *"Engineering scaffolding under a non-dot folder"* alternative above was guarding against does not apply: the user is not browsing the project folder in Finder, because the project folder is already inside a hidden top-level directory. The Guide panel is the user's actual file surface, and the panel does not render `prds/` or `issues/` regardless of where they live on disk.
+
+What this amendment **does not** change:
+
+- The two-category split (user-visible artifact vs. engineering scaffolding) stands. Categorization is judgment, not enforcement.
+- Engineering scaffolding is still **silent on the panel** — no `set_creating` brackets for the artifacts themselves, no panel tabs that render PRD or issue contents to the user. Only the *planning-phase moments* are bracketed (the `prd` / `issues` `target` enum entries on `set_creating` retain their existing persona-prompt interpretation as user-friendly narration of those moments).
+- The persona's translation rule (*"may translate sections only if the user explicitly asks"*) is unchanged.
+
+In practice: the rule for *"should this artifact be visible to the user?"* is the same as the original Decision; only the engineering-scaffolding location moved one directory up. ADR 0004 (implementing-phase orchestration) and the current `write-prd` / `write-issue` skills are aligned with the post-amendment paths. CONTEXT.md is updated alongside this amendment.

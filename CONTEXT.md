@@ -33,7 +33,7 @@ The third phase. Sub-agents do the actual coding one piece at a time while the G
 The plain-language plan the Guide writes near the end of Scoping. The user-visible source of truth for what the Project is. One kind of **User-visible artifact**.
 
 **Plan**:
-The plain-language summary of the current Slice that the Guide writes at the end of Slicing — what's being built first, how it'll come together, and what's coming next. Lives at `<project>/plan.html`; renders in the Plan tab of the project panel. Distinguished from the PRD, which is engineering content hidden under `.guide/`. Overwritten when re-slicing; the latest is canonical.
+The plain-language summary of the current Slice that the Guide writes at the end of Slicing — what's being built first, how it'll come together, and what's coming next. Lives at `<project>/plan.html`; renders in the Plan tab of the project panel. Distinguished from the PRD, which is engineering content the panel never renders. Overwritten when re-slicing; the latest is canonical.
 _Avoid_: roadmap, slice doc, plan-doc
 
 **Tasks tab**:
@@ -45,7 +45,7 @@ Anything the user sees rendered in the Guide's panel: the Brief, the Plan, the T
 _Avoid_: deliverable, output
 
 **Engineering scaffolding**:
-Hidden internal artifacts that the Guide and Sub-agents read but the user never sees in the panel. Lives under `<project>/.guide/`. Includes the **PRD** (engineering interpretation of a Slice) and **issues** (implementation tasks). The persona may translate sections of these into plain language only if the user explicitly asks; the raw files are never surfaced in the UI. See ADR 0003.
+Internal artifacts that the Guide and Sub-agents read but the user never sees in the panel. Lives at the Project root in `prds/` and `issues/` subdirectories that no panel tab renders. Includes the **PRD** (engineering interpretation of a Slice) and **issues** (implementation tasks). The persona may translate sections of these into plain language only if the user explicitly asks; the raw files are never surfaced in the UI. See ADR 0003 (and its 2026-04-30 amendment for the current path scheme).
 _Avoid_: internal artifacts, hidden files
 
 **Recap greeting**:
