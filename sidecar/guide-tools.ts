@@ -1,6 +1,10 @@
 import { Type } from "@mariozechner/pi-ai";
 import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { Project, ProjectRenameResult } from "./project-store";
+import {
+  type StartTaskResult,
+  startTask as startTaskInProject,
+} from "./start-task";
 
 export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
 
@@ -10,6 +14,11 @@ export type GuideToolsOptions = {
   onRenameSuccess: (previousProject: Project, nextProject: Project) => void;
   onProjectUpdate: (project: Project) => void;
   onCreatingStart: (target: CreatingTarget, message: string) => void;
+  startTask?: (input: {
+    projectRoot: string;
+    issuePath: string;
+    signal?: AbortSignal;
+  }) => Promise<StartTaskResult>;
 };
 
 export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
@@ -107,6 +116,54 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
             },
           ],
           details: { ok: true, target: params.target },
+        };
+      },
+    }),
+    defineTool({
+      name: "start_task",
+      label: "Start Task",
+      description:
+        "Dispatch a headless Guide Sub-agent to implement one named issue file in the active project. The target is a project-relative issue path, never a free-form prompt.",
+      promptSnippet: "Start implementing one Tasks tab piece",
+      promptGuidelines: [
+        "For each Tasks tab piece, write one short chat line in your Guide voice before calling start_task.",
+        "Pass the project-relative issuePath for the matching issue file; do not pass implementation instructions or a free-form prompt.",
+        "On outcome complete, tick the matching Tasks tab entry and continue to the next piece.",
+        "On outcome failure, write one short retry line and retry the same piece; after two consecutive failures, treat the piece as blocked.",
+        "On outcome blocked, stop dispatching and surface the situation in plain language with concrete options.",
+      ],
+      parameters: Type.Object(
+        {
+          issuePath: Type.String({
+            description:
+              "Project-relative path to the issue file for this piece, for example issues/06-2-start-task.md.",
+          }),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params, signal) {
+        const project = options.getActiveProject();
+        if (!project) {
+          const result: StartTaskResult = {
+            outcome: "blocked",
+            message: "No active project is open.",
+          };
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result,
+          };
+        }
+
+        const result = await (options.startTask ?? startTaskInProject)({
+          projectRoot: project.path,
+          issuePath: params.issuePath,
+          signal,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
         };
       },
     }),

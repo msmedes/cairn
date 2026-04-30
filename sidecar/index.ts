@@ -27,6 +27,7 @@ import {
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
+import type { StartTaskResult } from "./start-task";
 
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
@@ -112,6 +113,19 @@ function emitProjectState() {
 function formatError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function getFakeStartTaskResultFromEnv():
+  | ((input: {
+      projectRoot: string;
+      issuePath: string;
+      signal?: AbortSignal;
+    }) => Promise<StartTaskResult>)
+  | undefined {
+  const raw = process.env.GUIDE_FAKE_START_TASK_RESULT;
+  if (!raw) return undefined;
+
+  return async () => JSON.parse(raw) as StartTaskResult;
 }
 
 function extractAssistantText(content: unknown): string {
@@ -279,6 +293,7 @@ async function openProject(
       onCreatingStart: (target, message) => {
         emit({ type: "creating_started", target, message });
       },
+      startTask: getFakeStartTaskResultFromEnv(),
     }),
   });
 

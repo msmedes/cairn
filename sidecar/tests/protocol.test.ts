@@ -67,12 +67,17 @@ function getAuthCheck(): { ok: true } | { ok: false; reason: string } {
   };
 }
 
-function spawnSidecar(homeDir?: string): SubprocessHandle {
+function spawnSidecar(
+  homeDir?: string,
+  extraEnv: Record<string, string> = {},
+): SubprocessHandle {
   const proc = Bun.spawn(["bun", "run", SIDECAR_ENTRY], {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "ignore",
-    env: homeDir ? { ...process.env, HOME: homeDir } : process.env,
+    env: homeDir
+      ? { ...process.env, HOME: homeDir, ...extraEnv }
+      : { ...process.env, ...extraEnv },
   });
   liveProcs.add(proc);
   return proc;
@@ -325,6 +330,55 @@ Do not write files for this test.
         target: "brief",
         message: "Putting your project plan together",
       });
+    },
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  test(
+    "start_task fake sub-agent result flows through the sidecar protocol",
+    async () => {
+      const guideHome = createGuideHome();
+      const proc = spawnSidecar(guideHome, {
+        GUIDE_FAKE_START_TASK_RESULT: JSON.stringify({
+          outcome: "blocked",
+          message: "Need a decision before continuing.",
+        }),
+      });
+      const personaPath = createPersonaFile(`
+You are the Guide.
+When the user asks you to start the task, call start_task with issuePath "issues/06-2-start-task.md".
+After the tool returns, say exactly: RESULT: blocked - Need a decision before continuing.
+Do not write files for this test.
+`);
+
+      writeJsonToSidecar(proc, { type: "init", personaPath });
+      await collectEvents(
+        proc,
+        (event) => event.type === "ready",
+        DEFAULT_TIMEOUT_MS,
+      );
+
+      writeJsonToSidecar(proc, {
+        type: "prompt",
+        text: "Start the task.",
+      });
+
+      const promptEvents = await collectEvents(
+        proc,
+        (event) => event.type === "agent_end",
+        DEFAULT_TIMEOUT_MS,
+      );
+
+      expect(
+        promptEvents.some(
+          (event) =>
+            event.type === "text_delta" &&
+            typeof event.delta === "string" &&
+            event.delta.includes(
+              "RESULT: blocked - Need a decision before continuing.",
+            ),
+        ),
+      ).toBe(true);
     },
     DEFAULT_TIMEOUT_MS,
   );

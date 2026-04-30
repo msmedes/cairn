@@ -186,3 +186,70 @@ test("set_creating tool rejects unknown targets by schema", () => {
     }),
   ).toBe(true);
 });
+
+test("start_task tool returns the structured sub-agent outcome", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const startTask = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while starting a task");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while starting a task");
+    },
+    onProjectUpdate: () => {
+      throw new Error("should not emit project updates while starting a task");
+    },
+    onCreatingStart: () => {
+      throw new Error("should not emit creating state while starting a task");
+    },
+    startTask: async ({ projectRoot, issuePath }) => {
+      expect(projectRoot).toBe(activeProject.path);
+      expect(issuePath).toBe("issues/06-2-start-task.md");
+      return {
+        outcome: "blocked",
+        message: "Need a decision before continuing.",
+      };
+    },
+  }).find((tool) => tool.name === "start_task");
+
+  expect(startTask).toBeDefined();
+  if (!startTask) {
+    throw new Error("start_task tool was not registered");
+  }
+  expect(startTask.executionMode).toBe("sequential");
+  expect(
+    Value.Check(startTask.parameters, {
+      issuePath: "issues/06-2-start-task.md",
+    }),
+  ).toBe(true);
+  expect(Value.Check(startTask.parameters, { prompt: "build it" })).toBe(false);
+  expect(startTask.promptGuidelines?.join("\n")).toContain(
+    "one short chat line",
+  );
+  expect(startTask.promptGuidelines?.join("\n")).toContain(
+    "tick the matching Tasks tab entry",
+  );
+  expect(startTask.promptGuidelines?.join("\n")).toContain("retry");
+  expect(startTask.promptGuidelines?.join("\n")).toContain("blocked");
+
+  const result = await startTask.execute(
+    "tool-call-1",
+    { issuePath: "issues/06-2-start-task.md" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    outcome: "blocked",
+    message: "Need a decision before continuing.",
+  });
+  expect(toolText(result)).toBe(
+    '{"outcome":"blocked","message":"Need a decision before continuing."}',
+  );
+});
