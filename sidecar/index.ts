@@ -28,6 +28,7 @@ import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 import type { StartTaskResult } from "./start-task";
+import type { VerifySliceResult } from "./verify-slice";
 
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
@@ -126,6 +127,18 @@ function getFakeStartTaskResultFromEnv():
   if (!raw) return undefined;
 
   return async () => JSON.parse(raw) as StartTaskResult;
+}
+
+function getFakeVerifySliceResultFromEnv():
+  | ((input: {
+      projectRoot: string;
+      signal?: AbortSignal;
+    }) => Promise<VerifySliceResult>)
+  | undefined {
+  const raw = process.env.GUIDE_FAKE_VERIFY_SLICE_RESULT;
+  if (!raw) return undefined;
+
+  return async () => JSON.parse(raw) as VerifySliceResult;
 }
 
 function extractAssistantText(content: unknown): string {
@@ -294,6 +307,7 @@ async function openProject(
         emit({ type: "creating_started", target, message });
       },
       startTask: getFakeStartTaskResultFromEnv(),
+      verifySlice: getFakeVerifySliceResultFromEnv(),
     }),
   });
 

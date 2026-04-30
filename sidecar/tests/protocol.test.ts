@@ -382,6 +382,53 @@ Do not write files for this test.
     },
     DEFAULT_TIMEOUT_MS,
   );
+
+  test(
+    "verify_slice result flows through the sidecar protocol",
+    async () => {
+      const guideHome = createGuideHome();
+      const proc = spawnSidecar(guideHome, {
+        GUIDE_FAKE_VERIFY_SLICE_RESULT: JSON.stringify({
+          ok: false,
+          message: "The build did not pass yet.",
+        }),
+      });
+      const personaPath = createPersonaFile(`
+You are the Guide.
+When the user asks you to verify the slice, call verify_slice.
+After the tool returns, say exactly: VERIFY: false - The build did not pass yet.
+Do not write files for this test.
+`);
+
+      writeJsonToSidecar(proc, { type: "init", personaPath });
+      await collectEvents(
+        proc,
+        (event) => event.type === "ready",
+        DEFAULT_TIMEOUT_MS,
+      );
+
+      writeJsonToSidecar(proc, {
+        type: "prompt",
+        text: "Verify the slice.",
+      });
+
+      const promptEvents = await collectEvents(
+        proc,
+        (event) => event.type === "agent_end",
+        DEFAULT_TIMEOUT_MS,
+      );
+
+      expect(
+        promptEvents.some(
+          (event) =>
+            event.type === "text_delta" &&
+            typeof event.delta === "string" &&
+            event.delta.includes("VERIFY: false - The build did not pass yet."),
+        ),
+      ).toBe(true);
+    },
+    DEFAULT_TIMEOUT_MS,
+  );
 }
 
 test("Guide-bundled slicing skills are discoverable by the sidecar resource loader", async () => {
