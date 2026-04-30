@@ -14,7 +14,8 @@
     "test": "bun run test:frontend && bun run test:sidecar",
     "test:frontend": "vitest run",
     "test:sidecar": "cd sidecar && bun test",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:app": "bash scripts/build-app.sh"
   },
   "dependencies": {
     "react": "^19.1.0",

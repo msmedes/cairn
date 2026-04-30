@@ -23,13 +23,19 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "externalBin": ["binaries/guide-sidecar"],
+    "resources": {
+      "../prompts/persona.md": "prompts/persona.md",
+      "../prompts/skills": "prompts/skills",
+      "../sidecar/node_modules/@mariozechner/pi-coding-agent/package.json": "pi-package/package.json"
+    }
   }
 }

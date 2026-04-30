@@ -14,6 +14,7 @@ src-tauri/gen/
 # Tauri
 *.app
 *.dmg
+src-tauri/binaries/
 
 # Runtime workspace (user's projects, not source)
 .workspace/

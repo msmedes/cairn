@@ -69,16 +69,50 @@ struct ActiveProjectEvent {
 
 const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
+const SIDECAR_BIN_NAME: &str = "guide-sidecar";
 
-fn sidecar_script_path() -> String {
-    // Dev-time path; release/packaging is a later slice.
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    format!("{}/../sidecar/index.ts", manifest_dir)
+struct ResolvedPaths {
+    spawn: SpawnTarget,
+    persona: PathBuf,
+    skills: PathBuf,
+    pi_package_dir: Option<PathBuf>,
 }
 
-fn persona_path() -> String {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    format!("{}/../prompts/persona.md", manifest_dir)
+enum SpawnTarget {
+    BunScript(PathBuf),
+    Binary(PathBuf),
+}
+
+fn resolve_paths(app: &AppHandle) -> Result<ResolvedPaths, String> {
+    if cfg!(debug_assertions) {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir
+            .parent()
+            .ok_or("CARGO_MANIFEST_DIR has no parent")?
+            .to_path_buf();
+        Ok(ResolvedPaths {
+            spawn: SpawnTarget::BunScript(repo_root.join("sidecar/index.ts")),
+            persona: repo_root.join("prompts/persona.md"),
+            skills: repo_root.join("prompts/skills"),
+            pi_package_dir: None,
+        })
+    } else {
+        let resource_dir = app
+            .path()
+            .resource_dir()
+            .map_err(|e| format!("resolve resource dir: {}", e))?;
+        let exe_dir = std::env::current_exe()
+            .map_err(|e| format!("resolve current_exe: {}", e))?
+            .parent()
+            .ok_or("current_exe has no parent")?
+            .to_path_buf();
+        Ok(ResolvedPaths {
+            spawn: SpawnTarget::Binary(exe_dir.join(SIDECAR_BIN_NAME)),
+            persona: resource_dir.join("prompts/persona.md"),
+            skills: resource_dir.join("prompts/skills"),
+            pi_package_dir: Some(resource_dir.join("pi-package")),
+        })
+    }
 }
 
 fn project_file_path(name: &str, active_project: &ActiveProject) -> Result<PathBuf, String> {
@@ -222,8 +256,7 @@ fn read_project_file(name: String, state: State<'_, Arc<SidecarState>>) -> Resul
 }
 
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
-    let script = sidecar_script_path();
-    let persona = persona_path();
+    let paths = resolve_paths(&app)?;
 
     state.ready.store(false, Ordering::Release);
     if let Ok(mut slot) = state.last_error.lock() {
@@ -236,9 +269,22 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         *slot = None;
     }
 
-    let mut child = Command::new("bun")
-        .arg("run")
-        .arg(&script)
+    let mut command = match &paths.spawn {
+        SpawnTarget::BunScript(script) => {
+            let mut c = Command::new("bun");
+            c.arg("run").arg(script);
+            c
+        }
+        SpawnTarget::Binary(path) => Command::new(path),
+    };
+    if let Some(dir) = &paths.pi_package_dir {
+        command.env("PI_PACKAGE_DIR", dir);
+    }
+    let spawn_label = match &paths.spawn {
+        SpawnTarget::BunScript(_) => "bun in PATH?",
+        SpawnTarget::Binary(_) => "bundled sidecar binary missing?",
+    };
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -248,7 +294,7 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         // drops before the handlers see it.
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| format!("failed to spawn sidecar (bun in PATH?): {}", e))?;
+        .map_err(|e| format!("failed to spawn sidecar ({}): {}", spawn_label, e))?;
 
     let mut stdin = child.stdin.take().ok_or("no stdin pipe on sidecar")?;
     let stdout = child.stdout.take().ok_or("no stdout pipe on sidecar")?;
@@ -256,7 +302,8 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
 
     let init_payload = serde_json::json!({
         "type": "init",
-        "personaPath": persona,
+        "personaPath": paths.persona.to_string_lossy(),
+        "skillsPath": paths.skills.to_string_lossy(),
     });
     write_json_line(&mut stdin, &init_payload)
         .await
