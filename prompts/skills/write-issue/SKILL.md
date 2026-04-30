@@ -1,6 +1,6 @@
 ---
 name: write-issue
-description: Use only after a fresh slice PRD exists under the Project's .guide/prds/ folder and the user-approved slice needs to be broken into local implementation issue files.
+description: Use only after a fresh slice PRD exists under the Project's prds/ folder and the user-approved slice needs to be broken into local implementation issue files.
 disable-model-invocation: false
 ---
 
@@ -10,11 +10,11 @@ Break the most recent slice PRD into independently buildable implementation issu
 
 Read the most recently modified PRD under:
 
-`<project>/.guide/prds/`
+`<project>/prds/`
 
 Use only markdown PRD files in that folder. If more than one PRD exists, choose the newest file by modification time. Treat that file as the source of truth for the current slice.
 
-If there is no PRD under `<project>/.guide/prds/`, do not create issue files. Return exactly one targeted question in the Guide's voice that asks for the missing planning input.
+If there is no PRD under `<project>/prds/`, do not create issue files. Return exactly one targeted question in the Guide's voice that asks for the missing planning input.
 
 ## Bubble-up rule
 
@@ -34,9 +34,9 @@ If the missing information is not load-bearing, make a reasonable implementation
 
 Write issue files under:
 
-`<project>/.guide/issues/<NN>-<slug>.md`
+`<project>/issues/<NN>-<slug>.md`
 
-Create `<project>/.guide/issues/` if it does not exist; the Write tool may create parent directories as needed.
+Create `<project>/issues/` if it does not exist; the Write tool may create parent directories as needed.
 
 Use this naming convention:
 
@@ -86,7 +86,7 @@ A concise description of this vertical slice. Describe the end-to-end behavior, 
 
 Template rules:
 
-- `## Source` always references the PRD path relative to the Project root, for example `.guide/prds/01-video-playback.md`.
+- `## Source` always references the PRD path relative to the Project root, for example `prds/01-video-playback.md`.
 - Omit `## Parent`. There is no upstream GitHub issue in the Project folder workflow.
 - If there are no blockers, write `None - can start immediately` under `## Blocked by`.
 - If there are blockers, reference other issue files by slug only, without `.md` and without GitHub issue numbers, for example `- Blocked by 01-video-runtime`.

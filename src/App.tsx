@@ -64,8 +64,8 @@ function App() {
   const projectSlidesHtml = useProjectFile("brief.html");
   const planSlidesHtml = useProjectFile("plan.html");
   const projectBriefMarkdown = useProjectFile("brief.md");
-  const projectPrdsListing = useProjectFile(".guide/prds");
-  const projectIssuesListing = useProjectFile(".guide/issues");
+  const projectPrdsListing = useProjectFile("prds");
+  const projectIssuesListing = useProjectFile("issues");
   const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
   const hasPlanSlidesHtml = planSlidesHtml.trim().length > 0;
   const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;

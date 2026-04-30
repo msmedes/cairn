@@ -28,7 +28,7 @@ import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { type Project, ProjectStore } from "./project-store";
 
 type InMsg =
-  | { type: "init"; personaPath?: string }
+  | { type: "init"; personaPath?: string; skillsPath?: string }
   | { type: "prompt"; text: string }
   | { type: "new_project" };
 
@@ -70,6 +70,7 @@ let unsubscribeSession: (() => void) | null = null;
 let projectStore = new ProjectStore();
 let activeProject: Project | null = null;
 let activePersonaPath: string | null = null;
+let activeSkillsPath: string | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
 let streamedAssistantText = false;
@@ -108,10 +109,9 @@ function listMarkdown(dir: string): string[] {
 
 function emitProjectState() {
   if (!activeProject) return;
-  const guideDir = join(activeProject.path, ".guide");
   const briefExists = existsSync(join(activeProject.path, "brief.html"));
-  const prds = listMarkdown(join(guideDir, "prds"));
-  const issues = listMarkdown(join(guideDir, "issues"));
+  const prds = listMarkdown(join(activeProject.path, "prds"));
+  const issues = listMarkdown(join(activeProject.path, "issues"));
 
   let phase: ProjectPhase;
   if (!briefExists) phase = "scoping";
@@ -269,10 +269,11 @@ async function openProject(
   process.chdir(cwd);
   const personaContent = readFileSync(personaPath, "utf8");
 
+  const skillsPath = activeSkillsPath ?? resolve(repoRoot, "prompts/skills");
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),
-    additionalSkillPaths: [resolve(repoRoot, "prompts/skills")],
+    additionalSkillPaths: [skillsPath],
     systemPromptOverride: () => personaContent,
     appendSystemPromptOverride: () => [],
   });
@@ -325,13 +326,14 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
   disposeSession();
   activeProject = null;
 
-  const { personaPath } = msg;
+  const { personaPath, skillsPath } = msg;
   const resolvedPersonaPath = resolve(
     startupCwd,
     personaPath ?? "prompts/persona.md",
   );
   readFileSync(resolvedPersonaPath, "utf8");
   activePersonaPath = resolvedPersonaPath;
+  activeSkillsPath = skillsPath ? resolve(startupCwd, skillsPath) : null;
 
   projectStore = new ProjectStore();
   const recentProject = projectStore.findMostRecent();

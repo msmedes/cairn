@@ -33,9 +33,9 @@ If the missing information is not load-bearing, make a reasonable product judgme
 
 Write the PRD to:
 
-`<project>/.guide/prds/<NN>-<slug>.md`
+`<project>/prds/<NN>-<slug>.md`
 
-Create `<project>/.guide/prds/` if it does not exist; the Write tool may create parent directories as needed.
+Create `<project>/prds/` if it does not exist; the Write tool may create parent directories as needed.
 
 Use this naming convention:
 

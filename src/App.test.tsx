@@ -42,8 +42,8 @@ describe("App panel tabs", () => {
           return "# Project brief\n\n## Shape\n\nThe existing brief.";
         case "brief.html":
         case "plan.html":
-        case ".guide/prds":
-        case ".guide/issues":
+        case "prds":
+        case "issues":
           return "";
         default:
           return "";
