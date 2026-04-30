@@ -5,6 +5,10 @@ import {
   type StartTaskResult,
   startTask as startTaskInProject,
 } from "./start-task";
+import {
+  type VerifySliceResult,
+  verifySlice as verifySliceInProject,
+} from "./verify-slice";
 
 export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
 
@@ -19,6 +23,10 @@ export type GuideToolsOptions = {
     issuePath: string;
     signal?: AbortSignal;
   }) => Promise<StartTaskResult>;
+  verifySlice?: (input: {
+    projectRoot: string;
+    signal?: AbortSignal;
+  }) => Promise<VerifySliceResult>;
 };
 
 export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
@@ -158,6 +166,44 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         const result = await (options.startTask ?? startTaskInProject)({
           projectRoot: project.path,
           issuePath: params.issuePath,
+          signal,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "verify_slice",
+      label: "Verify Slice",
+      description:
+        "Check whether the active project's current slice composes at the build/typecheck level before inviting the user to try it.",
+      promptSnippet: "Verify the current slice before demo invitation",
+      promptGuidelines: [
+        "Call verify_slice after the last complete start_task outcome, after every Tasks tab piece is ticked.",
+        "Do not ask the user for parameters and do not pass a command; the tool uses the active project context.",
+        "If ok is true, invite the user to try the slice in plain language without claiming a build ran unless the tool says so.",
+        "If ok is false, treat it as blocked-class: stop, explain the short message plainly, and offer concrete options.",
+      ],
+      parameters: Type.Object({}, { additionalProperties: false }),
+      executionMode: "sequential",
+      async execute(_toolCallId, _params, signal) {
+        const project = options.getActiveProject();
+        if (!project) {
+          const result: VerifySliceResult = {
+            ok: false,
+            message: "No active project is open.",
+          };
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result,
+          };
+        }
+
+        const result = await (options.verifySlice ?? verifySliceInProject)({
+          projectRoot: project.path,
           signal,
         });
 

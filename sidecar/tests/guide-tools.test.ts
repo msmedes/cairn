@@ -7,6 +7,7 @@ import type { CreatingTarget } from "../guide-tools";
 import { createGuideTools } from "../guide-tools";
 import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
+import type { VerifySliceResult } from "../verify-slice";
 
 function tempProjectsRoot() {
   return mkdtempSync(join(tmpdir(), "guide-projects-"));
@@ -251,5 +252,68 @@ test("start_task tool returns the structured sub-agent outcome", async () => {
   });
   expect(toolText(result)).toBe(
     '{"outcome":"blocked","message":"Need a decision before continuing."}',
+  );
+});
+
+test("verify_slice tool is registered without required persona parameters", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const verifyResult: VerifySliceResult = {
+    ok: false,
+    message: "The build did not pass yet.",
+  };
+  const verifySlice = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while verifying a slice");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while verifying a slice");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while verifying a slice",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error("should not emit creating state while verifying a slice");
+    },
+    verifySlice: async ({ projectRoot }) => {
+      expect(projectRoot).toBe(activeProject.path);
+      return verifyResult;
+    },
+  }).find((tool) => tool.name === "verify_slice");
+
+  expect(verifySlice).toBeDefined();
+  if (!verifySlice) {
+    throw new Error("verify_slice tool was not registered");
+  }
+  expect(verifySlice.executionMode).toBe("sequential");
+  expect(Value.Check(verifySlice.parameters, {})).toBe(true);
+  expect(Value.Check(verifySlice.parameters, { command: "bun test" })).toBe(
+    false,
+  );
+  expect(verifySlice.promptGuidelines?.join("\n")).toContain(
+    "after the last complete",
+  );
+  expect(verifySlice.promptGuidelines?.join("\n")).toContain(
+    "invite the user to try",
+  );
+  expect(verifySlice.promptGuidelines?.join("\n")).toContain("blocked");
+
+  const result = await verifySlice.execute(
+    "tool-call-1",
+    {},
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual(verifyResult);
+  expect(toolText(result)).toBe(
+    '{"ok":false,"message":"The build did not pass yet."}',
   );
 });
