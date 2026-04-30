@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type CreatingTarget = "brief" | "prd" | "issues" | "plan";
+export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
 
 export type CreatingIndicator = {
   target: CreatingTarget;

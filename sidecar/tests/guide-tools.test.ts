@@ -101,6 +101,7 @@ test.each([
   "prd",
   "issues",
   "plan",
+  "tasks",
 ] as const)("set_creating tool accepts target %s and emits it once", async (target) => {
   const creatingEvents: Array<{ target: CreatingTarget; message: string }> = [];
   const setCreating = createGuideTools({
@@ -178,4 +179,10 @@ test("set_creating tool rejects unknown targets by schema", () => {
       message: "Putting this together",
     }),
   ).toBe(false);
+  expect(
+    Value.Check(setCreating.parameters, {
+      target: "tasks",
+      message: "Putting this together",
+    }),
+  ).toBe(true);
 });
