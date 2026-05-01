@@ -123,4 +123,10 @@ Capture sequencing dependencies, risks, gotchas, follow-up decisions, or anythin
 - Include enough implementation detail to make the slice buildable, while keeping user-visible behavior separate from engineering decisions.
 - Do not mention that the PRD came from a skill, do not mention this SKILL.md, and do not include hidden reasoning.
 
-After writing the file, return only the project-relative PRD path and one short sentence describing the slice covered.
+After writing the file, return only one JSON object matching `artifact_write`:
+
+```json
+{ "outcome": "complete", "message": "PRD written.", "path": "prds/01-slice-name.md" }
+```
+
+Use the actual project-relative PRD path in `path`.
