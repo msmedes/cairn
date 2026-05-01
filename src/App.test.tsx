@@ -361,4 +361,47 @@ describe("App panel tabs", () => {
       screen.getByText("A small tool for training videos."),
     ).toBeInTheDocument();
   });
+
+  test("does not render raw project context as a panel tab or artifact", () => {
+    mockUseProjectFile.mockImplementation((name) => {
+      switch (name) {
+        case "brief.json":
+          return JSON.stringify({
+            artifact: "brief",
+            schemaVersion: 1,
+            createdAt: "2026-05-01T12:00:00.000Z",
+            updatedAt: "2026-05-01T12:00:00.000Z",
+            data: {
+              title: "Video Quiz Helper",
+              summary: "A small tool for training videos.",
+              audience: "Team leads",
+              success: "A lead can share a quiz.",
+              sections: [
+                {
+                  heading: "What it does first",
+                  body: "It turns one training video into one quiz.",
+                },
+              ],
+            },
+          });
+        case "CONTEXT.md":
+          return "# Project Context\n\n## Language\n\n**Hidden**:\nDo not show.";
+        case "plan.json":
+        case "tasks.json":
+        case "prds":
+        case "issues":
+          return "";
+        default:
+          return "";
+      }
+    });
+
+    render(<App />);
+
+    expect(
+      screen.queryByRole("tab", { name: /context/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Project Context")).not.toBeInTheDocument();
+    expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
+  });
 });

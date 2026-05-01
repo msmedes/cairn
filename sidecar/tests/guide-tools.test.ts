@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CreatingTarget } from "../guide-tools";
@@ -468,6 +468,7 @@ test("create_brief_artifact tool writes brief.json only", async () => {
   expect(
     readFileSync(join(activeProject.path, "brief.json"), "utf8"),
   ).toContain('"artifact": "brief"');
+  expect(existsSync(join(activeProject.path, "CONTEXT.md"))).toBe(false);
   expect(() =>
     readFileSync(join(activeProject.path, "brief.html"), "utf8"),
   ).toThrow();
@@ -541,4 +542,74 @@ test("create_plan_artifact tool writes plan.json only", async () => {
   expect(() =>
     readFileSync(join(activeProject.path, "plan.html"), "utf8"),
   ).toThrow();
+});
+
+test("update_project_context tool writes only hidden project context", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const updateContext = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while updating project context");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while updating project context");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while updating project context",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while updating project context",
+      );
+    },
+  }).find((tool) => tool.name === "update_project_context");
+
+  expect(updateContext).toBeDefined();
+  if (!updateContext) {
+    throw new Error("update_project_context tool was not registered");
+  }
+  expect(updateContext.executionMode).toBe("sequential");
+  expect(updateContext.promptGuidelines?.join("\n")).toContain(
+    "not a user-visible artifact",
+  );
+
+  const result = await updateContext.execute(
+    "tool-call-1",
+    {
+      terms: [
+        {
+          name: "Instructor",
+          definition: "The person creating lightweight checks for a team.",
+        },
+      ],
+      constraints: ["Never expose engineering scaffolding in the panel."],
+      decisions: ["Start with one video and one quiz."],
+      open_questions: ["Who reviews generated questions?"],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: true,
+    path: "CONTEXT.md",
+    termCount: 1,
+    constraintCount: 1,
+    decisionCount: 1,
+    openQuestionCount: 1,
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":true,"path":"CONTEXT.md","termCount":1,"constraintCount":1,"decisionCount":1,"openQuestionCount":1}',
+  );
+  expect(
+    readFileSync(join(activeProject.path, "CONTEXT.md"), "utf8"),
+  ).toContain("**Instructor**:");
+  expect(existsSync(join(activeProject.path, "context.json"))).toBe(false);
 });

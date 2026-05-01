@@ -10,6 +10,12 @@ import {
   SessionManager,
   type Skill,
 } from "@mariozechner/pi-coding-agent";
+import {
+  ProjectContextUpdateToolParamsSchema,
+  paramsToProjectContextUpdates,
+  updateProjectContext,
+} from "./project-context";
+import { toolSchemaFromZod } from "./tool-schema";
 
 export const SPAWN_SUBAGENT_SKILL_NAMES = [
   "write-brief",
@@ -313,6 +319,7 @@ export async function runPiSubAgent({
           projectRoot: cwd,
           getLoadedSkills: () => loadedSkills,
         }),
+        createSubagentUpdateProjectContextTool({ projectRoot: cwd }),
       ],
     });
 
@@ -353,6 +360,30 @@ export async function runPiSubAgent({
       unsubscribe();
       session.dispose();
     }
+  });
+}
+
+export function createSubagentUpdateProjectContextTool(options: {
+  projectRoot: string;
+}) {
+  return defineTool({
+    name: "update_project_context",
+    label: "Update Project Context",
+    description:
+      "Capture durable Project facts, terms, constraints, decisions, and open questions in hidden CONTEXT.md. Use this instead of editing CONTEXT.md directly.",
+    parameters: toolSchemaFromZod(ProjectContextUpdateToolParamsSchema),
+    executionMode: "sequential",
+    async execute(_toolCallId, params) {
+      const result = updateProjectContext({
+        projectRoot: options.projectRoot,
+        updates: paramsToProjectContextUpdates(params),
+      });
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        details: result,
+      };
+    },
   });
 }
 
