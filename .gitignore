@@ -19,6 +19,9 @@ src-tauri/binaries/
 # Runtime workspace (user's projects, not source)
 .workspace/
 
+# Ralph worktrees (transient checkouts for the ralph loop)
+.ralph-worktrees/
+
 # OS
 .DS_Store
 Thumbs.db
