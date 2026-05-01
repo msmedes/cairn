@@ -15,6 +15,7 @@ import {
   type StartTaskResult,
   startTask as startTaskInProject,
 } from "./start-task";
+import { type TickTaskResult, tickTaskInProject } from "./tick-task";
 import {
   type VerifySliceResult,
   verifySlice as verifySliceInProject,
@@ -46,6 +47,10 @@ export type GuideToolsOptions = {
     projectRoot: string;
     signal?: AbortSignal;
   }) => Promise<VerifySliceResult>;
+  tickTask?: (input: {
+    projectRoot: string;
+    pieceIndex: number;
+  }) => TickTaskResult | Promise<TickTaskResult>;
 };
 
 export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
@@ -210,6 +215,57 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
 
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "tick_task",
+      label: "Tick Task",
+      description:
+        "Mark one Tasks tab checklist item done in the active project's tasks.html.",
+      promptSnippet: "Mark a Tasks tab checklist item done",
+      promptGuidelines: [
+        'Call tick_task(N) after each complete from spawn_subagent("implement-issue", ...) using the matching 1-indexed Tasks tab piece number.',
+        "Use tick_task instead of raw edit or raw write when updating tasks.html.",
+        "Use the short confirmation as private state; fold it into one brief Guide-voice line before continuing.",
+        "If tick_task returns a structured failure, stop and explain the short message plainly.",
+      ],
+      parameters: Type.Object(
+        {
+          piece_index: Type.Number({
+            description: "1-indexed checklist item number to mark done.",
+          }),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        if (!project) {
+          const result: TickTaskResult = {
+            ok: false,
+            code: "no_active_project",
+            message: "No active project is open.",
+          };
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result,
+          };
+        }
+
+        const result = await (options.tickTask ?? tickTaskInProject)({
+          projectRoot: project.path,
+          pieceIndex: params.piece_index,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: result.ok ? result.message : JSON.stringify(result),
+            },
+          ],
           details: result,
         };
       },
