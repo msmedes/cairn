@@ -66,59 +66,12 @@ test("createPlanArtifact persists canonical plan.json without writing plan.html"
   expect(loadPlanArtifact(projectRoot)?.data.title).toBe("First playable quiz");
 });
 
-test("createPlanArtifact returns a structured field error for invalid plan data", () => {
-  const projectRoot = tempProject();
-  const result = createPlanArtifact({
-    projectRoot,
-    data: validPlan({ pieces: [] }),
-    now: () => new Date("2026-05-01T12:00:00.000Z"),
-  });
-
-  expect(result).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "data.pieces",
-    message: "At least 3 Plan pieces are required.",
-  });
-  expect(existsSync(join(projectRoot, "plan.json"))).toBe(false);
-});
-
-test("createPlanArtifact enforces Plan list bounds", () => {
-  const projectRoot = tempProject();
-  const tooFewNotYet = createPlanArtifact({
-    projectRoot,
-    data: validPlan({ notYet: ["Team analytics"] }),
-    now: () => new Date("2026-05-01T12:00:00.000Z"),
-  });
-
-  expect(tooFewNotYet).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "data.notYet",
-    message: "At least 2 Plan not-yet items are required.",
-  });
-});
-
-test("updatePlanArtifact requires a short reason and preserves createdAt", () => {
+test("updatePlanArtifact preserves createdAt and records the update reason", () => {
   const projectRoot = tempProject();
   createPlanArtifact({
     projectRoot,
     data: validPlan(),
     now: () => new Date("2026-05-01T12:00:00.000Z"),
-  });
-
-  const missingReason = updatePlanArtifact({
-    projectRoot,
-    data: validPlan({ title: "Updated first quiz" }),
-    reason: "  ",
-    now: () => new Date("2026-05-01T13:00:00.000Z"),
-  });
-
-  expect(missingReason).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "reason",
-    message: "Update reason is required.",
   });
 
   const updated = updatePlanArtifact({

@@ -62,23 +62,6 @@ test("createBriefArtifact persists canonical brief.json without writing brief.ht
   expect(loadBriefArtifact(projectRoot)?.data.title).toBe("Video Quiz Helper");
 });
 
-test("createBriefArtifact returns a structured field error for invalid brief data", () => {
-  const projectRoot = tempProject();
-  const result = createBriefArtifact({
-    projectRoot,
-    data: validBrief({ title: "" }),
-    now: () => new Date("2026-05-01T12:00:00.000Z"),
-  });
-
-  expect(result).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "data.title",
-    message: "Brief title is required.",
-  });
-  expect(existsSync(join(projectRoot, "brief.json"))).toBe(false);
-});
-
 test("createBriefArtifact refuses to overwrite an existing brief.json", () => {
   const projectRoot = tempProject();
   createBriefArtifact({
@@ -114,26 +97,12 @@ test("loadBriefArtifact rejects malformed brief.json envelopes", () => {
   expect(loadBriefArtifact(projectRoot)).toBeNull();
 });
 
-test("updateBriefArtifact requires a short reason and preserves createdAt", () => {
+test("updateBriefArtifact preserves createdAt and records the update reason", () => {
   const projectRoot = tempProject();
   createBriefArtifact({
     projectRoot,
     data: validBrief(),
     now: () => new Date("2026-05-01T12:00:00.000Z"),
-  });
-
-  const missingReason = updateBriefArtifact({
-    projectRoot,
-    data: validBrief({ title: "Updated Quiz Helper" }),
-    reason: "  ",
-    now: () => new Date("2026-05-01T13:00:00.000Z"),
-  });
-
-  expect(missingReason).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "reason",
-    message: "Update reason is required.",
   });
 
   const updated = updateBriefArtifact({

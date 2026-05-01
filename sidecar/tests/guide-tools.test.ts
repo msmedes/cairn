@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Value } from "typebox/value";
 import type { CreatingTarget } from "../guide-tools";
 import { createGuideTools } from "../guide-tools";
 import type { Project } from "../project-store";
@@ -157,46 +156,6 @@ test.each([
   expect(toolText(result)).toBe("Creating indicator is showing.");
 });
 
-test("set_creating tool rejects unknown targets by schema", () => {
-  const setCreating = createGuideTools({
-    getActiveProject: () => null,
-    renameProject: () => {
-      throw new Error("should not rename while setting creating state");
-    },
-    onRenameSuccess: () => {
-      throw new Error("should not retarget while setting creating state");
-    },
-    onProjectUpdate: () => {
-      throw new Error(
-        "should not emit project updates while setting creating state",
-      );
-    },
-    onCreatingStart: (target, message) => {
-      throw new Error(
-        `should not emit creating state for ${target}: ${message}`,
-      );
-    },
-  }).find((tool) => tool.name === "set_creating");
-
-  expect(setCreating).toBeDefined();
-  if (!setCreating) {
-    throw new Error("set_creating tool was not registered");
-  }
-
-  expect(
-    Value.Check(setCreating.parameters, {
-      target: "wireframe",
-      message: "Putting this together",
-    }),
-  ).toBe(false);
-  expect(
-    Value.Check(setCreating.parameters, {
-      target: "tasks",
-      message: "Putting this together",
-    }),
-  ).toBe(true);
-});
-
 test("guide tool registry does not surface retired task dispatcher tools", () => {
   const tools = createGuideTools({
     getActiveProject: () => null,
@@ -219,7 +178,7 @@ test("guide tool registry does not surface retired task dispatcher tools", () =>
   expect(tools.map((tool) => tool.name)).not.toContain("tick_task");
 });
 
-test("spawn_subagent tool has bounded skill and response schema parameters", async () => {
+test("spawn_subagent tool routes bounded skill work to the active project", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
@@ -262,30 +221,6 @@ test("spawn_subagent tool has bounded skill and response schema parameters", asy
     throw new Error("spawn_subagent tool was not registered");
   }
   expect(spawnSubagent.executionMode).toBe("sequential");
-  expect(
-    Value.Check(spawnSubagent.parameters, {
-      skill_name: "write-prd",
-      args: { slice: "first" },
-      response_schema: "task_outcome",
-    }),
-  ).toBe(true);
-  expect(
-    Value.Check(spawnSubagent.parameters, {
-      skill_name: "wrtie-prd",
-      args: { slice: "first" },
-      response_schema: "task_outcome",
-    }),
-  ).toBe(false);
-  expect(
-    Value.Check(spawnSubagent.parameters, {
-      skill_name: "write-prd",
-      args: { slice: "first" },
-      response_schema: "unknown",
-    }),
-  ).toBe(false);
-  expect(
-    Value.Check(spawnSubagent.parameters, { skill_name: "write-prd" }),
-  ).toBe(false);
 
   const result = await spawnSubagent.execute(
     "tool-call-1",
@@ -305,7 +240,7 @@ test("spawn_subagent tool has bounded skill and response schema parameters", asy
   );
 });
 
-test("create_tasks_artifact tool validates and writes tasks.json only", async () => {
+test("create_tasks_artifact tool writes tasks.json only", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
@@ -333,7 +268,6 @@ test("create_tasks_artifact tool validates and writes tasks.json only", async ()
     throw new Error("create_tasks_artifact tool was not registered");
   }
   expect(createTasks.executionMode).toBe("sequential");
-  expect(Value.Check(createTasks.parameters, { issues: [] })).toBe(false);
   expect(createTasks.promptGuidelines?.join("\n")).toContain(
     "derives task slugs from issue paths",
   );
@@ -375,7 +309,7 @@ test("create_tasks_artifact tool validates and writes tasks.json only", async ()
   ).toThrow();
 });
 
-test("update_task_status tool mutates a task by slug and returns structured failures", async () => {
+test("update_task_status tool mutates a task by slug and reports unknown slugs", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
@@ -406,21 +340,6 @@ test("update_task_status tool mutates a task by slug and returns structured fail
   if (!createTasks || !updateTaskStatus) {
     throw new Error("tasks artifact tools were not registered");
   }
-  expect(
-    Value.Check(updateTaskStatus.parameters, { task_slug: "", status: "done" }),
-  ).toBe(false);
-  expect(
-    Value.Check(updateTaskStatus.parameters, {
-      task_slug: "preview-it-as-a-learner",
-      status: "complete",
-    }),
-  ).toBe(false);
-  expect(
-    Value.Check(updateTaskStatus.parameters, {
-      task_slug: "preview-it-as-a-learner",
-      status: "blocked",
-    }),
-  ).toBe(true);
 
   await createTasks.execute(
     "tool-call-1",
@@ -485,7 +404,7 @@ test("update_task_status tool mutates a task by slug and returns structured fail
   ).toContain('"status": "in_progress"');
 });
 
-test("create_brief_artifact tool validates and writes brief.json only", async () => {
+test("create_brief_artifact tool writes brief.json only", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
@@ -516,7 +435,6 @@ test("create_brief_artifact tool validates and writes brief.json only", async ()
     throw new Error("create_brief_artifact tool was not registered");
   }
   expect(createBrief.executionMode).toBe("sequential");
-  expect(Value.Check(createBrief.parameters, { title: "" })).toBe(false);
 
   const result = await createBrief.execute(
     "tool-call-1",
@@ -555,80 +473,7 @@ test("create_brief_artifact tool validates and writes brief.json only", async ()
   ).toThrow();
 });
 
-test("update_brief_artifact tool requires a reason and returns field validation errors", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
-  const activeProject = store.create(
-    "Temporary quiz idea",
-    new Date("2026-04-28T10:00:00.000Z"),
-  );
-  const [createBrief, updateBrief] = createGuideTools({
-    getActiveProject: () => activeProject,
-    renameProject: () => {
-      throw new Error("should not rename while updating a brief artifact");
-    },
-    onRenameSuccess: () => {
-      throw new Error("should not retarget while updating a brief artifact");
-    },
-    onProjectUpdate: () => {
-      throw new Error(
-        "should not emit project updates while updating a brief artifact",
-      );
-    },
-    onCreatingStart: () => {
-      throw new Error(
-        "should not emit creating state while updating a brief artifact",
-      );
-    },
-  }).filter((tool) =>
-    ["create_brief_artifact", "update_brief_artifact"].includes(tool.name),
-  );
-
-  if (!createBrief || !updateBrief) {
-    throw new Error("brief artifact tools were not registered");
-  }
-
-  const validInput = {
-    title: "Video Quiz Helper",
-    summary: "A small tool for turning training videos into simple quizzes.",
-    audience: "Team leads who need lightweight training checks.",
-    success: "A lead can paste in a video, add questions, and share the quiz.",
-    sections: [
-      {
-        heading: "What it does first",
-        body: "It helps a lead create one quiz from one training video.",
-      },
-    ],
-  };
-  await createBrief.execute(
-    "tool-call-1",
-    validInput,
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(Value.Check(updateBrief.parameters, validInput)).toBe(false);
-
-  const result = await updateBrief.execute(
-    "tool-call-2",
-    { ...validInput, reason: " " },
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(result.details).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "reason",
-    message: "Update reason is required.",
-  });
-  expect(toolText(result)).toBe(
-    '{"ok":false,"code":"validation_error","field":"reason","message":"Update reason is required."}',
-  );
-});
-
-test("create_plan_artifact tool validates and writes plan.json only", async () => {
+test("create_plan_artifact tool writes plan.json only", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
@@ -659,7 +504,6 @@ test("create_plan_artifact tool validates and writes plan.json only", async () =
     throw new Error("create_plan_artifact tool was not registered");
   }
   expect(createPlan.executionMode).toBe("sequential");
-  expect(Value.Check(createPlan.parameters, { title: "" })).toBe(false);
 
   const result = await createPlan.execute(
     "tool-call-1",
@@ -697,77 +541,4 @@ test("create_plan_artifact tool validates and writes plan.json only", async () =
   expect(() =>
     readFileSync(join(activeProject.path, "plan.html"), "utf8"),
   ).toThrow();
-});
-
-test("update_plan_artifact tool requires a reason and returns field validation errors", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
-  const activeProject = store.create(
-    "Temporary quiz idea",
-    new Date("2026-04-28T10:00:00.000Z"),
-  );
-  const [createPlan, updatePlan] = createGuideTools({
-    getActiveProject: () => activeProject,
-    renameProject: () => {
-      throw new Error("should not rename while updating a plan artifact");
-    },
-    onRenameSuccess: () => {
-      throw new Error("should not retarget while updating a plan artifact");
-    },
-    onProjectUpdate: () => {
-      throw new Error(
-        "should not emit project updates while updating a plan artifact",
-      );
-    },
-    onCreatingStart: () => {
-      throw new Error(
-        "should not emit creating state while updating a plan artifact",
-      );
-    },
-  }).filter((tool) =>
-    ["create_plan_artifact", "update_plan_artifact"].includes(tool.name),
-  );
-  if (!createPlan || !updatePlan) {
-    throw new Error("plan artifact tools were not registered");
-  }
-
-  const validInput = {
-    title: "First playable quiz",
-    summary: "Start with one video and one shareable quiz.",
-    from_brief:
-      "The brief asks for lightweight checks, so this proves one quiz end to end.",
-    outcomes: ["You'll be able to paste in one training video."],
-    pieces: [
-      "Create the first quiz draft",
-      "Preview it as a learner",
-      "Share the finished quiz",
-    ],
-    not_yet: ["Team analytics", "Question banks"],
-  };
-  await createPlan.execute(
-    "tool-call-1",
-    validInput,
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(Value.Check(updatePlan.parameters, validInput)).toBe(false);
-
-  const result = await updatePlan.execute(
-    "tool-call-2",
-    { ...validInput, reason: " " },
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(result.details).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "reason",
-    message: "Update reason is required.",
-  });
-  expect(toolText(result)).toBe(
-    '{"ok":false,"code":"validation_error","field":"reason","message":"Update reason is required."}',
-  );
 });

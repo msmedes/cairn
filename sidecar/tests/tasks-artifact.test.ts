@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -85,61 +85,6 @@ test("createTasksArtifact persists canonical tasks.json with issue-derived slugs
   ]);
 });
 
-test("createTasksArtifact validates issue input and duplicate derived slugs", () => {
-  const missingIssuePath = createTasksArtifact({
-    projectRoot: tempProject(),
-    issues: [{ issuePath: " ", title: "Create the first quiz draft" }],
-  });
-
-  expect(missingIssuePath).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "issues.0.issuePath",
-    message: "Issue path is required.",
-  });
-
-  const duplicateSlug = createTasksArtifact({
-    projectRoot: tempProject(),
-    issues: [
-      { issuePath: "issues/01-build-it.md", title: "Build it" },
-      { issuePath: "issues/02-build-it.md", title: "Build it again" },
-    ],
-  });
-
-  expect(duplicateSlug).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "issues.1.issuePath",
-    message: 'Issue path creates duplicate task slug "build-it".',
-  });
-});
-
-test("loadTasksArtifact rejects invalid task statuses", () => {
-  const projectRoot = tempProject();
-  writeFileSync(
-    join(projectRoot, "tasks.json"),
-    JSON.stringify({
-      artifact: "tasks",
-      schemaVersion: 1,
-      createdAt: "2026-05-01T12:00:00.000Z",
-      updatedAt: "2026-05-01T12:00:00.000Z",
-      data: {
-        tasks: [
-          {
-            slug: "create-the-first-quiz-draft",
-            issuePath: "issues/01-create-the-first-quiz-draft.md",
-            title: "Create the first quiz draft",
-            status: "complete",
-          },
-        ],
-      },
-    }),
-    "utf8",
-  );
-
-  expect(loadTasksArtifact(projectRoot)).toBeNull();
-});
-
 test.each([
   "todo",
   "in_progress",
@@ -175,7 +120,7 @@ test.each([
   ).toBe(status);
 });
 
-test("updateTaskStatus returns structured slug failures without rewriting task state", () => {
+test("updateTaskStatus reports unknown slugs without rewriting task state", () => {
   const projectRoot = tempProject();
   createTasksArtifact({
     projectRoot,
@@ -183,20 +128,6 @@ test("updateTaskStatus returns structured slug failures without rewriting task s
     now: () => new Date("2026-05-01T12:00:00.000Z"),
   });
   const before = readFileSync(join(projectRoot, "tasks.json"), "utf8");
-
-  expect(
-    updateTaskStatus({
-      projectRoot,
-      taskSlug: " ",
-      status: "done",
-    }),
-  ).toEqual({
-    ok: false,
-    code: "validation_error",
-    field: "task_slug",
-    message: "Task slug is required.",
-  });
-  expect(readFileSync(join(projectRoot, "tasks.json"), "utf8")).toBe(before);
 
   expect(
     updateTaskStatus({

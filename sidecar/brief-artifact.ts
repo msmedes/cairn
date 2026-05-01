@@ -1,21 +1,51 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 
 export const BRIEF_ARTIFACT_PATH = "brief.json";
 export const BRIEF_SCHEMA_VERSION = 1;
 
-export type BriefArtifactSection = {
-  heading: string;
-  body: string;
-};
+const nonEmptyString = (message: string) =>
+  z.string({ error: message }).trim().min(1, { error: message });
 
-export type BriefArtifactData = {
-  title: string;
-  summary: string;
-  audience: string;
-  success: string;
-  sections: BriefArtifactSection[];
-};
+export const BriefArtifactSectionSchema = z.object(
+  {
+    heading: nonEmptyString("Brief section heading is required.").describe(
+      "Short heading for this Brief section.",
+    ),
+    body: nonEmptyString("Brief section body is required.").describe(
+      "Plain-language body text for this Brief section.",
+    ),
+  },
+  { error: "Brief section is invalid." },
+);
+
+export const BriefArtifactDataSchema = z.object(
+  {
+    title: nonEmptyString("Brief title is required.").describe(
+      "Plain-language name for the Project in the Brief.",
+    ),
+    summary: nonEmptyString("Brief summary is required.").describe(
+      "One short paragraph explaining what the Project is.",
+    ),
+    audience: nonEmptyString("Brief audience is required.").describe(
+      "Who this Project is for.",
+    ),
+    success: nonEmptyString("Brief success is required.").describe(
+      "What should feel true when this Project is useful.",
+    ),
+    sections: z
+      .array(BriefArtifactSectionSchema, {
+        error: "At least one Brief section is required.",
+      })
+      .min(1, { error: "At least one Brief section is required." })
+      .describe("Brief sections to render in the Project tab."),
+  },
+  { error: "Brief data is required." },
+);
+
+export type BriefArtifactSection = z.infer<typeof BriefArtifactSectionSchema>;
+export type BriefArtifactData = z.infer<typeof BriefArtifactDataSchema>;
 
 export type BriefArtifactEnvelope = {
   artifact: "brief";
@@ -68,91 +98,35 @@ function isNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function validateStringField(
-  value: unknown,
-  field: keyof BriefArtifactData,
-  label: string,
-): BriefArtifactFailure | null {
-  if (isNonEmptyString(value)) return null;
+function issuePathToField(base: string, path: PropertyKey[]) {
+  if (path.length === 0) return base;
+  return `${base}.${path.join(".")}`;
+}
+
+function validationFailureFromZod(
+  error: z.ZodError,
+  baseField: string,
+): BriefArtifactFailure {
+  const issue = error.issues[0];
   return {
     ok: false,
     code: "validation_error",
-    field: `data.${field}`,
-    message: `${label} is required.`,
+    field: issuePathToField(baseField, issue?.path ?? []),
+    message: issue?.message ?? "Brief data is invalid.",
   };
 }
 
 export function validateBriefArtifactData(
   value: unknown,
 ): BriefArtifactFailure | null {
-  if (!isRecord(value)) {
-    return {
-      ok: false,
-      code: "validation_error",
-      field: "data",
-      message: "Brief data is required.",
-    };
-  }
-
-  const stringError =
-    validateStringField(value.title, "title", "Brief title") ??
-    validateStringField(value.summary, "summary", "Brief summary") ??
-    validateStringField(value.audience, "audience", "Brief audience") ??
-    validateStringField(value.success, "success", "Brief success");
-  if (stringError) return stringError;
-
-  if (!Array.isArray(value.sections) || value.sections.length === 0) {
-    return {
-      ok: false,
-      code: "validation_error",
-      field: "data.sections",
-      message: "At least one Brief section is required.",
-    };
-  }
-
-  for (const [index, section] of value.sections.entries()) {
-    if (!isRecord(section)) {
-      return {
-        ok: false,
-        code: "validation_error",
-        field: `data.sections.${index}`,
-        message: "Brief section is invalid.",
-      };
-    }
-    if (!isNonEmptyString(section.heading)) {
-      return {
-        ok: false,
-        code: "validation_error",
-        field: `data.sections.${index}.heading`,
-        message: "Brief section heading is required.",
-      };
-    }
-    if (!isNonEmptyString(section.body)) {
-      return {
-        ok: false,
-        code: "validation_error",
-        field: `data.sections.${index}.body`,
-        message: "Brief section body is required.",
-      };
-    }
-  }
-
-  return null;
+  const parsed = BriefArtifactDataSchema.safeParse(value);
+  return parsed.success ? null : validationFailureFromZod(parsed.error, "data");
 }
 
 function normalizeBriefArtifactData(
   data: BriefArtifactData,
 ): BriefArtifactData {
-  return {
-    title: data.title.trim(),
-    summary: data.summary.trim(),
-    audience: data.audience.trim(),
-    success: data.success.trim(),
-    sections: data.sections.map((section) => ({
-      heading: section.heading.trim(),
-      body: section.body.trim(),
-    })),
-  };
+  return BriefArtifactDataSchema.parse(data);
 }
 
 function success(data: BriefArtifactData): BriefArtifactSuccess {

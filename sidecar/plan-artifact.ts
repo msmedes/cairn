@@ -1,17 +1,49 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 
 export const PLAN_ARTIFACT_PATH = "plan.json";
 export const PLAN_SCHEMA_VERSION = 1;
 
-export type PlanArtifactData = {
-  title: string;
-  summary: string;
-  fromBrief: string;
-  outcomes: string[];
-  pieces: string[];
-  notYet: string[];
-};
+const nonEmptyString = (message: string) =>
+  z.string({ error: message }).trim().min(1, { error: message });
+
+export const PlanArtifactDataSchema = z.object(
+  {
+    title: nonEmptyString("Plan title is required.").describe(
+      "Plain-language name for the current first slice.",
+    ),
+    summary: nonEmptyString("Plan summary is required.").describe(
+      "One short paragraph explaining what this slice builds first.",
+    ),
+    fromBrief: nonEmptyString("Plan brief connection is required.").describe(
+      "How this first slice connects back to the Project Brief.",
+    ),
+    outcomes: z
+      .array(nonEmptyString("Plan outcome must not be empty."), {
+        error: "At least one Plan outcome is required.",
+      })
+      .min(1, { error: "At least one Plan outcome is required." })
+      .describe("Visible user outcomes for this slice."),
+    pieces: z
+      .array(nonEmptyString("Plan piece must not be empty."), {
+        error: "At least 3 Plan pieces are required.",
+      })
+      .min(3, { error: "At least 3 Plan pieces are required." })
+      .max(6, { error: "At most 6 Plan pieces are allowed." })
+      .describe("Ordered visible pieces for this slice."),
+    notYet: z
+      .array(nonEmptyString("Plan not-yet item must not be empty."), {
+        error: "At least 2 Plan not-yet items are required.",
+      })
+      .min(2, { error: "At least 2 Plan not-yet items are required." })
+      .max(4, { error: "At most 4 Plan not-yet items are allowed." })
+      .describe("User-visible items that are not part of this slice."),
+  },
+  { error: "Plan data is required." },
+);
+
+export type PlanArtifactData = z.infer<typeof PlanArtifactDataSchema>;
 
 export type PlanArtifactEnvelope = {
   artifact: "plan";
@@ -64,106 +96,33 @@ function isNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function validateStringField(
-  value: unknown,
-  field: keyof PlanArtifactData,
-  label: string,
-): PlanArtifactFailure | null {
-  if (isNonEmptyString(value)) return null;
+function issuePathToField(base: string, path: PropertyKey[]) {
+  if (path.length === 0) return base;
+  return `${base}.${path.join(".")}`;
+}
+
+function validationFailureFromZod(
+  error: z.ZodError,
+  baseField: string,
+): PlanArtifactFailure {
+  const issue = error.issues[0];
   return {
     ok: false,
     code: "validation_error",
-    field: `data.${field}`,
-    message: `${label} is required.`,
+    field: issuePathToField(baseField, issue?.path ?? []),
+    message: issue?.message ?? "Plan data is invalid.",
   };
-}
-
-function validateStringList(
-  value: unknown,
-  field: keyof PlanArtifactData,
-  label: string,
-  options: { minItems?: number; maxItems?: number } = {},
-): PlanArtifactFailure | null {
-  const minItems = options.minItems ?? 1;
-  if (!Array.isArray(value) || value.length < minItems) {
-    return {
-      ok: false,
-      code: "validation_error",
-      field: `data.${field}`,
-      message:
-        minItems === 1
-          ? `At least one ${label} is required.`
-          : `At least ${minItems} ${label}s are required.`,
-    };
-  }
-
-  if (options.maxItems !== undefined && value.length > options.maxItems) {
-    return {
-      ok: false,
-      code: "validation_error",
-      field: `data.${field}`,
-      message: `At most ${options.maxItems} ${label}s are allowed.`,
-    };
-  }
-
-  for (const [index, item] of value.entries()) {
-    if (!isNonEmptyString(item)) {
-      return {
-        ok: false,
-        code: "validation_error",
-        field: `data.${field}.${index}`,
-        message: `${label} must not be empty.`,
-      };
-    }
-  }
-
-  return null;
 }
 
 export function validatePlanArtifactData(
   value: unknown,
 ): PlanArtifactFailure | null {
-  if (!isRecord(value)) {
-    return {
-      ok: false,
-      code: "validation_error",
-      field: "data",
-      message: "Plan data is required.",
-    };
-  }
-
-  const stringError =
-    validateStringField(value.title, "title", "Plan title") ??
-    validateStringField(value.summary, "summary", "Plan summary") ??
-    validateStringField(value.fromBrief, "fromBrief", "Plan brief connection");
-  if (stringError) return stringError;
-
-  return (
-    validateStringList(value.outcomes, "outcomes", "Plan outcome") ??
-    validateStringList(value.pieces, "pieces", "Plan piece", {
-      minItems: 3,
-      maxItems: 6,
-    }) ??
-    validateStringList(value.notYet, "notYet", "Plan not-yet item", {
-      minItems: 2,
-      maxItems: 4,
-    })
-  );
-}
-
-function normalizeList(value: string[]) {
-  return value.map((item) => item.trim());
+  const parsed = PlanArtifactDataSchema.safeParse(value);
+  return parsed.success ? null : validationFailureFromZod(parsed.error, "data");
 }
 
 function normalizePlanArtifactData(data: PlanArtifactData): PlanArtifactData {
-  return {
-    title: data.title.trim(),
-    summary: data.summary.trim(),
-    fromBrief: data.fromBrief.trim(),
-    outcomes: normalizeList(data.outcomes),
-    pieces: normalizeList(data.pieces),
-    notYet: normalizeList(data.notYet),
-  };
+  return PlanArtifactDataSchema.parse(data);
 }
 
 function success(data: PlanArtifactData): PlanArtifactSuccess {

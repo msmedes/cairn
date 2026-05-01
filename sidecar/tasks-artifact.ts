@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
+import { z } from "zod";
 import { slugify } from "./slug";
 
 export const TASKS_ARTIFACT_PATH = "tasks.json";
@@ -13,16 +14,83 @@ export const TASK_STATUSES = [
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export type TaskArtifactItem = {
-  slug: string;
-  issuePath: string;
-  title: string;
-  status: TaskStatus;
-};
+const nonEmptyString = (message: string) =>
+  z.string({ error: message }).trim().min(1, { error: message });
 
-export type TasksArtifactData = {
-  tasks: TaskArtifactItem[];
-};
+const taskStatusSchema = z.enum(TASK_STATUSES, {
+  error: "Task status must be todo, in_progress, done, or blocked.",
+});
+
+export const TaskArtifactItemSchema = z.object(
+  {
+    slug: nonEmptyString("Task slug is required."),
+    issuePath: nonEmptyString("Issue path is required."),
+    title: nonEmptyString("Task title is required."),
+    status: taskStatusSchema,
+  },
+  { error: "Task is invalid." },
+);
+
+export const TasksArtifactDataSchema = z
+  .object(
+    {
+      tasks: z
+        .array(TaskArtifactItemSchema, {
+          error: "At least one task is required.",
+        })
+        .min(1, { error: "At least one task is required." }),
+    },
+    { error: "Tasks data is required." },
+  )
+  .superRefine((value, context) => {
+    const seenSlugs = new Set<string>();
+    value.tasks.forEach((task, index) => {
+      if (seenSlugs.has(task.slug)) {
+        context.addIssue({
+          code: "custom",
+          path: ["tasks", index, "slug"],
+          message: `Duplicate task slug "${task.slug}".`,
+        });
+      }
+      seenSlugs.add(task.slug);
+    });
+  });
+
+export const CreateTasksArtifactIssueSchema = z.object(
+  {
+    issuePath: nonEmptyString("Issue path is required."),
+    title: nonEmptyString("Task title is required."),
+  },
+  { error: "Issue is invalid." },
+);
+
+const createTasksArtifactIssuesSchema = z
+  .array(CreateTasksArtifactIssueSchema, {
+    error: "At least one issue is required.",
+  })
+  .min(1, { error: "At least one issue is required." })
+  .superRefine((issues, context) => {
+    const seenSlugs = new Set<string>();
+    issues.forEach((issue, index) => {
+      const slug = deriveTaskSlugFromIssuePath(issue.issuePath);
+      if (seenSlugs.has(slug)) {
+        context.addIssue({
+          code: "custom",
+          path: [index, "issuePath"],
+          message: `Issue path creates duplicate task slug "${slug}".`,
+        });
+      }
+      seenSlugs.add(slug);
+    });
+  });
+
+const taskStatusInputSchema = z.object({
+  taskSlug: nonEmptyString("Task slug is required."),
+  status: taskStatusSchema,
+});
+
+export type TaskArtifactItem = z.infer<typeof TaskArtifactItemSchema>;
+export type TasksArtifactData = z.infer<typeof TasksArtifactDataSchema>;
 
 export type TasksArtifactEnvelope = {
   artifact: "tasks";
@@ -32,10 +100,9 @@ export type TasksArtifactEnvelope = {
   data: TasksArtifactData;
 };
 
-export type CreateTasksArtifactIssue = {
-  issuePath: string;
-  title: string;
-};
+export type CreateTasksArtifactIssue = z.infer<
+  typeof CreateTasksArtifactIssueSchema
+>;
 
 export type TasksArtifactSuccess = {
   ok: true;
@@ -94,13 +161,6 @@ function isNonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isTaskStatus(value: unknown): value is TaskStatus {
-  return (
-    typeof value === "string" &&
-    (TASK_STATUSES as readonly string[]).includes(value)
-  );
-}
-
 function validationError(field: string, message: string): TasksArtifactFailure {
   return {
     ok: false,
@@ -117,116 +177,44 @@ export function deriveTaskSlugFromIssuePath(issuePath: string) {
   return slugify(stem.replace(/^\d+-/, ""));
 }
 
+function issuePathToField(base: string, path: PropertyKey[]) {
+  if (path.length === 0) return base;
+  if (!base) return path.join(".");
+  return `${base}.${path.join(".")}`;
+}
+
+function validationFailureFromZod(
+  error: z.ZodError,
+  baseField: string,
+): TasksArtifactFailure {
+  const issue = error.issues[0];
+  return validationError(
+    issuePathToField(baseField, issue?.path ?? []),
+    issue?.message ?? "Tasks data is invalid.",
+  );
+}
+
 function validateTasksArtifactData(
   value: unknown,
 ): TasksArtifactFailure | null {
-  if (!isRecord(value)) {
-    return validationError("data", "Tasks data is required.");
-  }
-
-  if (!Array.isArray(value.tasks) || value.tasks.length === 0) {
-    return validationError("data.tasks", "At least one task is required.");
-  }
-
-  const seenSlugs = new Set<string>();
-  for (const [index, task] of value.tasks.entries()) {
-    if (!isRecord(task)) {
-      return validationError(`data.tasks.${index}`, "Task is invalid.");
-    }
-    if (!isNonEmptyString(task.slug)) {
-      return validationError(
-        `data.tasks.${index}.slug`,
-        "Task slug is required.",
-      );
-    }
-    const slug = task.slug as string;
-    if (seenSlugs.has(slug.trim())) {
-      return validationError(
-        `data.tasks.${index}.slug`,
-        `Duplicate task slug "${slug.trim()}".`,
-      );
-    }
-    seenSlugs.add(slug.trim());
-    if (!isNonEmptyString(task.issuePath)) {
-      return validationError(
-        `data.tasks.${index}.issuePath`,
-        "Issue path is required.",
-      );
-    }
-    if (!isNonEmptyString(task.title)) {
-      return validationError(
-        `data.tasks.${index}.title`,
-        "Task title is required.",
-      );
-    }
-    if (!isTaskStatus(task.status)) {
-      return validationError(
-        `data.tasks.${index}.status`,
-        "Task status must be todo, in_progress, done, or blocked.",
-      );
-    }
-  }
-
-  return null;
+  const parsed = TasksArtifactDataSchema.safeParse(value);
+  return parsed.success ? null : validationFailureFromZod(parsed.error, "data");
 }
 
 function validateCreateIssues(
   issues: unknown,
 ): { issues: CreateTasksArtifactIssue[] } | TasksArtifactFailure {
-  if (!Array.isArray(issues) || issues.length === 0) {
-    return validationError("issues", "At least one issue is required.");
-  }
-
-  const nextIssues: CreateTasksArtifactIssue[] = [];
-  const seenSlugs = new Set<string>();
-  for (const [index, issue] of issues.entries()) {
-    if (!isRecord(issue)) {
-      return validationError(`issues.${index}`, "Issue is invalid.");
-    }
-    if (!isNonEmptyString(issue.issuePath)) {
-      return validationError(
-        `issues.${index}.issuePath`,
-        "Issue path is required.",
-      );
-    }
-    if (!isNonEmptyString(issue.title)) {
-      return validationError(
-        `issues.${index}.title`,
-        "Task title is required.",
-      );
-    }
-
-    const issuePath = issue.issuePath as string;
-    const title = issue.title as string;
-    const slug = deriveTaskSlugFromIssuePath(issuePath);
-    if (seenSlugs.has(slug)) {
-      return validationError(
-        `issues.${index}.issuePath`,
-        `Issue path creates duplicate task slug "${slug}".`,
-      );
-    }
-    seenSlugs.add(slug);
-
-    nextIssues.push({
-      issuePath: issuePath.trim(),
-      title: title.trim(),
-    });
-  }
-
-  return { issues: nextIssues };
+  const parsed = createTasksArtifactIssuesSchema.safeParse(issues);
+  return parsed.success
+    ? { issues: parsed.data }
+    : validationFailureFromZod(parsed.error, "issues");
 }
 
 function normalizeEnvelope(envelope: TasksArtifactEnvelope) {
+  const data = TasksArtifactDataSchema.parse(envelope.data);
   return {
     ...envelope,
-    data: {
-      tasks: envelope.data.tasks.map((task) => ({
-        slug: task.slug.trim(),
-        issuePath: task.issuePath.trim(),
-        title: task.title.trim(),
-        status: task.status,
-      })),
-    },
+    data,
   };
 }
 
@@ -316,14 +304,9 @@ export function loadTasksArtifact(
 export function updateTaskStatus(
   input: UpdateTaskStatusInput,
 ): UpdateTaskStatusResult {
-  if (!isNonEmptyString(input.taskSlug)) {
-    return validationError("task_slug", "Task slug is required.");
-  }
-  if (!isTaskStatus(input.status)) {
-    return validationError(
-      "status",
-      "Task status must be todo, in_progress, done, or blocked.",
-    );
+  const parsedInput = taskStatusInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    return validationFailureFromZod(parsedInput.error, "");
   }
 
   const existing = loadTasksArtifact(input.projectRoot);
@@ -345,7 +328,7 @@ export function updateTaskStatus(
     };
   }
 
-  const taskSlug = input.taskSlug.trim();
+  const taskSlug = parsedInput.data.taskSlug;
   const targetTask = existing.data.tasks.find((task) => task.slug === taskSlug);
   if (!targetTask) {
     return {
@@ -364,7 +347,9 @@ export function updateTaskStatus(
     updatedAt: (input.now ?? (() => new Date()))().toISOString(),
     data: {
       tasks: existing.data.tasks.map((task) =>
-        task.slug === taskSlug ? { ...task, status: input.status } : task,
+        task.slug === taskSlug
+          ? { ...task, status: parsedInput.data.status }
+          : task,
       ),
     },
   };
@@ -377,6 +362,6 @@ export function updateTaskStatus(
     artifact: "tasks",
     path: TASKS_ARTIFACT_PATH,
     taskSlug,
-    status: input.status,
+    status: parsedInput.data.status,
   };
 }

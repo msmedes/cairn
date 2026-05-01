@@ -1,11 +1,12 @@
-import { Type } from "@mariozechner/pi-ai";
 import {
   defineTool,
   type Skill,
   type ToolDefinition,
 } from "@mariozechner/pi-coding-agent";
+import { z } from "zod";
 import {
   type BriefArtifactData,
+  BriefArtifactDataSchema,
   type BriefArtifactResult,
   createBriefArtifact,
   updateBriefArtifact,
@@ -13,6 +14,7 @@ import {
 import {
   createPlanArtifact,
   type PlanArtifactData,
+  PlanArtifactDataSchema,
   type PlanArtifactResult,
   updatePlanArtifact,
 } from "./plan-artifact";
@@ -32,8 +34,11 @@ import {
   type UpdateTaskStatusResult,
   updateTaskStatus,
 } from "./tasks-artifact";
+import { toolSchemaFromZod } from "./tool-schema";
 
-export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
+const CREATING_TARGETS = ["brief", "prd", "issues", "plan", "tasks"] as const;
+
+export type CreatingTarget = (typeof CREATING_TARGETS)[number];
 
 export type GuideToolsOptions = {
   getActiveProject: () => Project | null;
@@ -79,104 +84,98 @@ export type GuideToolsOptions = {
   }) => UpdateTaskStatusResult | Promise<UpdateTaskStatusResult>;
 };
 
-const briefSectionParameters = Type.Object(
-  {
-    heading: Type.String({
-      description: "Short heading for this Brief section.",
-      minLength: 1,
-    }),
-    body: Type.String({
-      description: "Plain-language body text for this Brief section.",
-      minLength: 1,
-    }),
-  },
-  { additionalProperties: false },
-);
+const reasonSchema = z
+  .string({ error: "Update reason is required." })
+  .trim()
+  .min(1, { error: "Update reason is required." })
+  .describe("Short private reason for revising the artifact.");
 
-const briefArtifactParameters = {
-  title: Type.String({
-    description: "Plain-language name for the Project in the Brief.",
-    minLength: 1,
-  }),
-  summary: Type.String({
-    description: "One short paragraph explaining what the Project is.",
-    minLength: 1,
-  }),
-  audience: Type.String({
-    description: "Who this Project is for.",
-    minLength: 1,
-  }),
-  success: Type.String({
-    description: "What should feel true when this Project is useful.",
-    minLength: 1,
-  }),
-  sections: Type.Array(briefSectionParameters, {
-    description: "Brief sections to render in the Project tab.",
-    minItems: 1,
-  }),
-};
+const updateBriefArtifactToolParamsSchema = BriefArtifactDataSchema.extend({
+  reason: reasonSchema.describe("Short private reason for revising the Brief."),
+});
 
-const planArtifactParameters = {
-  title: Type.String({
-    description: "Plain-language name for the current first slice.",
-    minLength: 1,
-  }),
-  summary: Type.String({
-    description: "One short paragraph explaining what this slice builds first.",
-    minLength: 1,
-  }),
-  from_brief: Type.String({
-    description: "How this first slice connects back to the Project Brief.",
-    minLength: 1,
-  }),
-  outcomes: Type.Array(
-    Type.String({
-      description: "A concrete capability the user will have after this slice.",
-      minLength: 1,
-    }),
-    {
-      description: "Visible user outcomes for this slice.",
-      minItems: 1,
-    },
+const PlanArtifactToolParamsSchema = z.object({
+  title: PlanArtifactDataSchema.shape.title,
+  summary: PlanArtifactDataSchema.shape.summary,
+  from_brief: PlanArtifactDataSchema.shape.fromBrief.describe(
+    "How this first slice connects back to the Project Brief.",
   ),
-  pieces: Type.Array(
-    Type.String({
-      description: "One plain-language piece the Guide will work through.",
-      minLength: 1,
-    }),
-    {
-      description: "Ordered visible pieces for this slice.",
-      minItems: 3,
-      maxItems: 6,
-    },
+  outcomes: PlanArtifactDataSchema.shape.outcomes,
+  pieces: PlanArtifactDataSchema.shape.pieces,
+  not_yet: PlanArtifactDataSchema.shape.notYet.describe(
+    "User-visible items that are not part of this slice.",
   ),
-  not_yet: Type.Array(
-    Type.String({
-      description: "A Brief item intentionally not included in this slice.",
-      minLength: 1,
-    }),
-    {
-      description: "User-visible items that are not part of this slice.",
-      minItems: 2,
-      maxItems: 4,
-    },
-  ),
-};
+});
 
-const taskIssueParameters = Type.Object(
-  {
-    issue_path: Type.String({
-      description:
-        "Project-relative issue path such as issues/01-create-the-first-quiz-draft.md.",
-      minLength: 1,
-    }),
-    title: Type.String({
-      description: "Plain-language Tasks tab entry matching this issue.",
-      minLength: 1,
-    }),
-  },
-  { additionalProperties: false },
-);
+const updatePlanArtifactToolParamsSchema = PlanArtifactToolParamsSchema.extend({
+  reason: reasonSchema.describe("Short private reason for revising the Plan."),
+});
+
+const setProjectNameParamsSchema = z.object({
+  name: z.string().describe("The project name exactly as the user gave it."),
+});
+
+const setCreatingParamsSchema = z.object({
+  target: z
+    .enum(CREATING_TARGETS)
+    .describe("The kind of user-visible artifact being created."),
+  message: z
+    .string()
+    .describe(
+      "Short Guide-voice text to show while the artifact is being created.",
+    ),
+});
+
+const spawnSubagentParamsSchema = z.object({
+  skill_name: z
+    .enum(SPAWN_SUBAGENT_SKILL_NAMES)
+    .describe("The known Guide skill to run in isolation."),
+  args: z
+    .record(z.string(), z.unknown())
+    .describe("Structured arguments for the named skill."),
+  response_schema: z
+    .enum(SPAWN_SUBAGENT_RESPONSE_SCHEMAS)
+    .describe(
+      'Expected structured response shape: "task_outcome", "verify_result", or "artifact_write".',
+    ),
+});
+
+const TaskIssueToolParamsSchema = z.object({
+  issue_path: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      "Project-relative issue path such as issues/01-create-the-first-quiz-draft.md.",
+    ),
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .describe("Plain-language Tasks tab entry matching this issue."),
+});
+
+const createTasksArtifactToolParamsSchema = z.object({
+  issues: z
+    .array(TaskIssueToolParamsSchema)
+    .min(1)
+    .describe(
+      "Ordered issue path and plain-language task title pairs for the Tasks tab.",
+    ),
+});
+
+const updateTaskStatusToolParamsSchema = z.object({
+  task_slug: z
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      "Issue-derived task slug, for example create-the-first-quiz-draft.",
+    ),
+  status: z
+    .enum(TASK_STATUSES)
+    .describe("The next task status: todo, in_progress, done, or blocked."),
+});
 
 function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
   return {
@@ -188,14 +187,7 @@ function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
   };
 }
 
-type PlanToolParams = {
-  title: string;
-  summary: string;
-  from_brief: string;
-  outcomes: string[];
-  pieces: string[];
-  not_yet: string[];
-};
+type PlanToolParams = z.infer<typeof PlanArtifactToolParamsSchema>;
 
 function paramsToPlanData(params: PlanToolParams): PlanArtifactData {
   return {
@@ -208,12 +200,9 @@ function paramsToPlanData(params: PlanToolParams): PlanArtifactData {
   };
 }
 
-type CreateTasksToolParams = {
-  issues: Array<{
-    issue_path: string;
-    title: string;
-  }>;
-};
+type CreateTasksToolParams = z.infer<
+  typeof createTasksArtifactToolParamsSchema
+>;
 
 function paramsToTaskIssues(
   params: CreateTasksToolParams,
@@ -275,9 +264,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Do not write brief.html, brief.md, or brief.json directly; this tool owns the file envelope and validation.",
         "Use structured validation failures to fix the named field and retry once when the missing content is obvious.",
       ],
-      parameters: Type.Object(briefArtifactParameters, {
-        additionalProperties: false,
-      }),
+      parameters: toolSchemaFromZod(BriefArtifactDataSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -306,16 +293,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Provide the complete replacement Brief content; partial patch updates are not supported.",
         "Do not write brief.html, brief.md, or brief.json directly; this tool owns the file envelope and validation.",
       ],
-      parameters: Type.Object(
-        {
-          ...briefArtifactParameters,
-          reason: Type.String({
-            description: "Short private reason for revising the Brief.",
-            minLength: 1,
-          }),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: toolSchemaFromZod(updateBriefArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -346,9 +324,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Do not write plan.html, plan.md, or plan.json directly; this tool owns the file envelope and validation.",
         "Use structured validation failures to fix the named field and retry once when the missing content is obvious.",
       ],
-      parameters: Type.Object(planArtifactParameters, {
-        additionalProperties: false,
-      }),
+      parameters: toolSchemaFromZod(PlanArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -377,16 +353,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Provide the complete replacement Plan content; partial patch updates are not supported.",
         "Do not write plan.html, plan.md, or plan.json directly; this tool owns the file envelope and validation.",
       ],
-      parameters: Type.Object(
-        {
-          ...planArtifactParameters,
-          reason: Type.String({
-            description: "Short private reason for revising the Plan.",
-            minLength: 1,
-          }),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: toolSchemaFromZod(updatePlanArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -414,11 +381,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "After the brief is meaningfully drafted, ask the user what to call the project, then call set_project_name with their answer.",
         "Use the tool result only as private confirmation; acknowledge the name conversationally without mentioning folders, paths, ids, or slug conflicts.",
       ],
-      parameters: Type.Object({
-        name: Type.String({
-          description: "The project name exactly as the user gave it.",
-        }),
-      }),
+      parameters: toolSchemaFromZod(setProjectNameParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const previousProject = options.getActiveProject();
@@ -463,16 +426,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Do not write tasks.html, tasks.md, or tasks.json directly; this tool owns the file envelope and validation.",
         "Use structured validation failures to fix the named issue field and retry once when the missing content is obvious.",
       ],
-      parameters: Type.Object(
-        {
-          issues: Type.Array(taskIssueParameters, {
-            description:
-              "Ordered issue path and plain-language task title pairs for the Tasks tab.",
-            minItems: 1,
-          }),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: toolSchemaFromZod(createTasksArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -501,23 +455,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "If update_task_status returns a structured slug failure, stop and explain the short message plainly.",
         "Never use list indexes or raw edits for Tasks tab progress.",
       ],
-      parameters: Type.Object(
-        {
-          task_slug: Type.String({
-            description:
-              "Issue-derived task slug, for example create-the-first-quiz-draft.",
-            minLength: 1,
-          }),
-          status: Type.Union(
-            TASK_STATUSES.map((status) => Type.Literal(status)),
-            {
-              description:
-                "The next task status: todo, in_progress, done, or blocked.",
-            },
-          ),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: toolSchemaFromZod(updateTaskStatusToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         const project = options.getActiveProject();
@@ -547,24 +485,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Set message to the panel text the user should see: under about 80 characters, conversational, no paths, files, tools, or implementation details.",
         "The indicator auto-clears when the artifact appears; there is no clear_creating tool.",
       ],
-      parameters: Type.Object({
-        target: Type.Union(
-          [
-            Type.Literal("brief"),
-            Type.Literal("prd"),
-            Type.Literal("issues"),
-            Type.Literal("plan"),
-            Type.Literal("tasks"),
-          ],
-          {
-            description: "The kind of user-visible artifact being created.",
-          },
-        ),
-        message: Type.String({
-          description:
-            "Short Guide-voice text to show while the artifact is being created.",
-        }),
-      }),
+      parameters: toolSchemaFromZod(setCreatingParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
         options.onCreatingStart(params.target, params.message);
@@ -592,33 +513,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "On verify_result ok true, continue; on ok false, treat it as blocked-class.",
         "On artifact_write complete, use the returned path only as private confirmation; on failure or blocked, stop and explain plainly.",
       ],
-      parameters: Type.Object(
-        {
-          // Keep this literal union in sync with prompts/skills and the
-          // dispatcher allowlist in spawn-subagent.ts.
-          skill_name: Type.Union(
-            SPAWN_SUBAGENT_SKILL_NAMES.map((name) => Type.Literal(name)),
-            {
-              description: "The known Guide skill to run in isolation.",
-            },
-          ),
-          args: Type.Object(
-            {},
-            {
-              additionalProperties: true,
-              description: "Structured arguments for the named skill.",
-            },
-          ),
-          response_schema: Type.Union(
-            SPAWN_SUBAGENT_RESPONSE_SCHEMAS.map((name) => Type.Literal(name)),
-            {
-              description:
-                'Expected structured response shape: "task_outcome", "verify_result", or "artifact_write".',
-            },
-          ),
-        },
-        { additionalProperties: false },
-      ),
+      parameters: toolSchemaFromZod(spawnSubagentParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params, signal) {
         const project = options.getActiveProject();
