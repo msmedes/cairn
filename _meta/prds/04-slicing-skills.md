@@ -1,5 +1,9 @@
 # PRD — Slice 04: Slicing skills (write-prd, write-issue)
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 The wife finishes scoping. The Guide writes her brief. She names the project. The brief feels like the start of something. Then the conversation goes nowhere, because v0 stops at brief — every subsequent turn is the persona finding things to talk about while the project sits frozen at "brief written; slicing not implemented." The whole point of Guide is to take her from idea to running app, and right now the path stops at the first signpost.

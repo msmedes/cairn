@@ -22,7 +22,7 @@ args:
 
 Generate the Tasks tab content from the ordered issue list, then finish by calling the custom Tasks artifact tool. Call `create_tasks_artifact` with one item per issue, using the same plain-language wording as the Plan's pieces.
 
-Do not use raw Write or Edit on `tasks.html`, `tasks.md`, or `tasks.json`. Do not create replacement Tasks files. The Tasks artifact tool owns `tasks.json`, derives issue slugs, starts every task as `todo`, and writes the tool-owned envelope metadata.
+Do not use raw Write or Edit for Tasks artifact data. Do not create replacement Tasks files. The Tasks artifact tool owns `tasks.json`, derives issue slugs, starts every task as `todo`, and writes the tool-owned envelope metadata.
 
 ## Inputs
 

@@ -1,5 +1,9 @@
 # PRD — Slice 03: Creating indicator
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 The wife finishes scoping. The Guide has heard enough and goes quiet to write the brief. From her side, the chat shows a `…` for ten, twenty, thirty seconds. Her eyes drift to the panel where she expects the brief to appear — and the panel has been showing the same idle "Your project will show up here as we talk." placeholder it showed when she first opened the app. Nothing about the surface tells her work is happening. The deadest part of the entire scoping experience lives in the gap between *"the Guide stopped talking"* and *"the brief materialized,"* and right now that gap is empty space wearing a friendly headline.

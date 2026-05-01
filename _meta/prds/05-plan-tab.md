@@ -1,5 +1,9 @@
 # PRD — Slice 05: Plan tab and `plan.html` artifact
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 The wife scopes her Project. The Brief lands. She names it. The persona proposes a first chunk to build, she agrees, and the persona narrates *"Putting your plan together…"* — then the panel falls silent while `write-prd` and `write-issue` run silently. When the persona finishes, it confirms in chat: *"Slice one is planned and broken into pieces. Ready to start building when you are."*

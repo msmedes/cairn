@@ -1,5 +1,9 @@
 # PRD — Slice 06: Implementing-phase orchestration
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 Slicing produces a Plan, a PRD, and a set of issues, but nothing in Guide currently turns those issues into working code. The persona prompt has one sentence on Implementing — *"sub-agents do the actual coding while the Guide narrates"* — and no concrete dispatch mechanics. A user who agrees to a Plan today has no path forward inside Guide; the Plan tab just sits there. From the user's perspective the project visibly stalls at the moment they were promised software.
