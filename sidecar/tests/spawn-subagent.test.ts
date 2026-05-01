@@ -8,6 +8,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import {
   buildSpawnSubagentSystemPrompt,
+  createSubagentArtifactTools,
   createSubagentUpdateProjectContextTool,
   mapSubAgentResult,
   type PiSubAgentResult,
@@ -341,5 +342,53 @@ test("sub-agent project context tool writes CONTEXT.md in the project root", asy
   });
   expect(readFileSync(join(projectRoot, "CONTEXT.md"), "utf8")).toContain(
     "- Start with one video and one quiz.",
+  );
+});
+
+test("sub-agent artifact tools write schema-validated artifacts in the project root", async () => {
+  const projectRoot = tempProjectRoot();
+  const tools = createSubagentArtifactTools({ projectRoot });
+
+  expect(tools.map((tool) => tool.name)).toEqual(
+    expect.arrayContaining([
+      "create_brief_artifact",
+      "create_plan_artifact",
+      "create_tasks_artifact",
+    ]),
+  );
+
+  const createBrief = tools.find(
+    (tool) => tool.name === "create_brief_artifact",
+  );
+  if (!createBrief) {
+    throw new Error("create_brief_artifact tool was not registered");
+  }
+
+  const result = await createBrief.execute(
+    "tool-call-1",
+    {
+      title: "Video Quiz Helper",
+      summary: "A small helper for turning one video into a quick quiz.",
+      audience: "Teachers who need a fast comprehension check.",
+      success: "A teacher can share a quiz after adding one video.",
+      sections: [
+        {
+          heading: "What it does first",
+          body: "It starts with one video and a short generated quiz.",
+        },
+      ],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: true,
+    artifact: "brief",
+    path: "brief.json",
+  });
+  expect(readFileSync(join(projectRoot, "brief.json"), "utf8")).toContain(
+    "Video Quiz Helper",
   );
 });

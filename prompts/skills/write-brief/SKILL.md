@@ -1,6 +1,6 @@
 ---
 name: write-brief
-description: Deprecated Brief writer; the Guide should use create_brief_artifact for schema-validated Brief data.
+description: Generate Brief artifact content and persist it through the Brief and Project context tools.
 disable-model-invocation: false
 response_schema: artifact_write
 args:
@@ -20,7 +20,9 @@ args:
       description: Optional working name to use if the user has already named the Project.
 ---
 
-Do not write a Brief file. Brief creation now happens through the Guide's `create_brief_artifact` tool so the Project tab receives schema-validated `brief.json` data with a tool-owned envelope.
+Generate the Brief content in the Guide's plain-language voice, then finish by calling the custom artifact and context tools. Call `create_brief_artifact` for the user-visible Brief data and call `update_project_context` for durable Project facts the Guide and future Sub-agents should remember.
+
+Do not use raw Write or Edit on `brief.html`, `brief.md`, `brief.json`, or `CONTEXT.md`. Do not create replacement files for the Brief or Project context. The Brief artifact tool owns `brief.json`; the Project context tool owns `CONTEXT.md`.
 
 ## Inputs
 
@@ -31,11 +33,13 @@ Use the structured `summary` as the source of truth. It should describe:
 - what should feel true when the Project is useful
 - constraints, preferences, or examples the user has already given
 
-If invoked, do not write or modify `brief.html`, `brief.md`, or `brief.json`. Return an `artifact_write` result with `outcome: "blocked"`, `path: ""`, and a short message telling the Guide to call `create_brief_artifact` with the structured Brief fields.
+Read only the provided inputs and any existing Project files needed to understand stable Project facts. If a load-bearing part of the Brief is missing, do not invent it; return `outcome: "blocked"` with one short message naming the missing decision.
 
 ## Output path
 
-None. The canonical Brief path is `<project>/brief.json`, and it is owned by the `create_brief_artifact` and `update_brief_artifact` tools.
+The canonical Brief path is `<project>/brief.json`, but you do not write it directly. The `create_brief_artifact` and `update_brief_artifact` tools own that file and its envelope.
+
+The canonical Project context path is `<project>/CONTEXT.md`, but you do not write it directly. The `update_project_context` tool owns durable context updates.
 
 ## Visual shell
 
@@ -57,8 +61,32 @@ Good section shapes include:
 
 Keep the Brief specific to the user's Project. Do not produce a generic product template, do not expose hidden reasoning, and do not mention this skill.
 
-Return only one JSON object matching `artifact_write`:
+## Tool sequence
+
+1. Build the Brief fields:
+   - `title`: a plain-language Project name or working title.
+   - `summary`: one short paragraph explaining what the Project is.
+   - `audience`: who the Project is for.
+   - `success`: what should feel true when the Project is useful.
+   - `sections`: one or more concrete sections with `heading` and `body`.
+2. Call `create_brief_artifact` with those fields.
+3. Call `update_project_context` with durable facts from the Brief, such as user vocabulary, settled constraints, product decisions, and open questions. Do not use it as a progress log.
+4. If a tool returns a validation error and the fix is obvious from the inputs, correct the field and retry once. Otherwise return a small failure result.
+
+After the tool calls finish, return only one JSON object matching `artifact_write`:
 
 ```json
-{ "outcome": "blocked", "message": "Use create_brief_artifact for the Brief.", "path": "" }
+{ "outcome": "complete", "message": "Created the Brief artifact and Project context.", "path": "brief.json" }
+```
+
+Use `outcome: "failure"` with `path: ""` when a tool fails and retrying is not safe. Use `outcome: "blocked"` with `path: ""` when the inputs lack a user decision needed for the Brief.
+
+Failure and blocked examples:
+
+```json
+{ "outcome": "failure", "message": "create_brief_artifact failed validation for data.sections.0.body.", "path": "" }
+```
+
+```json
+{ "outcome": "blocked", "message": "The Brief needs the intended audience before I can save it.", "path": "" }
 ```
