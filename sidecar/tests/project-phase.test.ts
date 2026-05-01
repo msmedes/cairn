@@ -44,6 +44,25 @@ test("project_state reports implemented when all tasks.html entries are checked"
   expect(getProjectState(path).phase).toBe("implemented");
 });
 
+test("project_state reports progress from class-based visual tasks", () => {
+  const implementingPath = makeSlicedProject();
+  write(
+    implementingPath,
+    "tasks.html",
+    '<ul><li class="task checked done">First piece</li><li class="task unchecked">Second piece</li></ul>',
+  );
+
+  const implementedPath = makeSlicedProject();
+  write(
+    implementedPath,
+    "tasks.html",
+    '<ul><li class="task checked done">First piece</li><li class="task checked done">Second piece</li></ul>',
+  );
+
+  expect(getProjectState(implementingPath).phase).toBe("implementing");
+  expect(getProjectState(implementedPath).phase).toBe("implemented");
+});
+
 test("project_state falls back to sliced for empty or malformed tasks.html", () => {
   const emptyPath = makeSlicedProject();
   write(emptyPath, "tasks.html", "   ");

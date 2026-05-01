@@ -345,7 +345,7 @@ test(
       .join("");
     expect(text).toContain("tick_task result: Marked task 2 done.");
     expect(readFileSync(tasksPath, "utf8")).toBe(
-      '<ol><li>First piece</li><li class="done">Second piece</li></ol>',
+      '<ol><li>First piece</li><li class="checked done">Second piece</li></ol>',
     );
   },
   DEFAULT_TIMEOUT_MS,

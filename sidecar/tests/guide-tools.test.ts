@@ -347,7 +347,7 @@ test("tick_task tool mutates the active project's tasks.html and returns confirm
   expect(result.details).toEqual({ ok: true, message: "Marked task 2 done." });
   expect(toolText(result)).toBe("Marked task 2 done.");
   expect(readFileSync(tasksPath, "utf8")).toBe(
-    '<ol><li>First piece</li><li class="done">Second piece</li></ol>',
+    '<ol><li>First piece</li><li class="checked done">Second piece</li></ol>',
   );
 });
 

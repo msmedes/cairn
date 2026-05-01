@@ -23,11 +23,21 @@ function listMarkdown(dir: string): string[] {
     .sort();
 }
 
+const LI_ELEMENT = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
+
 function checkboxStates(html: string): boolean[] {
-  return Array.from(html.matchAll(/<input\b[^>]*>/gi))
+  const states = Array.from(html.matchAll(/<input\b[^>]*>/gi))
     .map((match) => match[0])
     .filter((tag) => /\btype\s*=\s*["']?checkbox["']?/i.test(tag))
     .map((tag) => /\bchecked\b/i.test(tag));
+  if (states.length > 0) return states;
+
+  return Array.from(html.matchAll(LI_ELEMENT)).map((match) => {
+    const openTag = /<li\b[^>]*>/i.exec(match[0])?.[0] ?? "";
+    const classValue = /\sclass\s*=\s*(["'])(.*?)\1/i.exec(openTag)?.[2] ?? "";
+    const classes = classValue.split(/\s+/).filter(Boolean);
+    return classes.includes("checked") || classes.includes("done");
+  });
 }
 
 function deriveTasksPhase(projectPath: string): ProjectPhase | null {
