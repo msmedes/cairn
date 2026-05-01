@@ -1,6 +1,6 @@
 ---
 name: write-plan
-description: Draft schema-validated Plan artifact content for the agreed first slice in the Guide's voice.
+description: Generate Plan artifact content for the agreed first slice and persist it through Plan tools.
 disable-model-invocation: false
 response_schema: artifact_write
 args:
@@ -23,17 +23,17 @@ args:
       description: Project-relative path to the issue files directory, normally issues/.
 ---
 
-This skill is retired for active Plan persistence. Do not draft or write Plan content here. The Guide must persist Plans directly with `create_plan_artifact` or `update_plan_artifact`, because those tools own the schema, envelope, validation, and canonical JSON file.
+Generate the Plan content in the Guide's plain-language voice, then finish by calling the custom Plan artifact tool. Call `create_plan_artifact` for a new Plan. Call `update_plan_artifact` only when the inputs clearly say this is a revision of an existing Plan and provide a short reason.
+
+Do not use raw Write or Edit on `plan.html`, `plan.md`, or `plan.json`. Do not create replacement Plan files. The Plan artifact tools own `plan.json`, its schema validation, and its envelope metadata.
 
 ## Inputs
 
-Use the slice agreement, Brief, and issue files only to decide whether this skill was invoked by mistake. Do not write `plan.json`, `plan.html`, or any replacement file.
-
-Always return an `artifact_write` result with `outcome: "blocked"`, `path: ""`, and a short message telling the Guide to call the Plan artifact tools instead.
+Use the slice agreement, Brief, and issue files to write the user-visible Plan. Read referenced files when present, but keep the final Plan plain-language and free of engineering vocabulary. If the slice agreement is too vague to name a concrete first slice, return `outcome: "blocked"` with one short message naming the missing decision.
 
 ## Content shape
 
-When the Guide calls the Plan artifact tools directly, the content should use these fields:
+The Plan artifact tool input uses these fields:
 
 - `title`: short plain-language name for the first slice.
 - `summary`: one short paragraph explaining what this slice builds first.
@@ -44,10 +44,28 @@ When the Guide calls the Plan artifact tools directly, the content should use th
 
 Use action-y language: "you'll be able to..." and "I'll work through..." rather than generic product description. Avoid engineering vocabulary throughout.
 
-## Final result
+## Tool sequence
 
-Return only one JSON object matching `artifact_write`:
+1. Build the complete Plan fields listed above.
+2. Call `create_plan_artifact` with the complete Plan content.
+3. If the tool reports that `plan.json` already exists and the inputs include a revision reason, call `update_plan_artifact` with the complete replacement Plan content and that reason. If there is no revision reason, return a small failure result instead of guessing.
+4. If a tool returns a validation error and the fix is obvious from the inputs, correct the field and retry once. Otherwise return a small failure result.
+
+After the tool call finishes, return only one JSON object matching `artifact_write`:
+
 
 ```json
-{ "outcome": "blocked", "message": "Use create_plan_artifact or update_plan_artifact for the Plan.", "path": "" }
+{ "outcome": "complete", "message": "Created the Plan artifact.", "path": "plan.json" }
+```
+
+Use `outcome: "failure"` with `path: ""` when a tool fails and retrying is not safe. Use `outcome: "blocked"` with `path: ""` when the inputs lack a user decision needed for the Plan.
+
+Failure and blocked examples:
+
+```json
+{ "outcome": "failure", "message": "create_plan_artifact failed validation for outcomes.", "path": "" }
+```
+
+```json
+{ "outcome": "blocked", "message": "The first slice needs a concrete user-visible outcome before I can save the Plan.", "path": "" }
 ```

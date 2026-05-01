@@ -5,6 +5,16 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { z } from "zod";
 import {
+  createTasksArtifactToolParamsSchema,
+  PlanArtifactToolParamsSchema,
+  paramsToBriefData,
+  paramsToPlanData,
+  paramsToTaskIssues,
+  updateBriefArtifactToolParamsSchema,
+  updatePlanArtifactToolParamsSchema,
+  updateTaskStatusToolParamsSchema,
+} from "./artifact-tool-params";
+import {
   type BriefArtifactData,
   BriefArtifactDataSchema,
   type BriefArtifactResult,
@@ -14,7 +24,6 @@ import {
 import {
   createPlanArtifact,
   type PlanArtifactData,
-  PlanArtifactDataSchema,
   type PlanArtifactResult,
   updatePlanArtifact,
 } from "./plan-artifact";
@@ -35,7 +44,6 @@ import {
   type CreateTasksArtifactIssue,
   type CreateTasksArtifactResult,
   createTasksArtifact,
-  TASK_STATUSES,
   type TaskStatus,
   type UpdateTaskStatusResult,
   updateTaskStatus,
@@ -94,33 +102,6 @@ export type GuideToolsOptions = {
   }) => ProjectContextResult | Promise<ProjectContextResult>;
 };
 
-const reasonSchema = z
-  .string({ error: "Update reason is required." })
-  .trim()
-  .min(1, { error: "Update reason is required." })
-  .describe("Short private reason for revising the artifact.");
-
-const updateBriefArtifactToolParamsSchema = BriefArtifactDataSchema.extend({
-  reason: reasonSchema.describe("Short private reason for revising the Brief."),
-});
-
-const PlanArtifactToolParamsSchema = z.object({
-  title: PlanArtifactDataSchema.shape.title,
-  summary: PlanArtifactDataSchema.shape.summary,
-  from_brief: PlanArtifactDataSchema.shape.fromBrief.describe(
-    "How this first slice connects back to the Project Brief.",
-  ),
-  outcomes: PlanArtifactDataSchema.shape.outcomes,
-  pieces: PlanArtifactDataSchema.shape.pieces,
-  not_yet: PlanArtifactDataSchema.shape.notYet.describe(
-    "User-visible items that are not part of this slice.",
-  ),
-});
-
-const updatePlanArtifactToolParamsSchema = PlanArtifactToolParamsSchema.extend({
-  reason: reasonSchema.describe("Short private reason for revising the Plan."),
-});
-
 const setProjectNameParamsSchema = z.object({
   name: z.string().describe("The project name exactly as the user gave it."),
 });
@@ -149,79 +130,6 @@ const spawnSubagentParamsSchema = z.object({
       'Expected structured response shape: "task_outcome", "verify_result", or "artifact_write".',
     ),
 });
-
-const TaskIssueToolParamsSchema = z.object({
-  issue_path: z
-    .string()
-    .trim()
-    .min(1)
-    .describe(
-      "Project-relative issue path such as issues/01-create-the-first-quiz-draft.md.",
-    ),
-  title: z
-    .string()
-    .trim()
-    .min(1)
-    .describe("Plain-language Tasks tab entry matching this issue."),
-});
-
-const createTasksArtifactToolParamsSchema = z.object({
-  issues: z
-    .array(TaskIssueToolParamsSchema)
-    .min(1)
-    .describe(
-      "Ordered issue path and plain-language task title pairs for the Tasks tab.",
-    ),
-});
-
-const updateTaskStatusToolParamsSchema = z.object({
-  task_slug: z
-    .string()
-    .trim()
-    .min(1)
-    .describe(
-      "Issue-derived task slug, for example create-the-first-quiz-draft.",
-    ),
-  status: z
-    .enum(TASK_STATUSES)
-    .describe("The next task status: todo, in_progress, done, or blocked."),
-});
-
-function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
-  return {
-    title: params.title,
-    summary: params.summary,
-    audience: params.audience,
-    success: params.success,
-    sections: params.sections,
-  };
-}
-
-type PlanToolParams = z.infer<typeof PlanArtifactToolParamsSchema>;
-
-function paramsToPlanData(params: PlanToolParams): PlanArtifactData {
-  return {
-    title: params.title,
-    summary: params.summary,
-    fromBrief: params.from_brief,
-    outcomes: params.outcomes,
-    pieces: params.pieces,
-    notYet: params.not_yet,
-  };
-}
-
-type CreateTasksToolParams = z.infer<
-  typeof createTasksArtifactToolParamsSchema
->;
-
-function paramsToTaskIssues(
-  params: CreateTasksToolParams,
-): CreateTasksArtifactIssue[] {
-  return params.issues.map((issue) => ({
-    issuePath: issue.issue_path,
-    title: issue.title,
-  }));
-}
 
 function noActiveProjectBriefResult(): BriefArtifactResult {
   return {

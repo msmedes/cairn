@@ -11,10 +11,26 @@ import {
   type Skill,
 } from "@mariozechner/pi-coding-agent";
 import {
+  createTasksArtifactToolParamsSchema,
+  PlanArtifactToolParamsSchema,
+  paramsToBriefData,
+  paramsToPlanData,
+  paramsToTaskIssues,
+  updateBriefArtifactToolParamsSchema,
+  updatePlanArtifactToolParamsSchema,
+} from "./artifact-tool-params";
+import {
+  BriefArtifactDataSchema,
+  createBriefArtifact,
+  updateBriefArtifact,
+} from "./brief-artifact";
+import { createPlanArtifact, updatePlanArtifact } from "./plan-artifact";
+import {
   ProjectContextUpdateToolParamsSchema,
   paramsToProjectContextUpdates,
   updateProjectContext,
 } from "./project-context";
+import { createTasksArtifact } from "./tasks-artifact";
 import { toolSchemaFromZod } from "./tool-schema";
 
 export const SPAWN_SUBAGENT_SKILL_NAMES = [
@@ -319,6 +335,7 @@ export async function runPiSubAgent({
           projectRoot: cwd,
           getLoadedSkills: () => loadedSkills,
         }),
+        ...createSubagentArtifactTools({ projectRoot: cwd }),
         createSubagentUpdateProjectContextTool({ projectRoot: cwd }),
       ],
     });
@@ -361,6 +378,108 @@ export async function runPiSubAgent({
       session.dispose();
     }
   });
+}
+
+export function createSubagentArtifactTools(options: { projectRoot: string }) {
+  return [
+    defineTool({
+      name: "create_brief_artifact",
+      label: "Create Brief Artifact",
+      description:
+        "Create the Project Brief as schema-validated artifact data in brief.json. Use this instead of writing brief.html, brief.md, or raw JSON yourself.",
+      parameters: toolSchemaFromZod(BriefArtifactDataSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const result = await createBriefArtifact({
+          projectRoot: options.projectRoot,
+          data: paramsToBriefData(params),
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_brief_artifact",
+      label: "Update Brief Artifact",
+      description:
+        "Replace the Project Brief artifact data in brief.json after the user changes the agreement. Requires a short reason.",
+      parameters: toolSchemaFromZod(updateBriefArtifactToolParamsSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const result = await updateBriefArtifact({
+          projectRoot: options.projectRoot,
+          data: paramsToBriefData(params),
+          reason: params.reason,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "create_plan_artifact",
+      label: "Create Plan Artifact",
+      description:
+        "Create the current Slice Plan as schema-validated artifact data in plan.json. Use this instead of writing plan.html, plan.md, or raw JSON yourself.",
+      parameters: toolSchemaFromZod(PlanArtifactToolParamsSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const result = await createPlanArtifact({
+          projectRoot: options.projectRoot,
+          data: paramsToPlanData(params),
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_plan_artifact",
+      label: "Update Plan Artifact",
+      description:
+        "Replace the current Slice Plan artifact data in plan.json after the user changes the agreement. Requires a short reason.",
+      parameters: toolSchemaFromZod(updatePlanArtifactToolParamsSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const result = await updatePlanArtifact({
+          projectRoot: options.projectRoot,
+          data: paramsToPlanData(params),
+          reason: params.reason,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "create_tasks_artifact",
+      label: "Create Tasks Artifact",
+      description:
+        "Create the Tasks tab as schema-validated artifact data in tasks.json. Use this instead of writing tasks.html or raw JSON yourself.",
+      parameters: toolSchemaFromZod(createTasksArtifactToolParamsSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const result = await createTasksArtifact({
+          projectRoot: options.projectRoot,
+          issues: paramsToTaskIssues(params),
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+  ];
 }
 
 export function createSubagentUpdateProjectContextTool(options: {
