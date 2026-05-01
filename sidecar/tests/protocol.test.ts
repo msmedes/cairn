@@ -192,7 +192,15 @@ test("Guide-bundled slicing skills are discoverable by the sidecar resource load
   const skillByName = new Map(skills.map((skill) => [skill.name, skill]));
 
   expect(diagnostics).toEqual([]);
-  for (const name of ["write-prd", "write-issue"]) {
+  for (const name of [
+    "write-brief",
+    "write-plan",
+    "write-tasks",
+    "write-prd",
+    "write-issue",
+    "implement-issue",
+    "verify-slice",
+  ]) {
     const skill = skillByName.get(name);
     expect(skill).toBeDefined();
     expect(skill?.description.trim().length).toBeGreaterThan(0);
