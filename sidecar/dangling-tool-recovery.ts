@@ -49,6 +49,7 @@ export type DanglingToolCall = {
   toolCallId: string;
   toolName: string;
   parentEntryId: string;
+  args: unknown;
 };
 
 export type RecoveryEntry = {
@@ -71,6 +72,64 @@ const INTERRUPTED_MESSAGE =
   "Previous run was interrupted before finishing this piece.";
 const VERIFY_INTERRUPTED_MESSAGE =
   "Previous run was interrupted before finishing the build check.";
+const ARTIFACT_INTERRUPTED_MESSAGE =
+  "Previous run was interrupted before finishing this artifact.";
+
+function structuredRecoveryEntry(
+  dangling: DanglingToolCall,
+  id: string,
+  ts: string,
+  tsMs: number,
+  details: unknown,
+): RecoveryEntry {
+  return {
+    type: "message",
+    id,
+    parentId: dangling.parentEntryId,
+    timestamp: ts,
+    message: {
+      role: "toolResult",
+      toolCallId: dangling.toolCallId,
+      toolName: dangling.toolName,
+      content: [{ type: "text", text: JSON.stringify(details) }],
+      details,
+      isError: false,
+      timestamp: tsMs,
+    },
+  };
+}
+
+function genericInterruptedEntry(
+  dangling: DanglingToolCall,
+  id: string,
+  ts: string,
+  tsMs: number,
+): RecoveryEntry {
+  return {
+    type: "message",
+    id,
+    parentId: dangling.parentEntryId,
+    timestamp: ts,
+    message: {
+      role: "toolResult",
+      toolCallId: dangling.toolCallId,
+      toolName: dangling.toolName,
+      content: [
+        {
+          type: "text",
+          text: `The ${dangling.toolName} call was interrupted before completing.`,
+        },
+      ],
+      isError: true,
+      timestamp: tsMs,
+    },
+  };
+}
+
+function responseSchemaFromArgs(args: unknown): unknown {
+  if (!args || typeof args !== "object") return undefined;
+  return (args as { response_schema?: unknown }).response_schema;
+}
 
 export function findDanglingToolCall(
   entries: SessionEntry[],
@@ -114,6 +173,7 @@ export function findDanglingToolCall(
       toolCallId: call.id,
       toolName: call.name,
       parentEntryId: lastAssistantId,
+      args: call.arguments ?? {},
     };
   }
 
@@ -129,61 +189,38 @@ export function synthesizeRecoveryEntry(
 
   if (dangling.toolName === "start_task") {
     const details = { outcome: "failure", message: INTERRUPTED_MESSAGE };
-    return {
-      type: "message",
-      id,
-      parentId: dangling.parentEntryId,
-      timestamp: ts,
-      message: {
-        role: "toolResult",
-        toolCallId: dangling.toolCallId,
-        toolName: dangling.toolName,
-        content: [{ type: "text", text: JSON.stringify(details) }],
-        details,
-        isError: false,
-        timestamp: tsMs,
-      },
-    };
+    return structuredRecoveryEntry(dangling, id, ts, tsMs, details);
   }
 
   if (dangling.toolName === "verify_slice") {
     const details = { ok: false, message: VERIFY_INTERRUPTED_MESSAGE };
-    return {
-      type: "message",
-      id,
-      parentId: dangling.parentEntryId,
-      timestamp: ts,
-      message: {
-        role: "toolResult",
-        toolCallId: dangling.toolCallId,
-        toolName: dangling.toolName,
-        content: [{ type: "text", text: VERIFY_INTERRUPTED_MESSAGE }],
-        details,
-        isError: false,
-        timestamp: tsMs,
-      },
-    };
+    return structuredRecoveryEntry(dangling, id, ts, tsMs, details);
   }
 
-  return {
-    type: "message",
-    id,
-    parentId: dangling.parentEntryId,
-    timestamp: ts,
-    message: {
-      role: "toolResult",
-      toolCallId: dangling.toolCallId,
-      toolName: dangling.toolName,
-      content: [
-        {
-          type: "text",
-          text: `The ${dangling.toolName} call was interrupted before completing.`,
-        },
-      ],
-      isError: true,
-      timestamp: tsMs,
-    },
-  };
+  if (dangling.toolName === "spawn_subagent") {
+    const responseSchema = responseSchemaFromArgs(dangling.args);
+    if (responseSchema === "task_outcome") {
+      return structuredRecoveryEntry(dangling, id, ts, tsMs, {
+        outcome: "failure",
+        message: INTERRUPTED_MESSAGE,
+      });
+    }
+    if (responseSchema === "verify_result") {
+      return structuredRecoveryEntry(dangling, id, ts, tsMs, {
+        ok: false,
+        message: VERIFY_INTERRUPTED_MESSAGE,
+      });
+    }
+    if (responseSchema === "artifact_write") {
+      return structuredRecoveryEntry(dangling, id, ts, tsMs, {
+        outcome: "failure",
+        message: ARTIFACT_INTERRUPTED_MESSAGE,
+        path: "",
+      });
+    }
+  }
+
+  return genericInterruptedEntry(dangling, id, ts, tsMs);
 }
 
 export function recoverDanglingToolCall(jsonlContent: string): string | null {

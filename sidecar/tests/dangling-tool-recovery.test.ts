@@ -12,7 +12,7 @@ import {
 function assistantWithToolCalls(
   id: string,
   parentId: string,
-  toolCalls: Array<{ id: string; name: string }>,
+  toolCalls: Array<{ id: string; name: string; arguments?: unknown }>,
 ) {
   return {
     type: "message",
@@ -27,7 +27,7 @@ function assistantWithToolCalls(
           type: "toolCall",
           id: call.id,
           name: call.name,
-          arguments: {},
+          arguments: call.arguments ?? {},
         })),
       ],
     },
@@ -108,6 +108,7 @@ describe("findDanglingToolCall", () => {
       toolCallId: "tc_001",
       toolName: "start_task",
       parentEntryId: "a1",
+      args: {},
     });
   });
 
@@ -154,6 +155,7 @@ describe("synthesizeRecoveryEntry", () => {
       toolCallId: "tc_001",
       toolName: "start_task",
       parentEntryId: "a1",
+      args: {},
     });
     expect(entry.type).toBe("message");
     expect(entry.parentId).toBe("a1");
@@ -175,6 +177,7 @@ describe("synthesizeRecoveryEntry", () => {
       toolCallId: "tc_002",
       toolName: "verify_slice",
       parentEntryId: "a2",
+      args: {},
     });
     expect(entry.message.toolName).toBe("verify_slice");
     expect(entry.message.isError).toBe(false);
@@ -189,6 +192,7 @@ describe("synthesizeRecoveryEntry", () => {
       toolCallId: "tc_999",
       toolName: "bash",
       parentEntryId: "a9",
+      args: {},
     });
     expect(entry.message.toolName).toBe("bash");
     expect(entry.message.isError).toBe(true);
@@ -201,6 +205,7 @@ describe("synthesizeRecoveryEntry", () => {
       toolCallId: "tc_001",
       toolName: "start_task",
       parentEntryId: "a1",
+      args: {},
     });
     expect(typeof entry.id).toBe("string");
     expect(entry.id.length).toBeGreaterThan(0);
@@ -213,12 +218,89 @@ describe("synthesizeRecoveryEntry", () => {
       toolCallId: "tc_001",
       toolName: "start_task",
       parentEntryId: "a1",
+      args: {},
     });
     const after = Date.now();
     expect(typeof entry.timestamp).toBe("string");
     expect(() => new Date(entry.timestamp).toISOString()).not.toThrow();
     expect(entry.message.timestamp).toBeGreaterThanOrEqual(before);
     expect(entry.message.timestamp).toBeLessThanOrEqual(after);
+  });
+
+  test("spawn_subagent task_outcome synth matches start_task structured failure outcome", () => {
+    const entry = synthesizeRecoveryEntry({
+      toolCallId: "tc_task",
+      toolName: "spawn_subagent",
+      parentEntryId: "a_task",
+      args: { response_schema: "task_outcome" },
+    });
+    const details = {
+      outcome: "failure",
+      message: "Previous run was interrupted before finishing this piece.",
+    };
+    expect(entry.message.toolName).toBe("spawn_subagent");
+    expect(entry.message.isError).toBe(false);
+    expect(entry.message.details).toEqual(details);
+    expect(entry.message.content[0].text).toBe(JSON.stringify(details));
+  });
+
+  test("spawn_subagent verify_result synth has structured ok:false payload", () => {
+    const entry = synthesizeRecoveryEntry({
+      toolCallId: "tc_verify",
+      toolName: "spawn_subagent",
+      parentEntryId: "a_verify",
+      args: { response_schema: "verify_result" },
+    });
+    const details = {
+      ok: false,
+      message: "Previous run was interrupted before finishing the build check.",
+    };
+    expect(entry.message.isError).toBe(false);
+    expect(entry.message.details).toEqual(details);
+    expect(entry.message.content[0].text).toBe(JSON.stringify(details));
+  });
+
+  test("spawn_subagent artifact_write synth has structured failure payload with blank path", () => {
+    const entry = synthesizeRecoveryEntry({
+      toolCallId: "tc_artifact",
+      toolName: "spawn_subagent",
+      parentEntryId: "a_artifact",
+      args: { response_schema: "artifact_write" },
+    });
+    const details = {
+      outcome: "failure",
+      message: "Previous run was interrupted before finishing this artifact.",
+      path: "",
+    };
+    expect(entry.message.isError).toBe(false);
+    expect(entry.message.details).toEqual(details);
+    expect(entry.message.content[0].text).toBe(JSON.stringify(details));
+  });
+
+  test("spawn_subagent missing response_schema falls back to isError:true text result", () => {
+    const entry = synthesizeRecoveryEntry({
+      toolCallId: "tc_missing",
+      toolName: "spawn_subagent",
+      parentEntryId: "a_missing",
+      args: {},
+    });
+    expect(entry.message.isError).toBe(true);
+    expect(entry.message.details).toBeUndefined();
+    expect(entry.message.content[0].text).toContain("spawn_subagent");
+    expect(entry.message.content[0].text).toContain("interrupted");
+  });
+
+  test("spawn_subagent unknown response_schema falls back to isError:true text result", () => {
+    const entry = synthesizeRecoveryEntry({
+      toolCallId: "tc_unknown_schema",
+      toolName: "spawn_subagent",
+      parentEntryId: "a_unknown_schema",
+      args: { response_schema: "surprise" },
+    });
+    expect(entry.message.isError).toBe(true);
+    expect(entry.message.details).toBeUndefined();
+    expect(entry.message.content[0].text).toContain("spawn_subagent");
+    expect(entry.message.content[0].text).toContain("interrupted");
   });
 });
 
@@ -250,7 +332,8 @@ describe("recoverDanglingToolCall", () => {
       .join("\n");
     const recovered = recoverDanglingToolCall(lines);
     expect(recovered).not.toBeNull();
-    const parsed = JSON.parse(recovered!);
+    if (recovered === null) throw new Error("expected recovery line");
+    const parsed = JSON.parse(recovered);
     expect(parsed.message.role).toBe("toolResult");
     expect(parsed.message.toolCallId).toBe("tc_001");
     expect(parsed.message.toolName).toBe("start_task");
@@ -265,6 +348,33 @@ describe("recoverDanglingToolCall", () => {
     );
     const lines = `{not json}\n${valid}\n`;
     expect(recoverDanglingToolCall(lines)).not.toBeNull();
+  });
+
+  test("returns a JSON line for spawn_subagent using the dangling call response_schema", () => {
+    const lines = [
+      assistantWithToolCalls("a1", "u0", [
+        {
+          id: "tc_spawn",
+          name: "spawn_subagent",
+          arguments: { response_schema: "artifact_write" },
+        },
+      ]),
+    ]
+      .map((entry) => JSON.stringify(entry))
+      .join("\n");
+    const recovered = recoverDanglingToolCall(lines);
+    expect(recovered).not.toBeNull();
+    if (recovered === null) throw new Error("expected recovery line");
+    const parsed = JSON.parse(recovered);
+    expect(parsed.message.role).toBe("toolResult");
+    expect(parsed.message.toolCallId).toBe("tc_spawn");
+    expect(parsed.message.toolName).toBe("spawn_subagent");
+    expect(parsed.message.isError).toBe(false);
+    expect(parsed.message.details).toEqual({
+      outcome: "failure",
+      message: "Previous run was interrupted before finishing this artifact.",
+      path: "",
+    });
   });
 });
 
@@ -297,6 +407,36 @@ describe("recoverDanglingToolCallInDir", () => {
     const appended = JSON.parse(lines[1]);
     expect(appended.message.role).toBe("toolResult");
     expect(appended.message.toolCallId).toBe("tc_001");
+  });
+
+  test("appends an idempotent synthetic line for dangling spawn_subagent", () => {
+    const dir = mkdtempSync(join(tmpdir(), "guide-recovery-spawn-"));
+    const file = join(dir, "2026-04-30T23-12-12-409Z_abc.jsonl");
+    const original = `${JSON.stringify(
+      assistantWithToolCalls("a1", "u0", [
+        {
+          id: "tc_spawn",
+          name: "spawn_subagent",
+          arguments: { response_schema: "task_outcome" },
+        },
+      ]),
+    )}\n`;
+    writeFileSync(file, original);
+
+    expect(recoverDanglingToolCallInDir(dir)).toBe(file);
+    expect(recoverDanglingToolCallInDir(dir)).toBeNull();
+
+    const after = readFileSync(file, "utf8");
+    expect(after.startsWith(original)).toBe(true);
+    const lines = after.split("\n").filter((line) => line.trim().length > 0);
+    expect(lines.length).toBe(2);
+    const appended = JSON.parse(lines[1]);
+    expect(appended.message.role).toBe("toolResult");
+    expect(appended.message.toolCallId).toBe("tc_spawn");
+    expect(appended.message.details).toEqual({
+      outcome: "failure",
+      message: "Previous run was interrupted before finishing this piece.",
+    });
   });
 
   test("is idempotent — second pass appends nothing", () => {
