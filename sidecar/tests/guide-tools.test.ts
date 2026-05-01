@@ -8,7 +8,6 @@ import { createGuideTools } from "../guide-tools";
 import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
 import type { SpawnSubagentResult } from "../spawn-subagent";
-import type { VerifySliceResult } from "../verify-slice";
 
 function tempProjectsRoot() {
   return mkdtempSync(join(tmpdir(), "guide-projects-"));
@@ -189,134 +188,25 @@ test("set_creating tool rejects unknown targets by schema", () => {
   ).toBe(true);
 });
 
-test("start_task tool returns the structured sub-agent outcome", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
-  const activeProject = store.create(
-    "Temporary quiz idea",
-    new Date("2026-04-28T10:00:00.000Z"),
-  );
-  const startTask = createGuideTools({
-    getActiveProject: () => activeProject,
+test("guide tool registry does not surface retired task dispatcher tools", () => {
+  const tools = createGuideTools({
+    getActiveProject: () => null,
     renameProject: () => {
-      throw new Error("should not rename while starting a task");
+      throw new Error("should not rename while listing tools");
     },
     onRenameSuccess: () => {
-      throw new Error("should not retarget while starting a task");
+      throw new Error("should not retarget while listing tools");
     },
     onProjectUpdate: () => {
-      throw new Error("should not emit project updates while starting a task");
+      throw new Error("should not emit project updates while listing tools");
     },
     onCreatingStart: () => {
-      throw new Error("should not emit creating state while starting a task");
+      throw new Error("should not emit creating state while listing tools");
     },
-    startTask: async ({ projectRoot, issuePath }) => {
-      expect(projectRoot).toBe(activeProject.path);
-      expect(issuePath).toBe("issues/06-2-start-task.md");
-      return {
-        outcome: "blocked",
-        message: "Need a decision before continuing.",
-      };
-    },
-  }).find((tool) => tool.name === "start_task");
-
-  expect(startTask).toBeDefined();
-  if (!startTask) {
-    throw new Error("start_task tool was not registered");
-  }
-  expect(startTask.executionMode).toBe("sequential");
-  expect(
-    Value.Check(startTask.parameters, {
-      issuePath: "issues/06-2-start-task.md",
-    }),
-  ).toBe(true);
-  expect(Value.Check(startTask.parameters, { prompt: "build it" })).toBe(false);
-  expect(startTask.promptGuidelines?.join("\n")).toContain(
-    "one short chat line",
-  );
-  expect(startTask.promptGuidelines?.join("\n")).toContain(
-    "tick the matching Tasks tab entry",
-  );
-  expect(startTask.promptGuidelines?.join("\n")).toContain("retry");
-  expect(startTask.promptGuidelines?.join("\n")).toContain("blocked");
-
-  const result = await startTask.execute(
-    "tool-call-1",
-    { issuePath: "issues/06-2-start-task.md" },
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(result.details).toEqual({
-    outcome: "blocked",
-    message: "Need a decision before continuing.",
   });
-  expect(toolText(result)).toBe(
-    '{"outcome":"blocked","message":"Need a decision before continuing."}',
-  );
-});
 
-test("verify_slice tool is registered without required persona parameters", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
-  const activeProject = store.create(
-    "Temporary quiz idea",
-    new Date("2026-04-28T10:00:00.000Z"),
-  );
-  const verifyResult: VerifySliceResult = {
-    ok: false,
-    message: "The build did not pass yet.",
-  };
-  const verifySlice = createGuideTools({
-    getActiveProject: () => activeProject,
-    renameProject: () => {
-      throw new Error("should not rename while verifying a slice");
-    },
-    onRenameSuccess: () => {
-      throw new Error("should not retarget while verifying a slice");
-    },
-    onProjectUpdate: () => {
-      throw new Error(
-        "should not emit project updates while verifying a slice",
-      );
-    },
-    onCreatingStart: () => {
-      throw new Error("should not emit creating state while verifying a slice");
-    },
-    verifySlice: async ({ projectRoot }) => {
-      expect(projectRoot).toBe(activeProject.path);
-      return verifyResult;
-    },
-  }).find((tool) => tool.name === "verify_slice");
-
-  expect(verifySlice).toBeDefined();
-  if (!verifySlice) {
-    throw new Error("verify_slice tool was not registered");
-  }
-  expect(verifySlice.executionMode).toBe("sequential");
-  expect(Value.Check(verifySlice.parameters, {})).toBe(true);
-  expect(Value.Check(verifySlice.parameters, { command: "bun test" })).toBe(
-    false,
-  );
-  expect(verifySlice.promptGuidelines?.join("\n")).toContain(
-    "after the last complete",
-  );
-  expect(verifySlice.promptGuidelines?.join("\n")).toContain(
-    "invite the user to try",
-  );
-  expect(verifySlice.promptGuidelines?.join("\n")).toContain("blocked");
-
-  const result = await verifySlice.execute(
-    "tool-call-1",
-    {},
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(result.details).toEqual(verifyResult);
-  expect(toolText(result)).toBe(
-    '{"ok":false,"message":"The build did not pass yet."}',
-  );
+  expect(tools.map((tool) => tool.name)).not.toContain("start_task");
+  expect(tools.map((tool) => tool.name)).not.toContain("verify_slice");
 });
 
 test("spawn_subagent tool has bounded skill and response schema parameters", async () => {

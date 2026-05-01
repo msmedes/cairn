@@ -37,9 +37,7 @@ import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 import type { SpawnSubagentResult } from "./spawn-subagent";
-import type { StartTaskResult } from "./start-task";
 import type { TickTaskResult } from "./tick-task";
-import type { VerifySliceResult } from "./verify-slice";
 
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
@@ -125,31 +123,6 @@ function emitProjectState() {
 function formatError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
-}
-
-function getFakeStartTaskResultFromEnv():
-  | ((input: {
-      projectRoot: string;
-      issuePath: string;
-      signal?: AbortSignal;
-    }) => Promise<StartTaskResult>)
-  | undefined {
-  const raw = process.env.GUIDE_FAKE_START_TASK_RESULT;
-  if (!raw) return undefined;
-
-  return async () => JSON.parse(raw) as StartTaskResult;
-}
-
-function getFakeVerifySliceResultFromEnv():
-  | ((input: {
-      projectRoot: string;
-      signal?: AbortSignal;
-    }) => Promise<VerifySliceResult>)
-  | undefined {
-  const raw = process.env.GUIDE_FAKE_VERIFY_SLICE_RESULT;
-  if (!raw) return undefined;
-
-  return async () => JSON.parse(raw) as VerifySliceResult;
 }
 
 function getFakeSpawnSubagentResultFromEnv():
@@ -436,9 +409,7 @@ async function openProject(
       },
       getLoadedSkills: () => resourceLoader.getSkills().skills,
       spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
-      startTask: getFakeStartTaskResultFromEnv(),
       tickTask: getFakeTickTaskResultFromEnv(),
-      verifySlice: getFakeVerifySliceResultFromEnv(),
     }),
   });
 

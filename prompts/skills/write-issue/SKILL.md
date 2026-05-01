@@ -107,4 +107,10 @@ Template rules:
 - Acceptance criteria should be concrete checks an implementer can satisfy. Include tests or manual verification when appropriate.
 - Do not include hidden reasoning, persona instructions, or this SKILL.md's text in the issue files.
 
-After writing the files, return only a compact list of the project-relative issue paths created or updated and one short sentence describing the breakdown.
+After writing the files, return only one JSON object matching `artifact_write`:
+
+```json
+{ "outcome": "complete", "message": "Issues written.", "path": "issues/" }
+```
+
+Use `path: "issues/"` when the current slice's issue files were created or updated successfully.
