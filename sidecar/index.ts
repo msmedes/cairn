@@ -272,13 +272,56 @@ function getFakeProtocolCreateBriefModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolCreatePlanModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_CREATE_PLAN !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "create_plan_artifact",
+        {
+          title: "First playable quiz",
+          summary: "Start with one video and one shareable quiz.",
+          from_brief:
+            "The brief asks for lightweight checks, so this proves one quiz end to end.",
+          outcomes: ["You'll be able to paste in one training video."],
+          pieces: [
+            "Create the first quiz draft",
+            "Preview it as a learner",
+            "Share the finished quiz",
+          ],
+          not_yet: ["Team analytics", "Question banks"],
+        },
+        { id: "tool-create-plan" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `create_plan_artifact result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
   return (
     getFakeProtocolSpawnModel() ??
     getFakeProtocolTickTaskModel() ??
-    getFakeProtocolCreateBriefModel()
+    getFakeProtocolCreateBriefModel() ??
+    getFakeProtocolCreatePlanModel()
   );
 }
 
