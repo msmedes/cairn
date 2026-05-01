@@ -301,6 +301,50 @@ function getFakeProtocolCreateBriefModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolUpdateBriefModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_BRIEF !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "update_brief_artifact",
+        {
+          title: "Focused Video Quiz Helper",
+          summary:
+            "A focused tool for turning one training video into a simple quiz.",
+          audience: "Team leads who need lightweight training checks.",
+          success:
+            "A lead can paste in one video, add questions, and share the quiz.",
+          sections: [
+            {
+              heading: "What it does first",
+              body: "It helps a lead create one focused quiz from one training video.",
+            },
+          ],
+          reason: "User narrowed the first version.",
+        },
+        { id: "tool-update-brief" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `update_brief_artifact result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolCreatePlanModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
@@ -335,6 +379,49 @@ function getFakeProtocolCreatePlanModel():
     (context) =>
       fauxAssistantMessage(
         `create_plan_artifact result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
+function getFakeProtocolUpdatePlanModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_PLAN !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "update_plan_artifact",
+        {
+          title: "Focused first quiz",
+          summary: "Start with one video and a focused learner preview.",
+          from_brief:
+            "The brief asks for lightweight checks, so this proves the first quiz flow.",
+          outcomes: ["You'll be able to paste in one training video."],
+          pieces: [
+            "Create the first quiz draft",
+            "Preview it as a learner",
+            "Share the finished quiz",
+          ],
+          not_yet: ["Team analytics", "Question banks"],
+          reason: "User changed the first slice.",
+        },
+        { id: "tool-update-plan" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `update_plan_artifact result: ${findLastToolResultText(context)}`,
       ),
   ]);
   const model = registration.getModel();
@@ -391,7 +478,9 @@ function getFakeProtocolModel():
     getFakeProtocolUpdateTaskStatusModel() ??
     getFakeProtocolCreateTasksModel() ??
     getFakeProtocolCreateBriefModel() ??
+    getFakeProtocolUpdateBriefModel() ??
     getFakeProtocolCreatePlanModel() ??
+    getFakeProtocolUpdatePlanModel() ??
     getFakeProtocolUpdateProjectContextModel()
   );
 }

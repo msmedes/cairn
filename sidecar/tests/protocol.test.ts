@@ -486,6 +486,78 @@ test(
 );
 
 test(
+  "update_brief_artifact revises brief.json through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const projectPath = createStoredProject(guideHome);
+    const briefPath = join(projectPath, "brief.json");
+    writeFileSync(
+      briefPath,
+      JSON.stringify({
+        artifact: "brief",
+        schemaVersion: 1,
+        createdAt: "2026-05-01T12:00:00.000Z",
+        updatedAt: "2026-05-01T12:00:00.000Z",
+        data: {
+          title: "Video Quiz Helper",
+          summary:
+            "A small tool for turning training videos into simple quizzes.",
+          audience: "Team leads who need lightweight training checks.",
+          success:
+            "A lead can paste in a video, add questions, and share the quiz.",
+          sections: [
+            {
+              heading: "What it does first",
+              body: "It helps a lead create one quiz from one training video.",
+            },
+          ],
+        },
+      }),
+      "utf8",
+    );
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_UPDATE_BRIEF: "1",
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Revise the brief.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain('update_brief_artifact result: {"ok":true');
+
+    const parsed = JSON.parse(readFileSync(briefPath, "utf8"));
+    expect(parsed).toMatchObject({
+      artifact: "brief",
+      schemaVersion: 1,
+      lastUpdateReason: "User narrowed the first version.",
+      data: {
+        title: "Focused Video Quiz Helper",
+      },
+    });
+    expect(existsSync(join(projectPath, "brief.html"))).toBe(false);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
   "create_plan_artifact writes plan.json through the sidecar protocol",
   async () => {
     const guideHome = createGuideHome();
@@ -525,6 +597,77 @@ test(
       schemaVersion: 1,
       data: {
         title: "First playable quiz",
+      },
+    });
+    expect(existsSync(join(projectPath, "plan.html"))).toBe(false);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
+  "update_plan_artifact revises plan.json through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const projectPath = createStoredProject(guideHome);
+    const planPath = join(projectPath, "plan.json");
+    writeFileSync(
+      planPath,
+      JSON.stringify({
+        artifact: "plan",
+        schemaVersion: 1,
+        createdAt: "2026-05-01T12:00:00.000Z",
+        updatedAt: "2026-05-01T12:00:00.000Z",
+        data: {
+          title: "First playable quiz",
+          summary: "Start with one video and one shareable quiz.",
+          fromBrief:
+            "The brief asks for lightweight checks, so this proves one quiz end to end.",
+          outcomes: ["You'll be able to paste in one training video."],
+          pieces: [
+            "Create the first quiz draft",
+            "Preview it as a learner",
+            "Share the finished quiz",
+          ],
+          notYet: ["Team analytics", "Question banks"],
+        },
+      }),
+      "utf8",
+    );
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_UPDATE_PLAN: "1",
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Revise the plan.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain('update_plan_artifact result: {"ok":true');
+
+    const parsed = JSON.parse(readFileSync(planPath, "utf8"));
+    expect(parsed).toMatchObject({
+      artifact: "plan",
+      schemaVersion: 1,
+      lastUpdateReason: "User changed the first slice.",
+      data: {
+        title: "Focused first quiz",
       },
     });
     expect(existsSync(join(projectPath, "plan.html"))).toBe(false);
