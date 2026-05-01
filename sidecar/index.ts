@@ -18,6 +18,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import { recoverDanglingToolCallInDir } from "./dangling-tool-recovery";
 import { loadRepoLocalEnv } from "./env";
 import { createGuideTools } from "./guide-tools";
 import {
@@ -287,7 +288,11 @@ async function openProject(
   });
   await resourceLoader.reload();
 
-  const nextSessionManager = hasExistingSession(sessionDir)
+  const sessionExists = hasExistingSession(sessionDir);
+  if (sessionExists) {
+    recoverDanglingToolCallInDir(sessionDir);
+  }
+  const nextSessionManager = sessionExists
     ? SessionManager.continueRecent(cwd, sessionDir)
     : SessionManager.create(cwd, sessionDir);
 
