@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import {
   buildSpawnSubagentSystemPrompt,
+  createSubagentUpdateProjectContextTool,
   mapSubAgentResult,
   type PiSubAgentResult,
   type SpawnSubagentResponseSchema,
@@ -314,4 +315,31 @@ test("buildSpawnSubagentSystemPrompt names every response shape", () => {
   expect(
     buildSpawnSubagentSystemPrompt("Skill body", "artifact_write"),
   ).toContain('"path": string');
+});
+
+test("sub-agent project context tool writes CONTEXT.md in the project root", async () => {
+  const projectRoot = tempProjectRoot();
+  const tool = createSubagentUpdateProjectContextTool({ projectRoot });
+
+  const result = await tool.execute(
+    "tool-call-1",
+    {
+      decisions: ["Start with one video and one quiz."],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: true,
+    path: "CONTEXT.md",
+    termCount: 0,
+    constraintCount: 0,
+    decisionCount: 1,
+    openQuestionCount: 0,
+  });
+  expect(readFileSync(join(projectRoot, "CONTEXT.md"), "utf8")).toContain(
+    "- Start with one video and one quiz.",
+  );
 });

@@ -18,6 +18,12 @@ import {
   type PlanArtifactResult,
   updatePlanArtifact,
 } from "./plan-artifact";
+import {
+  type ProjectContextResult,
+  ProjectContextUpdateToolParamsSchema,
+  paramsToProjectContextUpdates,
+  updateProjectContext,
+} from "./project-context";
 import type { Project, ProjectRenameResult } from "./project-store";
 import {
   SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
@@ -82,6 +88,10 @@ export type GuideToolsOptions = {
     taskSlug: string;
     status: TaskStatus;
   }) => UpdateTaskStatusResult | Promise<UpdateTaskStatusResult>;
+  updateProjectContext?: (input: {
+    projectRoot: string;
+    updates: ReturnType<typeof paramsToProjectContextUpdates>;
+  }) => ProjectContextResult | Promise<ProjectContextResult>;
 };
 
 const reasonSchema = z
@@ -238,6 +248,14 @@ function noActiveProjectTasksResult(): CreateTasksArtifactResult {
 }
 
 function noActiveProjectTaskStatusResult(): UpdateTaskStatusResult {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
+
+function noActiveProjectContextResult(): ProjectContextResult {
   return {
     ok: false,
     code: "no_active_project",
@@ -466,6 +484,36 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
               status: params.status,
             })
           : noActiveProjectTaskStatusResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_project_context",
+      label: "Update Project Context",
+      description:
+        "Capture durable Project facts, terms, constraints, decisions, and open questions in hidden CONTEXT.md. Use this instead of editing CONTEXT.md directly.",
+      promptSnippet: "Update hidden Project context",
+      promptGuidelines: [
+        "Call update_project_context only for durable Project knowledge the Guide or Sub-agents should remember.",
+        "Project context is Engineering scaffolding, not a user-visible artifact; never call set_creating for it.",
+        "Use terms for stable vocabulary, constraints for durable boundaries, decisions for settled choices, and open_questions for unresolved product questions.",
+        "Do not use this as a progress log. The tool merges updates into the existing CONTEXT.md structure and avoids duplicate append-only noise.",
+        "Artifact tools do not update Project context automatically; call this tool explicitly when context should change.",
+      ],
+      parameters: toolSchemaFromZod(ProjectContextUpdateToolParamsSchema),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.updateProjectContext ?? updateProjectContext)({
+              projectRoot: project.path,
+              updates: paramsToProjectContextUpdates(params),
+            })
+          : noActiveProjectContextResult();
 
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],

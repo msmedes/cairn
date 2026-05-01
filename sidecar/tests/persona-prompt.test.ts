@@ -20,3 +20,11 @@ test("persona prompt uses slug-based task status transitions for Implementing", 
   );
   expect(personaPrompt).not.toContain("tick_task(piece_index)");
 });
+
+test("persona prompt keeps Project context hidden and explicitly tool-owned", () => {
+  expect(personaPrompt).toContain("update_project_context");
+  expect(personaPrompt).toContain("Never show raw `<project>/CONTEXT.md`");
+  expect(personaPrompt).toContain(
+    "Artifact tools do not update Project context automatically",
+  );
+});

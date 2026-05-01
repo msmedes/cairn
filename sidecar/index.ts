@@ -343,6 +343,46 @@ function getFakeProtocolCreatePlanModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolUpdateProjectContextModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "update_project_context",
+        {
+          terms: [
+            {
+              name: "Instructor",
+              definition: "The person creating lightweight checks for a team.",
+            },
+          ],
+          constraints: ["Keep setup non-technical and app-owned."],
+          decisions: ["Start with one video and one quiz."],
+          open_questions: ["Who reviews generated questions?"],
+        },
+        { id: "tool-update-project-context" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `update_project_context result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
@@ -351,7 +391,8 @@ function getFakeProtocolModel():
     getFakeProtocolUpdateTaskStatusModel() ??
     getFakeProtocolCreateTasksModel() ??
     getFakeProtocolCreateBriefModel() ??
-    getFakeProtocolCreatePlanModel()
+    getFakeProtocolCreatePlanModel() ??
+    getFakeProtocolUpdateProjectContextModel()
   );
 }
 

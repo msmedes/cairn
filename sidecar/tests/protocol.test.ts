@@ -531,3 +531,45 @@ test(
   },
   DEFAULT_TIMEOUT_MS,
 );
+
+test(
+  "update_project_context writes CONTEXT.md through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const projectPath = createStoredProject(guideHome);
+    const contextPath = join(projectPath, "CONTEXT.md");
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT: "1",
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Remember this durable project context.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain('update_project_context result: {"ok":true');
+
+    const contextText = readFileSync(contextPath, "utf8");
+    expect(contextText).toContain("**Instructor**:");
+    expect(contextText).toContain("- Keep setup non-technical and app-owned.");
+    expect(existsSync(join(projectPath, "context.json"))).toBe(false);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
