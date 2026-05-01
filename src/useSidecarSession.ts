@@ -134,6 +134,7 @@ export function useSidecarSession({
           const id = activeAssistantId.current;
           if (!id) break;
           setMessages((prev) => markAssistantDone(prev, id));
+          activeAssistantId.current = null;
           break;
         }
         case "creating_started":
