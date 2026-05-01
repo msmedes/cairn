@@ -2,6 +2,18 @@
 name: write-issue
 description: Use only after a fresh slice PRD exists under the Project's prds/ folder and the user-approved slice needs to be broken into local implementation issue files.
 disable-model-invocation: false
+response_schema: artifact_write
+args:
+  type: object
+  required:
+    - project_root
+  properties:
+    project_root:
+      type: string
+      description: Absolute path to the active Project root.
+    prd_path:
+      type: string
+      description: Optional project-relative path to the PRD to split; defaults to the newest markdown file under prds/.
 ---
 
 Break the most recent slice PRD into independently buildable implementation issues. This is silent planning work for the Guide: do not chat with the user, do not expose implementation paths to the user, and do not write files unless the PRD supports useful issue slices.

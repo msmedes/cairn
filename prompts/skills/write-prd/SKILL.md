@@ -2,6 +2,21 @@
 name: write-prd
 description: Use only after the project brief is concrete, the Guide has proposed a smallest meaningful first slice, and the user has agreed to that slice; silently draft the slice PRD.
 disable-model-invocation: false
+response_schema: artifact_write
+args:
+  type: object
+  required:
+    - slice_intent
+  properties:
+    project_root:
+      type: string
+      description: Absolute path to the active Project root.
+    slice_intent:
+      type: string
+      description: The agreed smallest meaningful first slice, including any user clarifications.
+    brief_path:
+      type: string
+      description: Optional project-relative path to the saved Brief; defaults to brief.html.
 ---
 
 Write a product requirements document for the user-approved slice. This is silent planning work for the Guide: do not chat with the user, do not expose implementation paths to the user, and do not write anything unless the inputs support a useful PRD.
