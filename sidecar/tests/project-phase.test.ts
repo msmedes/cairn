@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBriefArtifact } from "../brief-artifact";
 import { getProjectState } from "../project-phase";
+import { createTasksArtifact, updateTaskStatus } from "../tasks-artifact";
 
 function tempProject() {
   return mkdtempSync(join(tmpdir(), "guide-project-phase-"));
@@ -75,53 +76,89 @@ test("project_state ignores malformed brief.json", () => {
   });
 });
 
-test("project_state reports implementing when tasks.html has an unchecked entry", () => {
+function writeTasks(path: string) {
+  createTasksArtifact({
+    projectRoot: path,
+    issues: [
+      {
+        issuePath: "issues/01-create-the-first-quiz-draft.md",
+        title: "Create the first quiz draft",
+      },
+      {
+        issuePath: "issues/02-preview-it-as-a-learner.md",
+        title: "Preview it as a learner",
+      },
+    ],
+  });
+}
+
+test("project_state reports implementing from JSON task status", () => {
   const path = makeSlicedProject();
-  write(
-    path,
-    "tasks.html",
-    '<ul><li><input type = "checkbox">First piece</li><li><input type="checkbox" checked>Second piece</li></ul>',
-  );
+  writeTasks(path);
+  updateTaskStatus({
+    projectRoot: path,
+    taskSlug: "preview-it-as-a-learner",
+    status: "done",
+  });
 
   expect(getProjectState(path).phase).toBe("implementing");
 });
 
-test("project_state reports implemented when all tasks.html entries are checked", () => {
+test("project_state reports implemented when every JSON task is done", () => {
   const path = makeSlicedProject();
-  write(
-    path,
-    "tasks.html",
-    '<ul><li><input type="checkbox" checked>First piece</li><li><input checked type="checkbox">Second piece</li></ul>',
-  );
+  writeTasks(path);
+  updateTaskStatus({
+    projectRoot: path,
+    taskSlug: "create-the-first-quiz-draft",
+    status: "done",
+  });
+  updateTaskStatus({
+    projectRoot: path,
+    taskSlug: "preview-it-as-a-learner",
+    status: "done",
+  });
 
   expect(getProjectState(path).phase).toBe("implemented");
 });
 
-test("project_state reports progress from class-based visual tasks", () => {
-  const implementingPath = makeSlicedProject();
-  write(
-    implementingPath,
-    "tasks.html",
-    '<ul><li class="task checked done">First piece</li><li class="task unchecked">Second piece</li></ul>',
-  );
+test.each([
+  "todo",
+  "in_progress",
+  "blocked",
+] as const)("project_state treats %s task status as implementing", (status) => {
+  const path = makeSlicedProject();
+  writeTasks(path);
+  updateTaskStatus({
+    projectRoot: path,
+    taskSlug: "create-the-first-quiz-draft",
+    status,
+  });
+  updateTaskStatus({
+    projectRoot: path,
+    taskSlug: "preview-it-as-a-learner",
+    status: "done",
+  });
 
-  const implementedPath = makeSlicedProject();
-  write(
-    implementedPath,
-    "tasks.html",
-    '<ul><li class="task checked done">First piece</li><li class="task checked done">Second piece</li></ul>',
-  );
-
-  expect(getProjectState(implementingPath).phase).toBe("implementing");
-  expect(getProjectState(implementedPath).phase).toBe("implemented");
+  expect(getProjectState(path).phase).toBe("implementing");
 });
 
-test("project_state falls back to sliced for empty or malformed tasks.html", () => {
+test("project_state ignores legacy tasks.html and reads only tasks.json", () => {
+  const path = makeSlicedProject();
+  write(
+    path,
+    "tasks.html",
+    '<ul><li><input type="checkbox" checked>First piece</li></ul>',
+  );
+
+  expect(getProjectState(path).phase).toBe("sliced");
+});
+
+test("project_state falls back to sliced for empty or malformed tasks.json", () => {
   const emptyPath = makeSlicedProject();
-  write(emptyPath, "tasks.html", "   ");
+  write(emptyPath, "tasks.json", "   ");
 
   const malformedPath = makeSlicedProject();
-  write(malformedPath, "tasks.html", "<p>No checkboxes yet</p>");
+  write(malformedPath, "tasks.json", '{"artifact":"tasks"}');
 
   expect(getProjectState(emptyPath).phase).toBe("sliced");
   expect(getProjectState(malformedPath).phase).toBe("sliced");

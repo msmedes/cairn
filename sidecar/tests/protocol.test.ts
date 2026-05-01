@@ -307,18 +307,39 @@ test(
 );
 
 test(
-  "tick_task mutates tasks.html through the sidecar protocol",
+  "update_task_status mutates tasks.json through the sidecar protocol",
   async () => {
     const guideHome = createGuideHome();
     const projectPath = createStoredProject(guideHome);
-    const tasksPath = join(projectPath, "tasks.html");
+    const tasksPath = join(projectPath, "tasks.json");
     writeFileSync(
       tasksPath,
-      "<ol><li>First piece</li><li>Second piece</li></ol>",
+      JSON.stringify({
+        artifact: "tasks",
+        schemaVersion: 1,
+        createdAt: "2026-05-01T12:00:00.000Z",
+        updatedAt: "2026-05-01T12:00:00.000Z",
+        data: {
+          tasks: [
+            {
+              slug: "create-the-first-quiz-draft",
+              issuePath: "issues/01-create-the-first-quiz-draft.md",
+              title: "Create the first quiz draft",
+              status: "todo",
+            },
+            {
+              slug: "preview-it-as-a-learner",
+              issuePath: "issues/02-preview-it-as-a-learner.md",
+              title: "Preview it as a learner",
+              status: "todo",
+            },
+          ],
+        },
+      }),
       "utf8",
     );
     const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_TICK_TASK: "1",
+      GUIDE_FAKE_PROTOCOL_UPDATE_TASK_STATUS: "1",
     });
     const personaPath = createPersonaFile("You are the Guide.");
 
@@ -343,10 +364,76 @@ test(
       .filter((event) => event.type === "text_delta")
       .map((event) => event.delta)
       .join("");
-    expect(text).toContain("tick_task result: Marked task 2 done.");
-    expect(readFileSync(tasksPath, "utf8")).toBe(
-      '<ol><li>First piece</li><li class="checked done">Second piece</li></ol>',
+    expect(text).toContain('update_task_status result: {"ok":true');
+    expect(JSON.parse(readFileSync(tasksPath, "utf8"))).toMatchObject({
+      data: {
+        tasks: [
+          { slug: "create-the-first-quiz-draft", status: "todo" },
+          { slug: "preview-it-as-a-learner", status: "done" },
+        ],
+      },
+    });
+    expect(existsSync(join(projectPath, "tasks.html"))).toBe(false);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
+  "create_tasks_artifact writes tasks.json through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const projectPath = createStoredProject(guideHome);
+    const tasksPath = join(projectPath, "tasks.json");
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_CREATE_TASKS: "1",
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
     );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Save the tasks.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain('create_tasks_artifact result: {"ok":true');
+
+    const parsed = JSON.parse(readFileSync(tasksPath, "utf8"));
+    expect(parsed).toMatchObject({
+      artifact: "tasks",
+      schemaVersion: 1,
+      data: {
+        tasks: [
+          {
+            slug: "create-the-first-quiz-draft",
+            issuePath: "issues/01-create-the-first-quiz-draft.md",
+            title: "Create the first quiz draft",
+            status: "todo",
+          },
+          {
+            slug: "preview-it-as-a-learner",
+            issuePath: "issues/02-preview-it-as-a-learner.md",
+            title: "Preview it as a learner",
+            status: "todo",
+          },
+        ],
+      },
+    });
+    expect(existsSync(join(projectPath, "tasks.html"))).toBe(false);
   },
   DEFAULT_TIMEOUT_MS,
 );
