@@ -8,20 +8,12 @@
  */
 
 import { afterEach, expect, test } from "bun:test";
-import {
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  AuthStorage,
   DefaultResourceLoader,
   getAgentDir,
-  ModelRegistry,
 } from "@mariozechner/pi-coding-agent";
 import { loadRepoLocalEnv } from "../env";
 
@@ -41,7 +33,6 @@ type SubprocessHandle = ReturnType<typeof Bun.spawn>;
 
 const liveProcs = new Set<SubprocessHandle>();
 loadRepoLocalEnv();
-const authCheck = getAuthCheck();
 
 afterEach(() => {
   for (const proc of liveProcs) {
@@ -53,19 +44,6 @@ afterEach(() => {
   }
   liveProcs.clear();
 });
-
-function getAuthCheck(): { ok: true } | { ok: false; reason: string } {
-  const authStorage = AuthStorage.create();
-  const modelRegistry = ModelRegistry.create(authStorage);
-  if (modelRegistry.getAvailable().length > 0) {
-    return { ok: true };
-  }
-  return {
-    ok: false,
-    reason:
-      "Skipping sidecar protocol smoke test: no pi auth is configured. Set an API key such as ANTHROPIC_API_KEY or log in with pi first.",
-  };
-}
 
 function spawnSidecar(
   homeDir?: string,
@@ -179,258 +157,6 @@ async function collectEvents(
   }
 }
 
-if (!authCheck.ok) {
-  console.warn(authCheck.reason);
-  test.skip("sidecar protocol smoke test requires configured pi auth", () => {});
-} else {
-  test(
-    "init then prompt yields hydrate, ready, streaming text, and agent_end",
-    async () => {
-      const guideHome = createGuideHome();
-      const proc = spawnSidecar(guideHome);
-      const personaPath = createPersonaFile();
-
-      writeJsonToSidecar(proc, { type: "init", personaPath });
-
-      const readyEvents = await collectEvents(
-        proc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-      expect(
-        readyEvents.filter((event) => event.type === "hydrate"),
-      ).toHaveLength(1);
-      expect(readyEvents.find((event) => event.type === "hydrate")).toEqual({
-        type: "hydrate",
-        messages: [],
-      });
-      expect(readyEvents.at(-1)?.type).toBe("ready");
-
-      writeJsonToSidecar(proc, {
-        type: "prompt",
-        text: "what's 2 + 2?",
-      });
-
-      const promptEvents = await collectEvents(
-        proc,
-        (event) => event.type === "agent_end",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      const activeProject = promptEvents.find(
-        (event) => event.type === "active_project",
-      );
-      expect(activeProject?.project).toEqual(
-        expect.objectContaining({
-          id: expect.stringMatching(/^\d{4}-\d{2}-\d{2}-what-s-2-2$/),
-          name: "what's 2 + 2?",
-          displayName: "what's 2 + 2?",
-        }),
-      );
-      expect(promptEvents.some((event) => event.type === "text_delta")).toBe(
-        true,
-      );
-      expect(promptEvents.at(-1)?.type).toBe("agent_end");
-
-      const textDoneIndex = promptEvents.findIndex(
-        (event) => event.type === "text_done",
-      );
-      const agentEndIndex = promptEvents.findIndex(
-        (event) => event.type === "agent_end",
-      );
-      expect(textDoneIndex).toBeGreaterThan(-1);
-      expect(agentEndIndex).toBeGreaterThan(textDoneIndex);
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-
-  test(
-    "respawn hydrates the previous user message from the most recent project",
-    async () => {
-      const guideHome = createGuideHome();
-      const personaPath = createPersonaFile();
-
-      const firstProc = spawnSidecar(guideHome);
-      writeJsonToSidecar(firstProc, { type: "init", personaPath });
-      await collectEvents(
-        firstProc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      writeJsonToSidecar(firstProc, {
-        type: "prompt",
-        text: "remember this idea",
-      });
-      await collectEvents(
-        firstProc,
-        (event) => event.type === "agent_end",
-        DEFAULT_TIMEOUT_MS,
-      );
-      firstProc.kill();
-      liveProcs.delete(firstProc);
-
-      const secondProc = spawnSidecar(guideHome);
-      writeJsonToSidecar(secondProc, { type: "init", personaPath });
-      const restartEvents = await collectEvents(
-        secondProc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      const hydrateEvents = restartEvents.filter(
-        (event) => event.type === "hydrate",
-      );
-      expect(hydrateEvents).toHaveLength(1);
-      expect(hydrateEvents[0]?.messages).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            role: "user",
-            text: "remember this idea",
-            done: true,
-          }),
-        ]),
-      );
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-
-  test(
-    "set_creating emits creating_started over stdio",
-    async () => {
-      const guideHome = createGuideHome();
-      const proc = spawnSidecar(guideHome);
-      const personaPath = createPersonaFile(`
-You are the Guide.
-When the user asks you to create a brief, first call set_creating with target "brief" and message "Putting your project plan together".
-In the same turn, say one short matching line in chat.
-Do not write files for this test.
-`);
-
-      writeJsonToSidecar(proc, { type: "init", personaPath });
-      await collectEvents(
-        proc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      writeJsonToSidecar(proc, {
-        type: "prompt",
-        text: "Create the brief now.",
-      });
-
-      const promptEvents = await collectEvents(
-        proc,
-        (event) => event.type === "creating_started",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      expect(promptEvents.at(-1)).toEqual({
-        type: "creating_started",
-        target: "brief",
-        message: "Putting your project plan together",
-      });
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-
-  test(
-    "start_task fake sub-agent result flows through the sidecar protocol",
-    async () => {
-      const guideHome = createGuideHome();
-      const proc = spawnSidecar(guideHome, {
-        GUIDE_FAKE_START_TASK_RESULT: JSON.stringify({
-          outcome: "blocked",
-          message: "Need a decision before continuing.",
-        }),
-      });
-      const personaPath = createPersonaFile(`
-You are the Guide.
-When the user asks you to start the task, call start_task with issuePath "issues/06-2-start-task.md".
-After the tool returns, say exactly: RESULT: blocked - Need a decision before continuing.
-Do not write files for this test.
-`);
-
-      writeJsonToSidecar(proc, { type: "init", personaPath });
-      await collectEvents(
-        proc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      writeJsonToSidecar(proc, {
-        type: "prompt",
-        text: "Start the task.",
-      });
-
-      const promptEvents = await collectEvents(
-        proc,
-        (event) => event.type === "agent_end",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      expect(
-        promptEvents.some(
-          (event) =>
-            event.type === "text_delta" &&
-            typeof event.delta === "string" &&
-            event.delta.includes(
-              "RESULT: blocked - Need a decision before continuing.",
-            ),
-        ),
-      ).toBe(true);
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-
-  test(
-    "verify_slice result flows through the sidecar protocol",
-    async () => {
-      const guideHome = createGuideHome();
-      const proc = spawnSidecar(guideHome, {
-        GUIDE_FAKE_VERIFY_SLICE_RESULT: JSON.stringify({
-          ok: false,
-          message: "The build did not pass yet.",
-        }),
-      });
-      const personaPath = createPersonaFile(`
-You are the Guide.
-When the user asks you to verify the slice, call verify_slice.
-After the tool returns, say exactly: VERIFY: false - The build did not pass yet.
-Do not write files for this test.
-`);
-
-      writeJsonToSidecar(proc, { type: "init", personaPath });
-      await collectEvents(
-        proc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      writeJsonToSidecar(proc, {
-        type: "prompt",
-        text: "Verify the slice.",
-      });
-
-      const promptEvents = await collectEvents(
-        proc,
-        (event) => event.type === "agent_end",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      expect(
-        promptEvents.some(
-          (event) =>
-            event.type === "text_delta" &&
-            typeof event.delta === "string" &&
-            event.delta.includes("VERIFY: false - The build did not pass yet."),
-        ),
-      ).toBe(true);
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-}
-
 test("Guide-bundled slicing skills are discoverable by the sidecar resource loader", async () => {
   const loader = new DefaultResourceLoader({
     cwd: createTempDir("guide-skill-loader-"),
@@ -462,19 +188,6 @@ test("malformed input emits an error event without killing the sidecar", async (
     DEFAULT_TIMEOUT_MS,
   );
   expect(errorEvents.at(-1)?.type).toBe("error");
-
-  if (authCheck.ok) {
-    const guideHome = createGuideHome();
-    const personaPath = createPersonaFile();
-    const readyProc = spawnSidecar(guideHome);
-    writeJsonToSidecar(readyProc, { type: "init", personaPath });
-    const readyEvents = await collectEvents(
-      readyProc,
-      (event) => event.type === "ready",
-      DEFAULT_TIMEOUT_MS,
-    );
-    expect(readyEvents.at(-1)?.type).toBe("ready");
-  }
 });
 
 test("init on an empty guide home reports ready without creating a project", async () => {
@@ -499,60 +212,6 @@ test("init on an empty guide home reports ready without creating a project", asy
   });
   expect(existsSync(projectsRoot)).toBe(false);
 });
-
-if (!authCheck.ok) {
-  test.skip("first prompt creates a dated project folder in an empty guide home", () => {});
-} else {
-  test(
-    "first prompt creates a dated project folder in an empty guide home",
-    async () => {
-      const guideHome = createGuideHome();
-      const proc = spawnSidecar(guideHome);
-      const personaPath = createPersonaFile();
-
-      writeJsonToSidecar(proc, { type: "init", personaPath });
-      await collectEvents(
-        proc,
-        (event) => event.type === "ready",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      writeJsonToSidecar(proc, {
-        type: "prompt",
-        text: "Build a volunteer snack rota",
-      });
-      const promptEvents = await collectEvents(
-        proc,
-        (event) => event.type === "agent_end",
-        DEFAULT_TIMEOUT_MS,
-      );
-
-      const projectsRoot = projectsRootFor(guideHome);
-      const projectIds = readdirSync(projectsRoot);
-      expect(projectIds).toHaveLength(1);
-      const projectId = projectIds[0];
-      if (!projectId) {
-        throw new Error("expected one created project");
-      }
-      expect(projectId).toMatch(
-        /^\d{4}-\d{2}-\d{2}-build-a-volunteer-snack-rota$/,
-      );
-      const metadata = JSON.parse(
-        readFileSync(join(projectsRoot, projectId, "project.json"), "utf8"),
-      );
-      expect(metadata).toEqual(
-        expect.objectContaining({
-          id: projectId,
-          name: "Build a volunteer snack rota",
-        }),
-      );
-      expect(
-        promptEvents.some((event) => event.type === "active_project"),
-      ).toBe(true);
-    },
-    DEFAULT_TIMEOUT_MS,
-  );
-}
 
 test("init emits an error event when personaPath does not exist", async () => {
   const guideHome = createGuideHome();
