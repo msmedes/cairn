@@ -10,6 +10,12 @@ import {
   createBriefArtifact,
   updateBriefArtifact,
 } from "./brief-artifact";
+import {
+  createPlanArtifact,
+  type PlanArtifactData,
+  type PlanArtifactResult,
+  updatePlanArtifact,
+} from "./plan-artifact";
 import type { Project, ProjectRenameResult } from "./project-store";
 import {
   SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
@@ -49,6 +55,15 @@ export type GuideToolsOptions = {
     data: BriefArtifactData;
     reason: string;
   }) => BriefArtifactResult | Promise<BriefArtifactResult>;
+  createPlanArtifact?: (input: {
+    projectRoot: string;
+    data: PlanArtifactData;
+  }) => PlanArtifactResult | Promise<PlanArtifactResult>;
+  updatePlanArtifact?: (input: {
+    projectRoot: string;
+    data: PlanArtifactData;
+    reason: string;
+  }) => PlanArtifactResult | Promise<PlanArtifactResult>;
 };
 
 const briefSectionParameters = Type.Object(
@@ -88,6 +103,53 @@ const briefArtifactParameters = {
   }),
 };
 
+const planArtifactParameters = {
+  title: Type.String({
+    description: "Plain-language name for the current first slice.",
+    minLength: 1,
+  }),
+  summary: Type.String({
+    description: "One short paragraph explaining what this slice builds first.",
+    minLength: 1,
+  }),
+  from_brief: Type.String({
+    description: "How this first slice connects back to the Project Brief.",
+    minLength: 1,
+  }),
+  outcomes: Type.Array(
+    Type.String({
+      description: "A concrete capability the user will have after this slice.",
+      minLength: 1,
+    }),
+    {
+      description: "Visible user outcomes for this slice.",
+      minItems: 1,
+    },
+  ),
+  pieces: Type.Array(
+    Type.String({
+      description: "One plain-language piece the Guide will work through.",
+      minLength: 1,
+    }),
+    {
+      description: "Ordered visible pieces for this slice.",
+      minItems: 3,
+      maxItems: 6,
+    },
+  ),
+  not_yet: Type.Array(
+    Type.String({
+      description: "A Brief item intentionally not included in this slice.",
+      minLength: 1,
+    }),
+    {
+      description: "User-visible items that are not part of this slice.",
+      minItems: 2,
+      maxItems: 4,
+    },
+  ),
+};
+
 function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
   return {
     title: params.title,
@@ -98,7 +160,35 @@ function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
   };
 }
 
+type PlanToolParams = {
+  title: string;
+  summary: string;
+  from_brief: string;
+  outcomes: string[];
+  pieces: string[];
+  not_yet: string[];
+};
+
+function paramsToPlanData(params: PlanToolParams): PlanArtifactData {
+  return {
+    title: params.title,
+    summary: params.summary,
+    fromBrief: params.from_brief,
+    outcomes: params.outcomes,
+    pieces: params.pieces,
+    notYet: params.not_yet,
+  };
+}
+
 function noActiveProjectBriefResult(): BriefArtifactResult {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
+
+function noActiveProjectPlanResult(): PlanArtifactResult {
   return {
     ok: false,
     code: "no_active_project",
@@ -176,6 +266,77 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
               reason: params.reason,
             })
           : noActiveProjectBriefResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "create_plan_artifact",
+      label: "Create Plan Artifact",
+      description:
+        "Create the current Slice Plan as schema-validated artifact data in plan.json. Use this instead of writing plan.html, plan.md, or raw JSON yourself.",
+      promptSnippet: "Create the schema-validated Plan artifact",
+      promptGuidelines: [
+        "Call create_plan_artifact when Slicing is complete and the user-visible Plan is ready to save.",
+        "Provide only plain-language content the user should see in the Plan tab.",
+        "Keep pieces aligned with the visible implementation pieces the Tasks tab will later show.",
+        "Do not write plan.html, plan.md, or plan.json directly; this tool owns the file envelope and validation.",
+        "Use structured validation failures to fix the named field and retry once when the missing content is obvious.",
+      ],
+      parameters: Type.Object(planArtifactParameters, {
+        additionalProperties: false,
+      }),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.createPlanArtifact ?? createPlanArtifact)({
+              projectRoot: project.path,
+              data: paramsToPlanData(params),
+            })
+          : noActiveProjectPlanResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_plan_artifact",
+      label: "Update Plan Artifact",
+      description:
+        "Replace the current Slice Plan artifact data in plan.json after the user changes the agreement. Requires a short reason.",
+      promptSnippet: "Update the schema-validated Plan artifact",
+      promptGuidelines: [
+        "Call update_plan_artifact only when revising an existing Plan agreement.",
+        "Include a short reason that explains what changed, without exposing paths or implementation details.",
+        "Provide the complete replacement Plan content; partial patch updates are not supported.",
+        "Do not write plan.html, plan.md, or plan.json directly; this tool owns the file envelope and validation.",
+      ],
+      parameters: Type.Object(
+        {
+          ...planArtifactParameters,
+          reason: Type.String({
+            description: "Short private reason for revising the Plan.",
+            minLength: 1,
+          }),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.updatePlanArtifact ?? updatePlanArtifact)({
+              projectRoot: project.path,
+              data: paramsToPlanData(params),
+              reason: params.reason,
+            })
+          : noActiveProjectPlanResult();
 
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],

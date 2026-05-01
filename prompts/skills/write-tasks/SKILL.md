@@ -17,7 +17,7 @@ args:
       description: Issue file paths and their plain-language descriptions from the Plan's pieces list.
     plan_path:
       type: string
-      description: Optional project-relative path to the Plan, normally plan.html.
+      description: Optional project-relative path to the Plan, normally plan.json.
 ---
 
 Write `<project>/tasks.html` as the initial Tasks tab for Implementing. This is user-visible artifact work for the Guide: write the file silently and do not chat with the user.

@@ -632,7 +632,8 @@ body {
   outline: none;
 }
 
-.brief-artifact-shell {
+.brief-artifact-shell,
+.plan-artifact-shell {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -641,7 +642,8 @@ body {
   background: transparent;
 }
 
-.brief-artifact {
+.brief-artifact,
+.plan-artifact {
   min-height: 100%;
   padding: 30px;
   color: var(--text);
@@ -650,20 +652,29 @@ body {
     linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
 }
 
-.brief-artifact-header {
+.plan-artifact {
+  background:
+    linear-gradient(135deg, rgba(152, 187, 108, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
+}
+
+.brief-artifact-header,
+.plan-artifact-header {
   max-width: 46rem;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 
-.brief-artifact-header h2 {
+.brief-artifact-header h2,
+.plan-artifact-header h2 {
   margin: 8px 0 0;
   font-size: clamp(2rem, 1.6rem + 1.1vw, 3rem);
   line-height: 1.02;
   color: var(--text);
 }
 
-.brief-artifact-header p:last-child {
+.brief-artifact-header p:last-child,
+.plan-artifact-header p:last-child {
   margin: 14px 0 0;
   max-width: 58ch;
   color: var(--text-soft);
@@ -679,7 +690,8 @@ body {
 }
 
 .brief-artifact-facts div,
-.brief-artifact-section {
+.brief-artifact-section,
+.plan-artifact-section {
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: rgba(42, 42, 55, 0.7);
@@ -704,29 +716,52 @@ body {
   line-height: 1.5;
 }
 
-.brief-artifact-sections {
+.brief-artifact-sections,
+.plan-artifact {
   display: grid;
   gap: 14px;
+}
+
+.brief-artifact-sections {
   margin-top: 18px;
 }
 
-.brief-artifact-section {
+.plan-artifact-section {
+  max-width: 58rem;
+}
+
+.brief-artifact-section,
+.plan-artifact-section {
   padding: 18px;
 }
 
-.brief-artifact-section h3 {
+.brief-artifact-section h3,
+.plan-artifact-section h3 {
   margin: 0;
   font-size: 1rem;
   line-height: 1.25;
 }
 
-.brief-artifact-section p {
+.brief-artifact-section p,
+.plan-artifact-section p {
   margin: 10px 0 0;
   color: var(--text-soft);
   line-height: 1.6;
 }
 
-.brief-artifact-shell-creating .brief-artifact {
+.plan-artifact-section ul,
+.plan-artifact-section ol {
+  margin: 12px 0 0;
+  padding-left: 1.35rem;
+  color: var(--text-soft);
+}
+
+.plan-artifact-section li + li {
+  margin-top: 8px;
+}
+
+.brief-artifact-shell-creating .brief-artifact,
+.plan-artifact-shell-creating .plan-artifact {
   filter: saturate(0.82) brightness(0.72);
 }
 
@@ -958,7 +993,8 @@ body {
     padding: 22px 20px;
   }
 
-  .brief-artifact {
+  .brief-artifact,
+  .plan-artifact {
     padding: 22px;
   }
 

@@ -13,7 +13,8 @@ import {
   parseBriefArtifact,
 } from "./briefArtifact";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
-import { buildSlidesDocument } from "./projectSlides";
+import { PlanArtifactView } from "./PlanArtifactView";
+import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
 import { useActivePanelTab } from "./useActivePanelTab";
 import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import { useAutoScroll } from "./useAutoScroll";
@@ -27,47 +28,11 @@ import {
 import { useProjectFile } from "./useProjectFile";
 import { useSidecarSession } from "./useSidecarSession";
 
-function htmlToMarkdown(html: string): string {
-  if (
-    typeof window === "undefined" ||
-    typeof window.DOMParser === "undefined" ||
-    !html.trim()
-  ) {
-    return "";
-  }
-
-  const doc = new window.DOMParser().parseFromString(html, "text/html");
-  const blocks = Array.from(doc.body.querySelectorAll("h1, h2, h3, h4, p, li"));
-
-  return blocks
-    .map((node) => {
-      const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
-      if (!text) return "";
-
-      switch (node.tagName.toLowerCase()) {
-        case "h1":
-          return `# ${text}`;
-        case "h2":
-          return `## ${text}`;
-        case "h3":
-          return `### ${text}`;
-        case "h4":
-          return `#### ${text}`;
-        case "li":
-          return `- ${text}`;
-        default:
-          return text;
-      }
-    })
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
   const projectBriefJson = useProjectFile("brief.json");
-  const planSlidesHtml = useProjectFile("plan.html");
+  const projectPlanJson = useProjectFile("plan.json");
   const tasksHtml = useProjectFile("tasks.html");
   const projectPrdsListing = useProjectFile("prds");
   const projectIssuesListing = useProjectFile("issues");
@@ -75,16 +40,14 @@ function App() {
     () => parseBriefArtifact(projectBriefJson),
     [projectBriefJson],
   );
-  const hasPlanSlidesHtml = planSlidesHtml.trim().length > 0;
+  const projectPlanArtifact: PlanArtifactEnvelope | null = useMemo(
+    () => parsePlanArtifact(projectPlanJson),
+    [projectPlanJson],
+  );
+  const hasPlanArtifact = projectPlanArtifact !== null;
   const hasTasksHtml = tasksHtml.trim().length > 0;
-  const normalizedPlan = hasPlanSlidesHtml
-    ? htmlToMarkdown(planSlidesHtml)
-    : "";
-  const planSlidesDoc = normalizedPlan
-    ? buildSlidesDocument(normalizedPlan)
-    : "";
   const { activeTab, setActiveTab } = useActivePanelTab(
-    hasPlanSlidesHtml,
+    hasPlanArtifact,
     hasTasksHtml,
   );
   const creatingContent = useMemo(
@@ -92,12 +55,12 @@ function App() {
       brief: projectBriefJson,
       prd: projectPrdsListing,
       issues: projectIssuesListing,
-      plan: normalizedPlan,
+      plan: projectPlanJson,
       tasks: tasksHtml,
     }),
     [
-      normalizedPlan,
       projectBriefJson,
+      projectPlanJson,
       projectPrdsListing,
       projectIssuesListing,
       tasksHtml,
@@ -160,16 +123,12 @@ function App() {
       ? [{ key: "tasks", label: "Tasks", available: true }]
       : []),
   ];
-  const activeSlidesDoc =
-    activeTab === "plan"
-      ? planSlidesDoc
-      : activeTab === "tasks"
-        ? tasksHtml
-        : "";
+  const activeSlidesDoc = activeTab === "tasks" ? tasksHtml : "";
   const showBriefArtifact = activeTab === "project" && projectBriefArtifact;
-  const showPlanEmptyState = activeTab === "plan" && !planSlidesDoc;
+  const showPlanArtifact = activeTab === "plan" && projectPlanArtifact;
+  const showPlanEmptyState = activeTab === "plan" && !projectPlanArtifact;
   const placeholderCreating =
-    activeSlidesDoc || showBriefArtifact ? null : creating;
+    activeSlidesDoc || showBriefArtifact || showPlanArtifact ? null : creating;
   const appStyle: CSSProperties = {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
@@ -312,6 +271,18 @@ function App() {
                 </section>
               )}
             </div>
+          ) : showPlanArtifact ? (
+            <div
+              className={`plan-artifact-shell${creating ? " plan-artifact-shell-creating" : ""}`}
+            >
+              <PlanArtifactView data={projectPlanArtifact.data} />
+              {creating && (
+                <section className="panel-creating-overlay" aria-live="polite">
+                  <p className="panel-kicker">Working draft</p>
+                  <h2>{creating.message}</h2>
+                </section>
+              )}
+            </div>
           ) : activeSlidesDoc ? (
             <div
               className={`project-slides-shell${creating ? " project-slides-shell-creating" : ""}`}
@@ -321,9 +292,7 @@ function App() {
                 title={
                   activeTab === "project"
                     ? "Project brief slideshow"
-                    : activeTab === "plan"
-                      ? "Project plan slideshow"
-                      : "Project tasks checklist"
+                    : "Project tasks checklist"
                 }
                 srcDoc={activeSlidesDoc}
                 sandbox="allow-scripts"

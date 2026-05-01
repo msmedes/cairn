@@ -542,3 +542,147 @@ test("update_brief_artifact tool requires a reason and returns field validation 
     '{"ok":false,"code":"validation_error","field":"reason","message":"Update reason is required."}',
   );
 });
+
+test("create_plan_artifact tool validates and writes plan.json only", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const createPlan = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while creating a plan artifact");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while creating a plan artifact");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while creating a plan artifact",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while creating a plan artifact",
+      );
+    },
+  }).find((tool) => tool.name === "create_plan_artifact");
+
+  expect(createPlan).toBeDefined();
+  if (!createPlan) {
+    throw new Error("create_plan_artifact tool was not registered");
+  }
+  expect(createPlan.executionMode).toBe("sequential");
+  expect(Value.Check(createPlan.parameters, { title: "" })).toBe(false);
+
+  const result = await createPlan.execute(
+    "tool-call-1",
+    {
+      title: "First playable quiz",
+      summary: "Start with one video and one shareable quiz.",
+      from_brief:
+        "The brief asks for lightweight checks, so this proves one quiz end to end.",
+      outcomes: ["You'll be able to paste in one training video."],
+      pieces: [
+        "Create the first quiz draft",
+        "Preview it as a learner",
+        "Share the finished quiz",
+      ],
+      not_yet: ["Team analytics", "Question banks"],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: true,
+    artifact: "plan",
+    path: "plan.json",
+    title: "First playable quiz",
+    pieceCount: 3,
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":true,"artifact":"plan","path":"plan.json","schemaVersion":1,"title":"First playable quiz","pieceCount":3}',
+  );
+  expect(readFileSync(join(activeProject.path, "plan.json"), "utf8")).toContain(
+    '"artifact": "plan"',
+  );
+  expect(() =>
+    readFileSync(join(activeProject.path, "plan.html"), "utf8"),
+  ).toThrow();
+});
+
+test("update_plan_artifact tool requires a reason and returns field validation errors", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const [createPlan, updatePlan] = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while updating a plan artifact");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while updating a plan artifact");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while updating a plan artifact",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while updating a plan artifact",
+      );
+    },
+  }).filter((tool) =>
+    ["create_plan_artifact", "update_plan_artifact"].includes(tool.name),
+  );
+  if (!createPlan || !updatePlan) {
+    throw new Error("plan artifact tools were not registered");
+  }
+
+  const validInput = {
+    title: "First playable quiz",
+    summary: "Start with one video and one shareable quiz.",
+    from_brief:
+      "The brief asks for lightweight checks, so this proves one quiz end to end.",
+    outcomes: ["You'll be able to paste in one training video."],
+    pieces: [
+      "Create the first quiz draft",
+      "Preview it as a learner",
+      "Share the finished quiz",
+    ],
+    not_yet: ["Team analytics", "Question banks"],
+  };
+  await createPlan.execute(
+    "tool-call-1",
+    validInput,
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(Value.Check(updatePlan.parameters, validInput)).toBe(false);
+
+  const result = await updatePlan.execute(
+    "tool-call-2",
+    { ...validInput, reason: " " },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: false,
+    code: "validation_error",
+    field: "reason",
+    message: "Update reason is required.",
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":false,"code":"validation_error","field":"reason","message":"Update reason is required."}',
+  );
+});

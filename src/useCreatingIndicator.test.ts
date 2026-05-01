@@ -145,7 +145,7 @@ describe("useCreatingIndicator", () => {
     {
       target: "plan" as const,
       contentKey: "plan" as const,
-      nextContent: "<h1>Plan</h1>",
+      nextContent: '{"artifact":"plan"}',
     },
     {
       target: "tasks" as const,
@@ -214,7 +214,7 @@ describe("useCreatingIndicator", () => {
       brief: "done",
       prd: "01-slice.md",
       issues: "01-task.md",
-      plan: "<h1>Plan</h1>",
+      plan: '{"artifact":"plan"}',
       tasks: "",
     });
 
