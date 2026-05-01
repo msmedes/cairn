@@ -15,6 +15,11 @@ import {
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { PlanArtifactView } from "./PlanArtifactView";
 import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
+import { TasksArtifactView } from "./TasksArtifactView";
+import {
+  parseTasksArtifact,
+  type TasksArtifactEnvelope,
+} from "./tasksArtifact";
 import { useActivePanelTab } from "./useActivePanelTab";
 import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import { useAutoScroll } from "./useAutoScroll";
@@ -33,7 +38,7 @@ function App() {
   const [recapInteracted, setRecapInteracted] = useState(false);
   const projectBriefJson = useProjectFile("brief.json");
   const projectPlanJson = useProjectFile("plan.json");
-  const tasksHtml = useProjectFile("tasks.html");
+  const projectTasksJson = useProjectFile("tasks.json");
   const projectPrdsListing = useProjectFile("prds");
   const projectIssuesListing = useProjectFile("issues");
   const projectBriefArtifact: BriefArtifactEnvelope | null = useMemo(
@@ -44,11 +49,15 @@ function App() {
     () => parsePlanArtifact(projectPlanJson),
     [projectPlanJson],
   );
+  const projectTasksArtifact: TasksArtifactEnvelope | null = useMemo(
+    () => parseTasksArtifact(projectTasksJson),
+    [projectTasksJson],
+  );
   const hasPlanArtifact = projectPlanArtifact !== null;
-  const hasTasksHtml = tasksHtml.trim().length > 0;
+  const hasTasksArtifact = projectTasksArtifact !== null;
   const { activeTab, setActiveTab } = useActivePanelTab(
     hasPlanArtifact,
-    hasTasksHtml,
+    hasTasksArtifact,
   );
   const creatingContent = useMemo(
     () => ({
@@ -56,14 +65,14 @@ function App() {
       prd: projectPrdsListing,
       issues: projectIssuesListing,
       plan: projectPlanJson,
-      tasks: tasksHtml,
+      tasks: projectTasksJson,
     }),
     [
       projectBriefJson,
       projectPlanJson,
+      projectTasksJson,
       projectPrdsListing,
       projectIssuesListing,
-      tasksHtml,
     ],
   );
   const {
@@ -119,16 +128,18 @@ function App() {
   const panelTabs: PanelTab[] = [
     { key: "project", label: "Project", available: true },
     { key: "plan", label: "Plan", available: true },
-    ...(hasTasksHtml
+    ...(hasTasksArtifact
       ? [{ key: "tasks", label: "Tasks", available: true }]
       : []),
   ];
-  const activeSlidesDoc = activeTab === "tasks" ? tasksHtml : "";
   const showBriefArtifact = activeTab === "project" && projectBriefArtifact;
   const showPlanArtifact = activeTab === "plan" && projectPlanArtifact;
+  const showTasksArtifact = activeTab === "tasks" && projectTasksArtifact;
   const showPlanEmptyState = activeTab === "plan" && !projectPlanArtifact;
   const placeholderCreating =
-    activeSlidesDoc || showBriefArtifact || showPlanArtifact ? null : creating;
+    showBriefArtifact || showPlanArtifact || showTasksArtifact
+      ? null
+      : creating;
   const appStyle: CSSProperties = {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
@@ -283,20 +294,11 @@ function App() {
                 </section>
               )}
             </div>
-          ) : activeSlidesDoc ? (
+          ) : showTasksArtifact ? (
             <div
-              className={`project-slides-shell${creating ? " project-slides-shell-creating" : ""}`}
+              className={`tasks-artifact-shell${creating ? " tasks-artifact-shell-creating" : ""}`}
             >
-              <iframe
-                className="project-slides-frame"
-                title={
-                  activeTab === "project"
-                    ? "Project brief slideshow"
-                    : "Project tasks checklist"
-                }
-                srcDoc={activeSlidesDoc}
-                sandbox="allow-scripts"
-              />
+              <TasksArtifactView data={projectTasksArtifact.data} />
               {creating && (
                 <section className="panel-creating-overlay" aria-live="polite">
                   <p className="panel-kicker">Working draft</p>

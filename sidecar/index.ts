@@ -37,7 +37,6 @@ import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 import type { SpawnSubagentResult } from "./spawn-subagent";
-import type { TickTaskResult } from "./tick-task";
 
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
@@ -140,18 +139,6 @@ function getFakeSpawnSubagentResultFromEnv():
   return async () => JSON.parse(raw) as SpawnSubagentResult;
 }
 
-function getFakeTickTaskResultFromEnv():
-  | ((input: {
-      projectRoot: string;
-      pieceIndex: number;
-    }) => Promise<TickTaskResult>)
-  | undefined {
-  const raw = process.env.GUIDE_FAKE_TICK_TASK_RESULT;
-  if (!raw) return undefined;
-
-  return async () => JSON.parse(raw) as TickTaskResult;
-}
-
 function findLastToolResultText(context: Context) {
   for (let index = context.messages.length - 1; index >= 0; index -= 1) {
     const message = context.messages[index];
@@ -197,10 +184,10 @@ function getFakeProtocolSpawnModel():
   return { model, authStorage };
 }
 
-function getFakeProtocolTickTaskModel():
+function getFakeProtocolUpdateTaskStatusModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_TICK_TASK !== "1") {
+  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_TASK_STATUS !== "1") {
     return undefined;
   }
 
@@ -211,16 +198,58 @@ function getFakeProtocolTickTaskModel():
   registration.setResponses([
     fauxAssistantMessage([
       fauxToolCall(
-        "tick_task",
+        "update_task_status",
         {
-          piece_index: 2,
+          task_slug: "preview-it-as-a-learner",
+          status: "done",
         },
-        { id: "tool-tick-task" },
+        { id: "tool-update-task-status" },
       ),
     ]),
     (context) =>
       fauxAssistantMessage(
-        `tick_task result: ${findLastToolResultText(context)}`,
+        `update_task_status result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
+function getFakeProtocolCreateTasksModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_CREATE_TASKS !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "create_tasks_artifact",
+        {
+          issues: [
+            {
+              issue_path: "issues/01-create-the-first-quiz-draft.md",
+              title: "Create the first quiz draft",
+            },
+            {
+              issue_path: "issues/02-preview-it-as-a-learner.md",
+              title: "Preview it as a learner",
+            },
+          ],
+        },
+        { id: "tool-create-tasks" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `create_tasks_artifact result: ${findLastToolResultText(context)}`,
       ),
   ]);
   const model = registration.getModel();
@@ -319,7 +348,8 @@ function getFakeProtocolModel():
   | undefined {
   return (
     getFakeProtocolSpawnModel() ??
-    getFakeProtocolTickTaskModel() ??
+    getFakeProtocolUpdateTaskStatusModel() ??
+    getFakeProtocolCreateTasksModel() ??
     getFakeProtocolCreateBriefModel() ??
     getFakeProtocolCreatePlanModel()
   );
@@ -499,7 +529,6 @@ async function openProject(
       },
       getLoadedSkills: () => resourceLoader.getSkills().skills,
       spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
-      tickTask: getFakeTickTaskResultFromEnv(),
     }),
   });
 

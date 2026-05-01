@@ -633,7 +633,8 @@ body {
 }
 
 .brief-artifact-shell,
-.plan-artifact-shell {
+.plan-artifact-shell,
+.tasks-artifact-shell {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -643,7 +644,8 @@ body {
 }
 
 .brief-artifact,
-.plan-artifact {
+.plan-artifact,
+.tasks-artifact {
   min-height: 100%;
   padding: 30px;
   color: var(--text);
@@ -658,15 +660,23 @@ body {
     linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
 }
 
+.tasks-artifact {
+  background:
+    linear-gradient(135deg, rgba(255, 160, 102, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
+}
+
 .brief-artifact-header,
-.plan-artifact-header {
+.plan-artifact-header,
+.tasks-artifact-header {
   max-width: 46rem;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 
 .brief-artifact-header h2,
-.plan-artifact-header h2 {
+.plan-artifact-header h2,
+.tasks-artifact-header h2 {
   margin: 8px 0 0;
   font-size: clamp(2rem, 1.6rem + 1.1vw, 3rem);
   line-height: 1.02;
@@ -674,7 +684,8 @@ body {
 }
 
 .brief-artifact-header p:last-child,
-.plan-artifact-header p:last-child {
+.plan-artifact-header p:last-child,
+.tasks-artifact-header p:last-child {
   margin: 14px 0 0;
   max-width: 58ch;
   color: var(--text-soft);
@@ -717,7 +728,8 @@ body {
 }
 
 .brief-artifact-sections,
-.plan-artifact {
+.plan-artifact,
+.tasks-artifact-list {
   display: grid;
   gap: 14px;
 }
@@ -760,8 +772,79 @@ body {
   margin-top: 8px;
 }
 
+.tasks-artifact-list {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tasks-artifact-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  max-width: 58rem;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: rgba(42, 42, 55, 0.72);
+}
+
+.tasks-artifact-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-soft);
+  box-shadow: 0 0 0 4px rgba(147, 138, 169, 0.12);
+}
+
+.tasks-artifact-item-in_progress .tasks-artifact-marker {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(126, 156, 216, 0.18);
+}
+
+.tasks-artifact-item-done .tasks-artifact-marker {
+  background: #98bb6c;
+  box-shadow: 0 0 0 4px rgba(152, 187, 108, 0.18);
+}
+
+.tasks-artifact-item-blocked .tasks-artifact-marker {
+  background: var(--accent-warm);
+  box-shadow: 0 0 0 4px rgba(255, 160, 102, 0.18);
+}
+
+.tasks-artifact-copy {
+  min-width: 0;
+}
+
+.tasks-artifact-copy p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.tasks-artifact-slug {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.tasks-artifact-status {
+  justify-self: end;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  background: rgba(31, 31, 40, 0.76);
+  font-size: 0.82rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .brief-artifact-shell-creating .brief-artifact,
-.plan-artifact-shell-creating .plan-artifact {
+.plan-artifact-shell-creating .plan-artifact,
+.tasks-artifact-shell-creating .tasks-artifact {
   filter: saturate(0.82) brightness(0.72);
 }
 
@@ -994,7 +1077,8 @@ body {
   }
 
   .brief-artifact,
-  .plan-artifact {
+  .plan-artifact,
+  .tasks-artifact {
     padding: 22px;
   }
 
@@ -1004,5 +1088,14 @@ body {
 
   .project-slides-shell {
     min-height: 420px;
+  }
+
+  .tasks-artifact-item {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .tasks-artifact-status {
+    grid-column: 2;
+    justify-self: start;
   }
 }

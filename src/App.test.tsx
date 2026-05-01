@@ -59,7 +59,7 @@ describe("App panel tabs", () => {
           });
         case "plan.json":
           return "";
-        case "tasks.html":
+        case "tasks.json":
         case "prds":
         case "issues":
           return "";
@@ -168,7 +168,7 @@ describe("App panel tabs", () => {
               notYet: ["Team analytics", "Question banks"],
             },
           });
-        case "tasks.html":
+        case "tasks.json":
         case "prds":
         case "issues":
           return "";
@@ -213,7 +213,7 @@ describe("App panel tabs", () => {
           });
         case "plan.json":
           return planJson;
-        case "tasks.html":
+        case "tasks.json":
         case "prds":
         case "issues":
           return "";
@@ -256,7 +256,7 @@ describe("App panel tabs", () => {
     ).toBeInTheDocument();
   });
 
-  test("shows Tasks tab only when tasks.html is non-empty and renders it", () => {
+  test("Tasks tab renders tasks.json and visibly distinguishes task states", () => {
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
         case "brief.json":
@@ -278,8 +278,41 @@ describe("App panel tabs", () => {
               ],
             },
           });
-        case "tasks.html":
-          return "<h1>Tasks</h1><ul><li>First piece</li></ul>";
+        case "tasks.json":
+          return JSON.stringify({
+            artifact: "tasks",
+            schemaVersion: 1,
+            createdAt: "2026-05-01T12:00:00.000Z",
+            updatedAt: "2026-05-01T12:00:00.000Z",
+            data: {
+              tasks: [
+                {
+                  slug: "create-the-first-quiz-draft",
+                  issuePath: "issues/01-create-the-first-quiz-draft.md",
+                  title: "Create the first quiz draft",
+                  status: "todo",
+                },
+                {
+                  slug: "preview-it-as-a-learner",
+                  issuePath: "issues/02-preview-it-as-a-learner.md",
+                  title: "Preview it as a learner",
+                  status: "in_progress",
+                },
+                {
+                  slug: "share-the-finished-quiz",
+                  issuePath: "issues/03-share-the-finished-quiz.md",
+                  title: "Share the finished quiz",
+                  status: "done",
+                },
+                {
+                  slug: "handle-approval",
+                  issuePath: "issues/04-handle-approval.md",
+                  title: "Handle approval",
+                  status: "blocked",
+                },
+              ],
+            },
+          });
         case "plan.json":
         case "prds":
         case "issues":
@@ -298,13 +331,20 @@ describe("App panel tabs", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByTitle("Project tasks checklist")).toHaveAttribute(
-      "srcdoc",
-      expect.stringContaining("First piece"),
-    );
+    expect(
+      screen.queryByTitle("Project tasks checklist"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tasks" })).toBeInTheDocument();
+    expect(screen.getByText("Create the first quiz draft")).toBeInTheDocument();
+    expect(screen.getByText("To do")).toBeInTheDocument();
+    expect(screen.getByText("In progress")).toBeInTheDocument();
+    expect(screen.getByText("Done")).toBeInTheDocument();
+    expect(screen.getByText("Blocked")).toBeInTheDocument();
+    expect(mockUseProjectFile).toHaveBeenCalledWith("tasks.json");
+    expect(mockUseProjectFile).not.toHaveBeenCalledWith("tasks.html");
   });
 
-  test("does not show Tasks tab for empty tasks.html", () => {
+  test("does not show Tasks tab for empty tasks.json", () => {
     render(<App />);
 
     expect(

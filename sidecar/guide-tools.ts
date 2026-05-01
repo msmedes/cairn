@@ -23,7 +23,15 @@ import {
   type SpawnSubagentResult,
   spawnSubagent as spawnSubagentInProject,
 } from "./spawn-subagent";
-import { type TickTaskResult, tickTaskInProject } from "./tick-task";
+import {
+  type CreateTasksArtifactIssue,
+  type CreateTasksArtifactResult,
+  createTasksArtifact,
+  TASK_STATUSES,
+  type TaskStatus,
+  type UpdateTaskStatusResult,
+  updateTaskStatus,
+} from "./tasks-artifact";
 
 export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
 
@@ -42,10 +50,6 @@ export type GuideToolsOptions = {
     loadedSkills: Skill[];
     signal?: AbortSignal;
   }) => Promise<SpawnSubagentResult>;
-  tickTask?: (input: {
-    projectRoot: string;
-    pieceIndex: number;
-  }) => TickTaskResult | Promise<TickTaskResult>;
   createBriefArtifact?: (input: {
     projectRoot: string;
     data: BriefArtifactData;
@@ -64,6 +68,15 @@ export type GuideToolsOptions = {
     data: PlanArtifactData;
     reason: string;
   }) => PlanArtifactResult | Promise<PlanArtifactResult>;
+  createTasksArtifact?: (input: {
+    projectRoot: string;
+    issues: CreateTasksArtifactIssue[];
+  }) => CreateTasksArtifactResult | Promise<CreateTasksArtifactResult>;
+  updateTaskStatus?: (input: {
+    projectRoot: string;
+    taskSlug: string;
+    status: TaskStatus;
+  }) => UpdateTaskStatusResult | Promise<UpdateTaskStatusResult>;
 };
 
 const briefSectionParameters = Type.Object(
@@ -150,6 +163,21 @@ const planArtifactParameters = {
   ),
 };
 
+const taskIssueParameters = Type.Object(
+  {
+    issue_path: Type.String({
+      description:
+        "Project-relative issue path such as issues/01-create-the-first-quiz-draft.md.",
+      minLength: 1,
+    }),
+    title: Type.String({
+      description: "Plain-language Tasks tab entry matching this issue.",
+      minLength: 1,
+    }),
+  },
+  { additionalProperties: false },
+);
+
 function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
   return {
     title: params.title,
@@ -180,6 +208,22 @@ function paramsToPlanData(params: PlanToolParams): PlanArtifactData {
   };
 }
 
+type CreateTasksToolParams = {
+  issues: Array<{
+    issue_path: string;
+    title: string;
+  }>;
+};
+
+function paramsToTaskIssues(
+  params: CreateTasksToolParams,
+): CreateTasksArtifactIssue[] {
+  return params.issues.map((issue) => ({
+    issuePath: issue.issue_path,
+    title: issue.title,
+  }));
+}
+
 function noActiveProjectBriefResult(): BriefArtifactResult {
   return {
     ok: false,
@@ -189,6 +233,22 @@ function noActiveProjectBriefResult(): BriefArtifactResult {
 }
 
 function noActiveProjectPlanResult(): PlanArtifactResult {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
+
+function noActiveProjectTasksResult(): CreateTasksArtifactResult {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
+
+function noActiveProjectTaskStatusResult(): UpdateTaskStatusResult {
   return {
     ok: false,
     code: "no_active_project",
@@ -391,6 +451,91 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
       },
     }),
     defineTool({
+      name: "create_tasks_artifact",
+      label: "Create Tasks Artifact",
+      description:
+        "Create the Tasks tab as schema-validated artifact data in tasks.json. Use this instead of writing tasks.html or raw JSON yourself.",
+      promptSnippet: "Create the schema-validated Tasks artifact",
+      promptGuidelines: [
+        "Call create_tasks_artifact when Implementing begins and the Tasks tab is ready to save.",
+        "Pass the ordered issue paths and matching plain-language task titles from the current slice.",
+        "The tool derives task slugs from issue paths and starts every task as todo.",
+        "Do not write tasks.html, tasks.md, or tasks.json directly; this tool owns the file envelope and validation.",
+        "Use structured validation failures to fix the named issue field and retry once when the missing content is obvious.",
+      ],
+      parameters: Type.Object(
+        {
+          issues: Type.Array(taskIssueParameters, {
+            description:
+              "Ordered issue path and plain-language task title pairs for the Tasks tab.",
+            minItems: 1,
+          }),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.createTasksArtifact ?? createTasksArtifact)({
+              projectRoot: project.path,
+              issues: paramsToTaskIssues(params),
+            })
+          : noActiveProjectTasksResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_task_status",
+      label: "Update Task Status",
+      description:
+        "Update one Tasks tab item by issue-derived task slug in tasks.json. Use this for routine implementation progress.",
+      promptSnippet: "Update a Tasks tab status by task slug",
+      promptGuidelines: [
+        'Call update_task_status after each spawn_subagent("implement-issue", ...) result using the matching issue-derived task_slug.',
+        "Use status todo, in_progress, done, or blocked; do not rewrite the full Tasks artifact for routine progress.",
+        "If update_task_status returns a structured slug failure, stop and explain the short message plainly.",
+        "Never use list indexes or raw edits for Tasks tab progress.",
+      ],
+      parameters: Type.Object(
+        {
+          task_slug: Type.String({
+            description:
+              "Issue-derived task slug, for example create-the-first-quiz-draft.",
+            minLength: 1,
+          }),
+          status: Type.Union(
+            TASK_STATUSES.map((status) => Type.Literal(status)),
+            {
+              description:
+                "The next task status: todo, in_progress, done, or blocked.",
+            },
+          ),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.updateTaskStatus ?? updateTaskStatus)({
+              projectRoot: project.path,
+              taskSlug: params.task_slug,
+              status: params.status,
+            })
+          : noActiveProjectTaskStatusResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
       name: "set_creating",
       label: "Show Creating Indicator",
       description:
@@ -499,57 +644,6 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
 
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
-          details: result,
-        };
-      },
-    }),
-    defineTool({
-      name: "tick_task",
-      label: "Tick Task",
-      description:
-        "Mark one Tasks tab checklist item done in the active project's tasks.html.",
-      promptSnippet: "Mark a Tasks tab checklist item done",
-      promptGuidelines: [
-        'Call tick_task(N) after each complete from spawn_subagent("implement-issue", ...) using the matching 1-indexed Tasks tab piece number.',
-        "Use tick_task instead of raw edit or raw write when updating tasks.html.",
-        "Use the short confirmation as private state; fold it into one brief Guide-voice line before continuing.",
-        "If tick_task returns a structured failure, stop and explain the short message plainly.",
-      ],
-      parameters: Type.Object(
-        {
-          piece_index: Type.Number({
-            description: "1-indexed checklist item number to mark done.",
-          }),
-        },
-        { additionalProperties: false },
-      ),
-      executionMode: "sequential",
-      async execute(_toolCallId, params) {
-        const project = options.getActiveProject();
-        if (!project) {
-          const result: TickTaskResult = {
-            ok: false,
-            code: "no_active_project",
-            message: "No active project is open.",
-          };
-          return {
-            content: [{ type: "text", text: JSON.stringify(result) }],
-            details: result,
-          };
-        }
-
-        const result = await (options.tickTask ?? tickTaskInProject)({
-          projectRoot: project.path,
-          pieceIndex: params.piece_index,
-        });
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: result.ok ? result.message : JSON.stringify(result),
-            },
-          ],
           details: result,
         };
       },

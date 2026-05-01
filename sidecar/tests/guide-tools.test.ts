@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Value } from "typebox/value";
@@ -216,6 +216,7 @@ test("guide tool registry does not surface retired task dispatcher tools", () =>
 
   expect(tools.map((tool) => tool.name)).not.toContain("start_task");
   expect(tools.map((tool) => tool.name)).not.toContain("verify_slice");
+  expect(tools.map((tool) => tool.name)).not.toContain("tick_task");
 });
 
 test("spawn_subagent tool has bounded skill and response schema parameters", async () => {
@@ -304,100 +305,184 @@ test("spawn_subagent tool has bounded skill and response schema parameters", asy
   );
 });
 
-test("tick_task tool mutates the active project's tasks.html and returns confirmation", async () => {
+test("create_tasks_artifact tool validates and writes tasks.json only", async () => {
   const store = new ProjectStore(tempProjectsRoot());
   const activeProject = store.create(
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
-  const tasksPath = join(activeProject.path, "tasks.html");
-  writeFileSync(
-    tasksPath,
-    "<ol><li>First piece</li><li>Second piece</li></ol>",
-    "utf8",
-  );
 
-  const tickTask = createGuideTools({
+  const createTasks = createGuideTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
-      throw new Error("should not rename while ticking a task");
+      throw new Error("should not rename while creating tasks");
     },
     onRenameSuccess: () => {
-      throw new Error("should not retarget while ticking a task");
+      throw new Error("should not retarget while creating tasks");
     },
     onProjectUpdate: () => {
-      throw new Error("should not emit project updates while ticking a task");
+      throw new Error("should not emit project updates while creating tasks");
     },
     onCreatingStart: () => {
-      throw new Error("should not emit creating state while ticking a task");
+      throw new Error("should not emit creating state while creating tasks");
     },
-  }).find((tool) => tool.name === "tick_task");
+  }).find((tool) => tool.name === "create_tasks_artifact");
 
-  expect(tickTask).toBeDefined();
-  if (!tickTask) {
-    throw new Error("tick_task tool was not registered");
+  expect(createTasks).toBeDefined();
+  if (!createTasks) {
+    throw new Error("create_tasks_artifact tool was not registered");
   }
-  expect(tickTask.executionMode).toBe("sequential");
-  expect(Value.Check(tickTask.parameters, { piece_index: 2 })).toBe(true);
-  expect(Value.Check(tickTask.parameters, { pieceIndex: 2 })).toBe(false);
-  expect(tickTask.promptGuidelines?.join("\n")).toContain(
-    'tick_task(N) after each complete from spawn_subagent("implement-issue"',
+  expect(createTasks.executionMode).toBe("sequential");
+  expect(Value.Check(createTasks.parameters, { issues: [] })).toBe(false);
+  expect(createTasks.promptGuidelines?.join("\n")).toContain(
+    "derives task slugs from issue paths",
   );
-  expect(tickTask.promptGuidelines?.join("\n")).toContain("raw edit");
+  expect(createTasks.promptGuidelines?.join("\n")).toContain("tasks.json");
 
-  const result = await tickTask.execute(
+  const result = await createTasks.execute(
     "tool-call-1",
-    { piece_index: 2 },
+    {
+      issues: [
+        {
+          issue_path: "issues/01-create-the-first-quiz-draft.md",
+          title: "Create the first quiz draft",
+        },
+        {
+          issue_path: "issues/02-preview-it-as-a-learner.md",
+          title: "Preview it as a learner",
+        },
+      ],
+    },
     undefined,
     undefined,
     {} as never,
   );
 
-  expect(result.details).toEqual({ ok: true, message: "Marked task 2 done." });
-  expect(toolText(result)).toBe("Marked task 2 done.");
-  expect(readFileSync(tasksPath, "utf8")).toBe(
-    '<ol><li>First piece</li><li class="checked done">Second piece</li></ol>',
+  expect(result.details).toMatchObject({
+    ok: true,
+    artifact: "tasks",
+    path: "tasks.json",
+    taskCount: 2,
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":true,"artifact":"tasks","path":"tasks.json","schemaVersion":1,"taskCount":2}',
   );
+  expect(
+    readFileSync(join(activeProject.path, "tasks.json"), "utf8"),
+  ).toContain('"slug": "create-the-first-quiz-draft"');
+  expect(() =>
+    readFileSync(join(activeProject.path, "tasks.html"), "utf8"),
+  ).toThrow();
 });
 
-test("tick_task tool returns structured failure without an active project", async () => {
-  const tickTask = createGuideTools({
-    getActiveProject: () => null,
+test("update_task_status tool mutates a task by slug and returns structured failures", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const [createTasks, updateTaskStatus] = createGuideTools({
+    getActiveProject: () => activeProject,
     renameProject: () => {
-      throw new Error("should not rename while ticking a task");
+      throw new Error("should not rename while updating task status");
     },
     onRenameSuccess: () => {
-      throw new Error("should not retarget while ticking a task");
+      throw new Error("should not retarget while updating task status");
     },
     onProjectUpdate: () => {
-      throw new Error("should not emit project updates while ticking a task");
+      throw new Error(
+        "should not emit project updates while updating task status",
+      );
     },
     onCreatingStart: () => {
-      throw new Error("should not emit creating state while ticking a task");
+      throw new Error(
+        "should not emit creating state while updating task status",
+      );
     },
-  }).find((tool) => tool.name === "tick_task");
+  }).filter((tool) =>
+    ["create_tasks_artifact", "update_task_status"].includes(tool.name),
+  );
 
-  expect(tickTask).toBeDefined();
-  if (!tickTask) {
-    throw new Error("tick_task tool was not registered");
+  if (!createTasks || !updateTaskStatus) {
+    throw new Error("tasks artifact tools were not registered");
   }
+  expect(
+    Value.Check(updateTaskStatus.parameters, { task_slug: "", status: "done" }),
+  ).toBe(false);
+  expect(
+    Value.Check(updateTaskStatus.parameters, {
+      task_slug: "preview-it-as-a-learner",
+      status: "complete",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(updateTaskStatus.parameters, {
+      task_slug: "preview-it-as-a-learner",
+      status: "blocked",
+    }),
+  ).toBe(true);
 
-  const result = await tickTask.execute(
+  await createTasks.execute(
     "tool-call-1",
-    { piece_index: 1 },
+    {
+      issues: [
+        {
+          issue_path: "issues/01-create-the-first-quiz-draft.md",
+          title: "Create the first quiz draft",
+        },
+        {
+          issue_path: "issues/02-preview-it-as-a-learner.md",
+          title: "Preview it as a learner",
+        },
+      ],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+  const beforeMissing = readFileSync(
+    join(activeProject.path, "tasks.json"),
+    "utf8",
+  );
+
+  const missing = await updateTaskStatus.execute(
+    "tool-call-2",
+    { task_slug: "missing-task", status: "done" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(missing.details).toMatchObject({
+    ok: false,
+    code: "unknown_task_slug",
+    field: "task_slug",
+  });
+  expect(readFileSync(join(activeProject.path, "tasks.json"), "utf8")).toBe(
+    beforeMissing,
+  );
+
+  const result = await updateTaskStatus.execute(
+    "tool-call-3",
+    { task_slug: "preview-it-as-a-learner", status: "in_progress" },
     undefined,
     undefined,
     {} as never,
   );
 
   expect(result.details).toEqual({
-    ok: false,
-    code: "no_active_project",
-    message: "No active project is open.",
+    ok: true,
+    artifact: "tasks",
+    path: "tasks.json",
+    taskSlug: "preview-it-as-a-learner",
+    status: "in_progress",
   });
   expect(toolText(result)).toBe(
-    '{"ok":false,"code":"no_active_project","message":"No active project is open."}',
+    '{"ok":true,"artifact":"tasks","path":"tasks.json","taskSlug":"preview-it-as-a-learner","status":"in_progress"}',
   );
+  expect(
+    readFileSync(join(activeProject.path, "tasks.json"), "utf8"),
+  ).toContain('"status": "in_progress"');
 });
 
 test("create_brief_artifact tool validates and writes brief.json only", async () => {

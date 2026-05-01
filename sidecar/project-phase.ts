@@ -1,6 +1,7 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadBriefArtifact } from "./brief-artifact";
+import { loadTasksArtifact } from "./tasks-artifact";
 
 export type ProjectPhase =
   | "scoping"
@@ -24,33 +25,13 @@ function listMarkdown(dir: string): string[] {
     .sort();
 }
 
-const LI_ELEMENT = /<li\b[^>]*>[\s\S]*?<\/li>/gi;
-
-function checkboxStates(html: string): boolean[] {
-  const states = Array.from(html.matchAll(/<input\b[^>]*>/gi))
-    .map((match) => match[0])
-    .filter((tag) => /\btype\s*=\s*["']?checkbox["']?/i.test(tag))
-    .map((tag) => /\bchecked\b/i.test(tag));
-  if (states.length > 0) return states;
-
-  return Array.from(html.matchAll(LI_ELEMENT)).map((match) => {
-    const openTag = /<li\b[^>]*>/i.exec(match[0])?.[0] ?? "";
-    const classValue = /\sclass\s*=\s*(["'])(.*?)\1/i.exec(openTag)?.[2] ?? "";
-    const classes = classValue.split(/\s+/).filter(Boolean);
-    return classes.includes("checked") || classes.includes("done");
-  });
-}
-
 function deriveTasksPhase(projectPath: string): ProjectPhase | null {
-  const tasksPath = join(projectPath, "tasks.html");
-  if (!existsSync(tasksPath)) return null;
+  const artifact = loadTasksArtifact(projectPath);
+  if (!artifact) return null;
 
-  const html = readFileSync(tasksPath, "utf8");
-  if (!html.trim()) return null;
-
-  const states = checkboxStates(html);
-  if (states.length === 0) return null;
-  return states.every(Boolean) ? "implemented" : "implementing";
+  return artifact.data.tasks.every((task) => task.status === "done")
+    ? "implemented"
+    : "implementing";
 }
 
 export function getProjectState(projectPath: string): ProjectState {
