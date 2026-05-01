@@ -4,6 +4,12 @@ import {
   type Skill,
   type ToolDefinition,
 } from "@mariozechner/pi-coding-agent";
+import {
+  type BriefArtifactData,
+  type BriefArtifactResult,
+  createBriefArtifact,
+  updateBriefArtifact,
+} from "./brief-artifact";
 import type { Project, ProjectRenameResult } from "./project-store";
 import {
   SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
@@ -34,7 +40,71 @@ export type GuideToolsOptions = {
     projectRoot: string;
     pieceIndex: number;
   }) => TickTaskResult | Promise<TickTaskResult>;
+  createBriefArtifact?: (input: {
+    projectRoot: string;
+    data: BriefArtifactData;
+  }) => BriefArtifactResult | Promise<BriefArtifactResult>;
+  updateBriefArtifact?: (input: {
+    projectRoot: string;
+    data: BriefArtifactData;
+    reason: string;
+  }) => BriefArtifactResult | Promise<BriefArtifactResult>;
 };
+
+const briefSectionParameters = Type.Object(
+  {
+    heading: Type.String({
+      description: "Short heading for this Brief section.",
+      minLength: 1,
+    }),
+    body: Type.String({
+      description: "Plain-language body text for this Brief section.",
+      minLength: 1,
+    }),
+  },
+  { additionalProperties: false },
+);
+
+const briefArtifactParameters = {
+  title: Type.String({
+    description: "Plain-language name for the Project in the Brief.",
+    minLength: 1,
+  }),
+  summary: Type.String({
+    description: "One short paragraph explaining what the Project is.",
+    minLength: 1,
+  }),
+  audience: Type.String({
+    description: "Who this Project is for.",
+    minLength: 1,
+  }),
+  success: Type.String({
+    description: "What should feel true when this Project is useful.",
+    minLength: 1,
+  }),
+  sections: Type.Array(briefSectionParameters, {
+    description: "Brief sections to render in the Project tab.",
+    minItems: 1,
+  }),
+};
+
+function paramsToBriefData(params: BriefArtifactData): BriefArtifactData {
+  return {
+    title: params.title,
+    summary: params.summary,
+    audience: params.audience,
+    success: params.success,
+    sections: params.sections,
+  };
+}
+
+function noActiveProjectBriefResult(): BriefArtifactResult {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
 
 export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
   // Guide-specific tools live beside pi's filesystem tools via `customTools`.
@@ -43,6 +113,76 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
   // the persona can fold into its own voice. Artifact-writing work such as PRDs
   // and issues ships as skills; tools stay reserved for declared side effects.
   return [
+    defineTool({
+      name: "create_brief_artifact",
+      label: "Create Brief Artifact",
+      description:
+        "Create the Project Brief as schema-validated artifact data in brief.json. Use this instead of writing brief.html, brief.md, or raw JSON yourself.",
+      promptSnippet: "Create the schema-validated Brief artifact",
+      promptGuidelines: [
+        "Call create_brief_artifact when Scoping is complete and the Brief is ready to save.",
+        "Provide only plain-language content the user should see in the Project tab.",
+        "Do not write brief.html, brief.md, or brief.json directly; this tool owns the file envelope and validation.",
+        "Use structured validation failures to fix the named field and retry once when the missing content is obvious.",
+      ],
+      parameters: Type.Object(briefArtifactParameters, {
+        additionalProperties: false,
+      }),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.createBriefArtifact ?? createBriefArtifact)({
+              projectRoot: project.path,
+              data: paramsToBriefData(params),
+            })
+          : noActiveProjectBriefResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "update_brief_artifact",
+      label: "Update Brief Artifact",
+      description:
+        "Replace the Project Brief artifact data in brief.json after the user changes the agreement. Requires a short reason.",
+      promptSnippet: "Update the schema-validated Brief artifact",
+      promptGuidelines: [
+        "Call update_brief_artifact only when revising an existing Brief agreement.",
+        "Include a short reason that explains what changed, without exposing paths or implementation details.",
+        "Provide the complete replacement Brief content; partial patch updates are not supported.",
+        "Do not write brief.html, brief.md, or brief.json directly; this tool owns the file envelope and validation.",
+      ],
+      parameters: Type.Object(
+        {
+          ...briefArtifactParameters,
+          reason: Type.String({
+            description: "Short private reason for revising the Brief.",
+            minLength: 1,
+          }),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params) {
+        const project = options.getActiveProject();
+        const result = project
+          ? await (options.updateBriefArtifact ?? updateBriefArtifact)({
+              projectRoot: project.path,
+              data: paramsToBriefData(params),
+              reason: params.reason,
+            })
+          : noActiveProjectBriefResult();
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
     defineTool({
       name: "set_project_name",
       label: "Set Project Name",

@@ -16,7 +16,7 @@ args:
       description: The agreed smallest meaningful first slice, including any user clarifications.
     brief_path:
       type: string
-      description: Optional project-relative path to the saved Brief; defaults to brief.html.
+      description: Optional project-relative path to the saved Brief; defaults to brief.json.
 ---
 
 Write a product requirements document for the user-approved slice. This is silent planning work for the Guide: do not chat with the user, do not expose implementation paths to the user, and do not write anything unless the inputs support a useful PRD.
@@ -25,7 +25,7 @@ Write a product requirements document for the user-approved slice. This is silen
 
 Use both sources together:
 
-1. `<project>/brief.html`: the saved Brief for the Project. Treat it as the primary source of truth for what the user is trying to build, who it is for, and what should feel true when the Project is useful.
+1. `<project>/brief.json`: the saved Brief artifact for the Project. Treat its `data` as the primary source of truth for what the user is trying to build, who it is for, and what should feel true when the Project is useful.
 2. The current Session context: the slice the Guide proposed, the user's agreement or redirect, and any clarifications already given during Slicing.
 
 If the Brief and Session conflict, prefer the most recent explicit user direction in the Session, but keep the PRD consistent with the Brief's product intent.

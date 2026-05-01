@@ -1,6 +1,6 @@
 ---
 name: write-brief
-description: Generate the user-visible Brief artifact from a structured Scoping summary in the Guide's voice.
+description: Deprecated Brief writer; the Guide should use create_brief_artifact for schema-validated Brief data.
 disable-model-invocation: false
 response_schema: artifact_write
 args:
@@ -20,7 +20,7 @@ args:
       description: Optional working name to use if the user has already named the Project.
 ---
 
-Write `<project>/brief.html` from the provided Scoping summary. This is user-visible artifact work for the Guide: write the file silently, do not chat with the user, and do not mention file paths in the artifact.
+Do not write a Brief file. Brief creation now happens through the Guide's `create_brief_artifact` tool so the Project tab receives schema-validated `brief.json` data with a tool-owned envelope.
 
 ## Inputs
 
@@ -31,36 +31,15 @@ Use the structured `summary` as the source of truth. It should describe:
 - what should feel true when the Project is useful
 - constraints, preferences, or examples the user has already given
 
-If a load-bearing dimension is missing, do not write or modify `brief.html`. Return an `artifact_write` result with `outcome: "blocked"`, `path: ""`, and a short message naming the missing input.
+If invoked, do not write or modify `brief.html`, `brief.md`, or `brief.json`. Return an `artifact_write` result with `outcome: "blocked"`, `path: ""`, and a short message telling the Guide to call `create_brief_artifact` with the structured Brief fields.
 
 ## Output path
 
-Write the Brief to:
-
-`<project>/brief.html`
-
-Overwrite any existing file at that path. The file must be a complete HTML document with all CSS inline inside a `<style>` tag. Do not depend on external assets, scripts, fonts, or stylesheets.
+None. The canonical Brief path is `<project>/brief.json`, and it is owned by the `create_brief_artifact` and `update_brief_artifact` tools.
 
 ## Visual shell
 
-Use the same self-contained slideshow shell the Guide uses today:
-
-- a Kanagawa-inspired palette
-- a left-hand index of sections
-- a detailed view for the selected section on the right
-- responsive behavior that remains readable in a narrow panel
-- no lead-in description paragraph below the `Brief` title; go straight from the title to the section index
-
-Use these palette anchors unless the content needs a tiny adjustment for contrast:
-
-- dark ink background: `#1f1f28`
-- panel surface: `#2a2a37`
-- muted surface: `#363646`
-- text: `#dcd7ba`
-- muted text: `#c8c093`
-- warm Brief accent: `#e6c384`
-- red / rose accent for warnings or boundaries: `#c34043`
-- blue accent for secondary details: `#7e9cd8`
+The app owns Brief presentation. Do not generate HTML, CSS, scripts, or visual markup.
 
 ## Content guidance
 
@@ -78,8 +57,8 @@ Good section shapes include:
 
 Keep the Brief specific to the user's Project. Do not produce a generic product template, do not expose hidden reasoning, and do not mention this skill.
 
-After writing the file, return only one JSON object matching `artifact_write`:
+Return only one JSON object matching `artifact_write`:
 
 ```json
-{ "outcome": "complete", "message": "Brief written.", "path": "brief.html" }
+{ "outcome": "blocked", "message": "Use create_brief_artifact for the Brief.", "path": "" }
 ```

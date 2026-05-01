@@ -38,10 +38,26 @@ describe("App panel tabs", () => {
     sidecarSessionHandlers = null;
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
-        case "brief.md":
-          return "# Project brief\n\n## Shape\n\nThe existing brief.";
+        case "brief.json":
+          return JSON.stringify({
+            artifact: "brief",
+            schemaVersion: 1,
+            createdAt: "2026-05-01T12:00:00.000Z",
+            updatedAt: "2026-05-01T12:00:00.000Z",
+            data: {
+              title: "Video Quiz Helper",
+              summary: "A small tool for training videos.",
+              audience: "Team leads",
+              success: "A lead can share a quiz.",
+              sections: [
+                {
+                  heading: "What it does first",
+                  body: "It turns one training video into one quiz.",
+                },
+              ],
+            },
+          });
         case "tasks.html":
-        case "brief.html":
         case "plan.html":
         case "prds":
         case "issues":
@@ -59,7 +75,15 @@ describe("App panel tabs", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByTitle("Project brief slideshow")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Video Quiz Helper" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("It turns one training video into one quiz."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTitle("Project brief slideshow"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
 
@@ -75,7 +99,9 @@ describe("App panel tabs", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Project" }));
 
-    expect(screen.getByTitle("Project brief slideshow")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Video Quiz Helper" }),
+    ).toBeInTheDocument();
   });
 
   test("keeps creating indicator visible on the empty Plan tab", () => {
@@ -102,11 +128,27 @@ describe("App panel tabs", () => {
   test("shows Tasks tab only when tasks.html is non-empty and renders it", () => {
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
-        case "brief.md":
-          return "# Project brief\n\n## Shape\n\nThe existing brief.";
+        case "brief.json":
+          return JSON.stringify({
+            artifact: "brief",
+            schemaVersion: 1,
+            createdAt: "2026-05-01T12:00:00.000Z",
+            updatedAt: "2026-05-01T12:00:00.000Z",
+            data: {
+              title: "Video Quiz Helper",
+              summary: "A small tool for training videos.",
+              audience: "Team leads",
+              success: "A lead can share a quiz.",
+              sections: [
+                {
+                  heading: "What it does first",
+                  body: "It turns one training video into one quiz.",
+                },
+              ],
+            },
+          });
         case "tasks.html":
           return "<h1>Tasks</h1><ul><li>First piece</li></ul>";
-        case "brief.html":
         case "plan.html":
         case "prds":
         case "issues":
@@ -137,5 +179,15 @@ describe("App panel tabs", () => {
     expect(
       screen.queryByRole("tab", { name: "Tasks" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("Project tab reads brief.json without reading legacy brief.html", () => {
+    render(<App />);
+
+    expect(mockUseProjectFile).toHaveBeenCalledWith("brief.json");
+    expect(mockUseProjectFile).not.toHaveBeenCalledWith("brief.html");
+    expect(
+      screen.getByText("A small tool for training videos."),
+    ).toBeInTheDocument();
   });
 });

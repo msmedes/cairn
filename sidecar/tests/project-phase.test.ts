@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createBriefArtifact } from "../brief-artifact";
 import { getProjectState } from "../project-phase";
 
 function tempProject() {
@@ -16,11 +17,63 @@ function makeSlicedProject() {
   const path = tempProject();
   mkdirSync(join(path, "prds"));
   mkdirSync(join(path, "issues"));
-  write(path, "brief.html", "<h1>Brief</h1>");
+  createBriefArtifact({
+    projectRoot: path,
+    data: {
+      title: "Video Quiz Helper",
+      summary: "A small tool for turning training videos into simple quizzes.",
+      audience: "Team leads who need lightweight training checks.",
+      success:
+        "A lead can paste in a video, add questions, and share the quiz.",
+      sections: [
+        {
+          heading: "What it does first",
+          body: "It helps a lead create one quiz from one training video.",
+        },
+      ],
+    },
+    now: () => new Date("2026-05-01T12:00:00.000Z"),
+  });
   write(path, "prds/01-slice.md");
   write(path, "issues/01-task.md");
   return path;
 }
+
+test("project_state treats brief.json as the scoped Brief artifact", () => {
+  const path = tempProject();
+  createBriefArtifact({
+    projectRoot: path,
+    data: {
+      title: "Video Quiz Helper",
+      summary: "A small tool for turning training videos into simple quizzes.",
+      audience: "Team leads who need lightweight training checks.",
+      success:
+        "A lead can paste in a video, add questions, and share the quiz.",
+      sections: [
+        {
+          heading: "What it does first",
+          body: "It helps a lead create one quiz from one training video.",
+        },
+      ],
+    },
+    now: () => new Date("2026-05-01T12:00:00.000Z"),
+  });
+
+  expect(getProjectState(path)).toMatchObject({
+    brief: true,
+    phase: "scoped",
+  });
+});
+
+test("project_state ignores malformed brief.json", () => {
+  const path = tempProject();
+  write(path, "brief.json", '{"artifact":"brief"}');
+
+  expect(getProjectState(path)).toMatchObject({
+    brief: false,
+    phase: "scoping",
+  });
+});
 
 test("project_state reports implementing when tasks.html has an unchecked entry", () => {
   const path = makeSlicedProject();
