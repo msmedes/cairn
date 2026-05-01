@@ -1,5 +1,9 @@
 # PRD — Slice 02: Persistence and projects
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 The wife successfully scoped a project in v0 — typed an idea, answered questions, watched a brief get written next to the chat. She closes the app. The next morning she reopens it. The brief panel still shows what she made; the chat surface is empty. The persona, which has promised in its own voice that "last time we were working on...", has no memory of last time. She is stranded between an artifact she recognizes and a conversation that has been silently erased. The surface is lying about its own state.

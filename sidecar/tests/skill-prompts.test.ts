@@ -9,9 +9,9 @@ function readSkill(name: string) {
   );
 }
 
-function expectNoRawWrites(content: string, forbiddenPaths: string[]) {
+function expectNoRawWrites(content: string, canonicalPaths: string[]) {
   expect(content).toContain("Do not use raw Write or Edit");
-  for (const path of forbiddenPaths) {
+  for (const path of canonicalPaths) {
     expect(content).toContain(path);
   }
 }
@@ -25,12 +25,7 @@ test("write-brief requires Brief artifact and Project context tool calls", () =>
   expect(content).toContain('"outcome": "complete"');
   expect(content).toContain('"outcome": "failure"');
   expect(content).toContain('"outcome": "blocked"');
-  expectNoRawWrites(content, [
-    "brief.html",
-    "brief.md",
-    "brief.json",
-    "CONTEXT.md",
-  ]);
+  expectNoRawWrites(content, ["brief.json", "CONTEXT.md"]);
 });
 
 test("write-plan requires Plan artifact tool calls instead of raw file writes", () => {
@@ -41,7 +36,7 @@ test("write-plan requires Plan artifact tool calls instead of raw file writes", 
   expect(content).toContain("After the tool call finishes");
   expect(content).toContain('"outcome": "complete"');
   expect(content).toContain('"outcome": "failure"');
-  expectNoRawWrites(content, ["plan.html", "plan.md", "plan.json"]);
+  expectNoRawWrites(content, ["plan.json"]);
 });
 
 test("write-tasks requires Tasks artifact tool calls instead of raw file writes", () => {
@@ -51,5 +46,5 @@ test("write-tasks requires Tasks artifact tool calls instead of raw file writes"
   expect(content).toContain("After the tool call finishes");
   expect(content).toContain('"outcome": "complete"');
   expect(content).toContain('"outcome": "failure"');
-  expectNoRawWrites(content, ["tasks.html", "tasks.md", "tasks.json"]);
+  expectNoRawWrites(content, ["tasks.json"]);
 });

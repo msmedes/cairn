@@ -22,7 +22,7 @@ args:
 
 Generate the Brief content in the Guide's plain-language voice, then finish by calling the custom artifact and context tools. Call `create_brief_artifact` for the user-visible Brief data and call `update_project_context` for durable Project facts the Guide and future Sub-agents should remember.
 
-Do not use raw Write or Edit on `brief.html`, `brief.md`, `brief.json`, or `CONTEXT.md`. Do not create replacement files for the Brief or Project context. The Brief artifact tool owns `brief.json`; the Project context tool owns `CONTEXT.md`.
+Do not use raw Write or Edit for the Brief or Project context. Do not create replacement files for either one. The Brief artifact tool owns `brief.json`; the Project context tool owns `CONTEXT.md`.
 
 ## Inputs
 

@@ -150,7 +150,7 @@ describe("useCreatingIndicator", () => {
     {
       target: "tasks" as const,
       contentKey: "tasks" as const,
-      nextContent: "<h1>Tasks</h1>",
+      nextContent: '{"artifact":"tasks"}',
     },
   ])("$target clears when matching guide artifact appears", async (entry) => {
     const { result, rerender } = renderHook(

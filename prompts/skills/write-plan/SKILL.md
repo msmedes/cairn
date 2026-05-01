@@ -25,7 +25,7 @@ args:
 
 Generate the Plan content in the Guide's plain-language voice, then finish by calling the custom Plan artifact tool. Call `create_plan_artifact` for a new Plan. Call `update_plan_artifact` only when the inputs clearly say this is a revision of an existing Plan and provide a short reason.
 
-Do not use raw Write or Edit on `plan.html`, `plan.md`, or `plan.json`. Do not create replacement Plan files. The Plan artifact tools own `plan.json`, its schema validation, and its envelope metadata.
+Do not use raw Write or Edit for Plan artifact data. Do not create replacement Plan files. The Plan artifact tools own `plan.json`, its schema validation, and its envelope metadata.
 
 ## Inputs
 

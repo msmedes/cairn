@@ -386,7 +386,7 @@ export function createSubagentArtifactTools(options: { projectRoot: string }) {
       name: "create_brief_artifact",
       label: "Create Brief Artifact",
       description:
-        "Create the Project Brief as schema-validated artifact data in brief.json. Use this instead of writing brief.html, brief.md, or raw JSON yourself.",
+        "Create the Project Brief as schema-validated artifact data in brief.json. Use this instead of raw artifact writes.",
       parameters: toolSchemaFromZod(BriefArtifactDataSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
@@ -425,7 +425,7 @@ export function createSubagentArtifactTools(options: { projectRoot: string }) {
       name: "create_plan_artifact",
       label: "Create Plan Artifact",
       description:
-        "Create the current Slice Plan as schema-validated artifact data in plan.json. Use this instead of writing plan.html, plan.md, or raw JSON yourself.",
+        "Create the current Slice Plan as schema-validated artifact data in plan.json. Use this instead of raw artifact writes.",
       parameters: toolSchemaFromZod(PlanArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {
@@ -464,7 +464,7 @@ export function createSubagentArtifactTools(options: { projectRoot: string }) {
       name: "create_tasks_artifact",
       label: "Create Tasks Artifact",
       description:
-        "Create the Tasks tab as schema-validated artifact data in tasks.json. Use this instead of writing tasks.html or raw JSON yourself.",
+        "Create the Tasks tab as schema-validated artifact data in tasks.json. Use this instead of raw artifact writes.",
       parameters: toolSchemaFromZod(createTasksArtifactToolParamsSchema),
       executionMode: "sequential",
       async execute(_toolCallId, params) {

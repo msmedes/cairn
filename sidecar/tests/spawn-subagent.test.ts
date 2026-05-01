@@ -84,12 +84,12 @@ const cases: Array<{
     successText: JSON.stringify({
       outcome: "complete",
       message: "Wrote it.",
-      path: "brief.html",
+      path: "brief.json",
     }),
     success: {
       outcome: "complete",
       message: "Wrote it.",
-      path: "brief.html",
+      path: "brief.json",
     },
     failureText: JSON.stringify({
       outcome: "failure",

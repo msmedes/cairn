@@ -1,5 +1,9 @@
 # PRD — Slice 07: Composable `spawn_subagent` dispatch
 
+## Superseded by Slice 08
+
+This PRD records the historical slice design. Slice 08 and ADR 0005 supersede its generated-HTML artifact assumptions: Brief, Plan, and Tasks are now schema-validated JSON Artifact data, rendered by the app, and task progress is slug-based rather than index-based HTML mutation.
+
 ## Problem Statement
 
 The persona's main context absorbs the full bytes of every user-visible artifact it produces. Today, when the persona generates `brief.html` (~5 KB), `plan.html` (~4 KB), `tasks.html` (~2 KB), or any PRD or issue markdown, those bytes flow through Opus 4.7's context as the assistant message that contains the `Write` tool call. Per real session inspection (`~/.guide/projects/2026-04-30-new-baby-log`), a single project's planning phase emits ~20 KB of artifact bytes through the persona's context across the brief / PRD / issues / plan steps, before any Implementing work begins. At Opus pricing this is real money over time, and it scales with project complexity rather than with conversational complexity.
