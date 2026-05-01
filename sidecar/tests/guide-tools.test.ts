@@ -28,7 +28,7 @@ test("set_project_name tool renames the active project and reports the updated p
   const renamedPairs: Array<[Project, Project]> = [];
   const emittedProjects: Project[] = [];
 
-  const [setProjectName] = createGuideTools({
+  const setProjectName = createGuideTools({
     getActiveProject: () => activeProject,
     renameProject: (id, displayName) => store.rename(id, displayName),
     onRenameSuccess: (previousProject, nextProject) => {
@@ -39,8 +39,12 @@ test("set_project_name tool renames the active project and reports the updated p
     onCreatingStart: () => {
       throw new Error("should not emit creating state while naming");
     },
-  });
+  }).find((tool) => tool.name === "set_project_name");
 
+  expect(setProjectName).toBeDefined();
+  if (!setProjectName) {
+    throw new Error("set_project_name tool was not registered");
+  }
   expect(setProjectName.name).toBe("set_project_name");
   expect(setProjectName.executionMode).toBe("sequential");
 
@@ -69,7 +73,7 @@ test("set_project_name tool renames the active project and reports the updated p
 });
 
 test("set_project_name tool keeps voice-safe failure messages inside the tool result", async () => {
-  const [setProjectName] = createGuideTools({
+  const setProjectName = createGuideTools({
     getActiveProject: () => null,
     renameProject: () => {
       throw new Error("should not rename without an active project");
@@ -83,7 +87,12 @@ test("set_project_name tool keeps voice-safe failure messages inside the tool re
     onCreatingStart: () => {
       throw new Error("should not emit creating state while naming");
     },
-  });
+  }).find((tool) => tool.name === "set_project_name");
+
+  expect(setProjectName).toBeDefined();
+  if (!setProjectName) {
+    throw new Error("set_project_name tool was not registered");
+  }
 
   const result = await setProjectName.execute(
     "tool-call-1",
@@ -388,5 +397,148 @@ test("tick_task tool returns structured failure without an active project", asyn
   });
   expect(toolText(result)).toBe(
     '{"ok":false,"code":"no_active_project","message":"No active project is open."}',
+  );
+});
+
+test("create_brief_artifact tool validates and writes brief.json only", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const createBrief = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while creating a brief artifact");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while creating a brief artifact");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while creating a brief artifact",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while creating a brief artifact",
+      );
+    },
+  }).find((tool) => tool.name === "create_brief_artifact");
+
+  expect(createBrief).toBeDefined();
+  if (!createBrief) {
+    throw new Error("create_brief_artifact tool was not registered");
+  }
+  expect(createBrief.executionMode).toBe("sequential");
+  expect(Value.Check(createBrief.parameters, { title: "" })).toBe(false);
+
+  const result = await createBrief.execute(
+    "tool-call-1",
+    {
+      title: "Video Quiz Helper",
+      summary: "A small tool for turning training videos into simple quizzes.",
+      audience: "Team leads who need lightweight training checks.",
+      success:
+        "A lead can paste in a video, add questions, and share the quiz.",
+      sections: [
+        {
+          heading: "What it does first",
+          body: "It helps a lead create one quiz from one training video.",
+        },
+      ],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: true,
+    artifact: "brief",
+    path: "brief.json",
+    title: "Video Quiz Helper",
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":true,"artifact":"brief","path":"brief.json","schemaVersion":1,"title":"Video Quiz Helper","sectionCount":1}',
+  );
+  expect(
+    readFileSync(join(activeProject.path, "brief.json"), "utf8"),
+  ).toContain('"artifact": "brief"');
+  expect(() =>
+    readFileSync(join(activeProject.path, "brief.html"), "utf8"),
+  ).toThrow();
+});
+
+test("update_brief_artifact tool requires a reason and returns field validation errors", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const [createBrief, updateBrief] = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while updating a brief artifact");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while updating a brief artifact");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while updating a brief artifact",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while updating a brief artifact",
+      );
+    },
+  }).filter((tool) =>
+    ["create_brief_artifact", "update_brief_artifact"].includes(tool.name),
+  );
+
+  if (!createBrief || !updateBrief) {
+    throw new Error("brief artifact tools were not registered");
+  }
+
+  const validInput = {
+    title: "Video Quiz Helper",
+    summary: "A small tool for turning training videos into simple quizzes.",
+    audience: "Team leads who need lightweight training checks.",
+    success: "A lead can paste in a video, add questions, and share the quiz.",
+    sections: [
+      {
+        heading: "What it does first",
+        body: "It helps a lead create one quiz from one training video.",
+      },
+    ],
+  };
+  await createBrief.execute(
+    "tool-call-1",
+    validInput,
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(Value.Check(updateBrief.parameters, validInput)).toBe(false);
+
+  const result = await updateBrief.execute(
+    "tool-call-2",
+    { ...validInput, reason: " " },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: false,
+    code: "validation_error",
+    field: "reason",
+    message: "Update reason is required.",
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":false,"code":"validation_error","field":"reason","message":"Update reason is required."}',
   );
 });

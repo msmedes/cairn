@@ -153,7 +153,7 @@ export class ProjectStore {
   rename(id: string, displayName: string): ProjectRenameResult {
     // Renaming updates displayName in metadata only. The on-disk directory
     // and project id stay fixed at their create-time slug so any path the
-    // running agent has already learned (brief.html absolute path, the
+    // running agent has already learned (artifact absolute paths, the
     // project root passed into skills) remains valid for the rest of the
     // session. Without this, a rename mid-session would orphan subsequent
     // writes into a phantom directory recreated at the old path.

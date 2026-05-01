@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { loadBriefArtifact } from "./brief-artifact";
 
 export type ProjectPhase =
   | "scoping"
@@ -53,7 +54,7 @@ function deriveTasksPhase(projectPath: string): ProjectPhase | null {
 }
 
 export function getProjectState(projectPath: string): ProjectState {
-  const brief = existsSync(join(projectPath, "brief.html"));
+  const brief = loadBriefArtifact(projectPath) !== null;
   const prds = listMarkdown(join(projectPath, "prds"));
   const issues = listMarkdown(join(projectPath, "issues"));
 

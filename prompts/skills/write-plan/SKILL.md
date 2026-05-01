@@ -17,7 +17,7 @@ args:
       description: The slice the Guide proposed and the user agreed to.
     brief_path:
       type: string
-      description: Project-relative path to the Brief, normally brief.html.
+      description: Project-relative path to the Brief, normally brief.json.
     issues_directory:
       type: string
       description: Project-relative path to the issue files directory, normally issues/.

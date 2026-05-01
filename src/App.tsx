@@ -7,6 +7,11 @@ import {
   useState,
 } from "react";
 import "./App.css";
+import { BriefArtifactView } from "./BriefArtifactView";
+import {
+  type BriefArtifactEnvelope,
+  parseBriefArtifact,
+} from "./briefArtifact";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { buildSlidesDocument } from "./projectSlides";
 import { useActivePanelTab } from "./useActivePanelTab";
@@ -61,26 +66,19 @@ function htmlToMarkdown(html: string): string {
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
-  const projectSlidesHtml = useProjectFile("brief.html");
+  const projectBriefJson = useProjectFile("brief.json");
   const planSlidesHtml = useProjectFile("plan.html");
   const tasksHtml = useProjectFile("tasks.html");
-  const projectBriefMarkdown = useProjectFile("brief.md");
   const projectPrdsListing = useProjectFile("prds");
   const projectIssuesListing = useProjectFile("issues");
-  const hasProjectSlidesHtml = projectSlidesHtml.trim().length > 0;
+  const projectBriefArtifact: BriefArtifactEnvelope | null = useMemo(
+    () => parseBriefArtifact(projectBriefJson),
+    [projectBriefJson],
+  );
   const hasPlanSlidesHtml = planSlidesHtml.trim().length > 0;
   const hasTasksHtml = tasksHtml.trim().length > 0;
-  const hasProjectBriefMarkdown = projectBriefMarkdown.trim().length > 0;
-  const normalizedProjectBrief = hasProjectBriefMarkdown
-    ? projectBriefMarkdown
-    : hasProjectSlidesHtml
-      ? htmlToMarkdown(projectSlidesHtml)
-      : "";
   const normalizedPlan = hasPlanSlidesHtml
     ? htmlToMarkdown(planSlidesHtml)
-    : "";
-  const projectSlidesDoc = normalizedProjectBrief
-    ? buildSlidesDocument(normalizedProjectBrief)
     : "";
   const planSlidesDoc = normalizedPlan
     ? buildSlidesDocument(normalizedPlan)
@@ -91,15 +89,15 @@ function App() {
   );
   const creatingContent = useMemo(
     () => ({
-      brief: normalizedProjectBrief,
+      brief: projectBriefJson,
       prd: projectPrdsListing,
       issues: projectIssuesListing,
       plan: normalizedPlan,
       tasks: tasksHtml,
     }),
     [
-      normalizedProjectBrief,
       normalizedPlan,
+      projectBriefJson,
       projectPrdsListing,
       projectIssuesListing,
       tasksHtml,
@@ -163,13 +161,15 @@ function App() {
       : []),
   ];
   const activeSlidesDoc =
-    activeTab === "project"
-      ? projectSlidesDoc
-      : activeTab === "plan"
-        ? planSlidesDoc
-        : tasksHtml;
+    activeTab === "plan"
+      ? planSlidesDoc
+      : activeTab === "tasks"
+        ? tasksHtml
+        : "";
+  const showBriefArtifact = activeTab === "project" && projectBriefArtifact;
   const showPlanEmptyState = activeTab === "plan" && !planSlidesDoc;
-  const placeholderCreating = activeSlidesDoc ? null : creating;
+  const placeholderCreating =
+    activeSlidesDoc || showBriefArtifact ? null : creating;
   const appStyle: CSSProperties = {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
@@ -300,7 +300,19 @@ function App() {
           }
         />
         <div className="panel-body">
-          {activeSlidesDoc ? (
+          {showBriefArtifact ? (
+            <div
+              className={`brief-artifact-shell${creating ? " brief-artifact-shell-creating" : ""}`}
+            >
+              <BriefArtifactView data={projectBriefArtifact.data} />
+              {creating && (
+                <section className="panel-creating-overlay" aria-live="polite">
+                  <p className="panel-kicker">Working draft</p>
+                  <h2>{creating.message}</h2>
+                </section>
+              )}
+            </div>
+          ) : activeSlidesDoc ? (
             <div
               className={`project-slides-shell${creating ? " project-slides-shell-creating" : ""}`}
             >
