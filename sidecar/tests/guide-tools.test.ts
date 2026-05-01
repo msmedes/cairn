@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Value } from "typebox/value";
@@ -402,5 +402,101 @@ test("spawn_subagent tool has bounded skill and response schema parameters", asy
   expect(result.details).toEqual(spawnResult);
   expect(toolText(result)).toBe(
     '{"outcome":"blocked","message":"Need a decision before continuing."}',
+  );
+});
+
+test("tick_task tool mutates the active project's tasks.html and returns confirmation", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const tasksPath = join(activeProject.path, "tasks.html");
+  writeFileSync(
+    tasksPath,
+    "<ol><li>First piece</li><li>Second piece</li></ol>",
+    "utf8",
+  );
+
+  const tickTask = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while ticking a task");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while ticking a task");
+    },
+    onProjectUpdate: () => {
+      throw new Error("should not emit project updates while ticking a task");
+    },
+    onCreatingStart: () => {
+      throw new Error("should not emit creating state while ticking a task");
+    },
+  }).find((tool) => tool.name === "tick_task");
+
+  expect(tickTask).toBeDefined();
+  if (!tickTask) {
+    throw new Error("tick_task tool was not registered");
+  }
+  expect(tickTask.executionMode).toBe("sequential");
+  expect(Value.Check(tickTask.parameters, { piece_index: 2 })).toBe(true);
+  expect(Value.Check(tickTask.parameters, { pieceIndex: 2 })).toBe(false);
+  expect(tickTask.promptGuidelines?.join("\n")).toContain(
+    'tick_task(N) after each complete from spawn_subagent("implement-issue"',
+  );
+  expect(tickTask.promptGuidelines?.join("\n")).toContain("raw edit");
+
+  const result = await tickTask.execute(
+    "tool-call-1",
+    { piece_index: 2 },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({ ok: true, message: "Marked task 2 done." });
+  expect(toolText(result)).toBe("Marked task 2 done.");
+  expect(readFileSync(tasksPath, "utf8")).toBe(
+    '<ol><li>First piece</li><li class="done">Second piece</li></ol>',
+  );
+});
+
+test("tick_task tool returns structured failure without an active project", async () => {
+  const tickTask = createGuideTools({
+    getActiveProject: () => null,
+    renameProject: () => {
+      throw new Error("should not rename while ticking a task");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while ticking a task");
+    },
+    onProjectUpdate: () => {
+      throw new Error("should not emit project updates while ticking a task");
+    },
+    onCreatingStart: () => {
+      throw new Error("should not emit creating state while ticking a task");
+    },
+  }).find((tool) => tool.name === "tick_task");
+
+  expect(tickTask).toBeDefined();
+  if (!tickTask) {
+    throw new Error("tick_task tool was not registered");
+  }
+
+  const result = await tickTask.execute(
+    "tool-call-1",
+    { piece_index: 1 },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":false,"code":"no_active_project","message":"No active project is open."}',
   );
 });

@@ -38,6 +38,7 @@ import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 import type { SpawnSubagentResult } from "./spawn-subagent";
 import type { StartTaskResult } from "./start-task";
+import type { TickTaskResult } from "./tick-task";
 import type { VerifySliceResult } from "./verify-slice";
 
 type InMsg =
@@ -166,6 +167,18 @@ function getFakeSpawnSubagentResultFromEnv():
   return async () => JSON.parse(raw) as SpawnSubagentResult;
 }
 
+function getFakeTickTaskResultFromEnv():
+  | ((input: {
+      projectRoot: string;
+      pieceIndex: number;
+    }) => Promise<TickTaskResult>)
+  | undefined {
+  const raw = process.env.GUIDE_FAKE_TICK_TASK_RESULT;
+  if (!raw) return undefined;
+
+  return async () => JSON.parse(raw) as TickTaskResult;
+}
+
 function findLastToolResultText(context: Context) {
   for (let index = context.messages.length - 1; index >= 0; index -= 1) {
     const message = context.messages[index];
@@ -209,6 +222,44 @@ function getFakeProtocolSpawnModel():
   const authStorage = AuthStorage.inMemory();
   authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
   return { model, authStorage };
+}
+
+function getFakeProtocolTickTaskModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_TICK_TASK !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "tick_task",
+        {
+          piece_index: 2,
+        },
+        { id: "tool-tick-task" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `tick_task result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
+}
+
+function getFakeProtocolModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  return getFakeProtocolSpawnModel() ?? getFakeProtocolTickTaskModel();
 }
 
 function extractAssistantText(content: unknown): string {
@@ -365,14 +416,14 @@ async function openProject(
     ? SessionManager.continueRecent(cwd, sessionDir)
     : SessionManager.create(cwd, sessionDir);
 
-  const fakeProtocolSpawn = getFakeProtocolSpawnModel();
+  const fakeProtocol = getFakeProtocolModel();
   const { session: nextSession } = await createAgentSession({
     cwd,
     agentDir: getAgentDir(),
     resourceLoader,
     sessionManager: nextSessionManager,
-    model: fakeProtocolSpawn?.model,
-    authStorage: fakeProtocolSpawn?.authStorage,
+    model: fakeProtocol?.model,
+    authStorage: fakeProtocol?.authStorage,
     customTools: createGuideTools({
       getActiveProject: () => activeProject,
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
@@ -386,6 +437,7 @@ async function openProject(
       getLoadedSkills: () => resourceLoader.getSkills().skills,
       spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
       startTask: getFakeStartTaskResultFromEnv(),
+      tickTask: getFakeTickTaskResultFromEnv(),
       verifySlice: getFakeVerifySliceResultFromEnv(),
     }),
   });

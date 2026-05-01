@@ -8,7 +8,13 @@
  */
 
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -79,6 +85,22 @@ function createPersonaFile(
 
 function projectsRootFor(homeDir: string): string {
   return join(homeDir, ".guide", "projects");
+}
+
+function createStoredProject(homeDir: string, id = "2026-04-30-test-project") {
+  const projectPath = join(projectsRootFor(homeDir), id);
+  mkdirSync(join(projectPath, "sessions"), { recursive: true });
+  writeFileSync(
+    join(projectPath, "project.json"),
+    JSON.stringify({
+      id,
+      name: "Test Project",
+      createdAt: "2026-04-30T12:00:00.000Z",
+      lastOpenedAt: "2026-04-30T12:00:00.000Z",
+    }),
+    "utf8",
+  );
+  return projectPath;
 }
 
 function writeToSidecar(proc: SubprocessHandle, line: string) {
@@ -271,6 +293,51 @@ test(
       .join("");
     expect(text).toContain(
       'spawn_subagent result: {"outcome":"blocked","message":"Need product input."}',
+    );
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
+  "tick_task mutates tasks.html through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const projectPath = createStoredProject(guideHome);
+    const tasksPath = join(projectPath, "tasks.html");
+    writeFileSync(
+      tasksPath,
+      "<ol><li>First piece</li><li>Second piece</li></ol>",
+      "utf8",
+    );
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_TICK_TASK: "1",
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Mark the second task done.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain("tick_task result: Marked task 2 done.");
+    expect(readFileSync(tasksPath, "utf8")).toBe(
+      '<ol><li>First piece</li><li class="done">Second piece</li></ol>',
     );
   },
   DEFAULT_TIMEOUT_MS,
