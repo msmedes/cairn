@@ -234,3 +234,44 @@ test("init emits an error event when personaPath does not exist", async () => {
   expect(errorEvents.at(-1)?.type).toBe("error");
   expect(errorEvents.at(-1)?.message).toContain("missing-persona.md");
 });
+
+test(
+  "spawn_subagent fake result flows through the sidecar protocol",
+  async () => {
+    const guideHome = createGuideHome();
+    const proc = spawnSidecar(guideHome, {
+      GUIDE_FAKE_PROTOCOL_SPAWN_SUBAGENT: "1",
+      GUIDE_FAKE_SPAWN_SUBAGENT_RESULT: JSON.stringify({
+        outcome: "blocked",
+        message: "Need product input.",
+      }),
+    });
+    const personaPath = createPersonaFile("You are the Guide.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Start the first slice.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain(
+      'spawn_subagent result: {"outcome":"blocked","message":"Need product input."}',
+    );
+  },
+  DEFAULT_TIMEOUT_MS,
+);

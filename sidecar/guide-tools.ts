@@ -1,6 +1,16 @@
 import { Type } from "@mariozechner/pi-ai";
-import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent";
+import {
+  defineTool,
+  type Skill,
+  type ToolDefinition,
+} from "@mariozechner/pi-coding-agent";
 import type { Project, ProjectRenameResult } from "./project-store";
+import {
+  SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
+  SPAWN_SUBAGENT_SKILL_NAMES,
+  type SpawnSubagentResult,
+  spawnSubagent as spawnSubagentInProject,
+} from "./spawn-subagent";
 import {
   type StartTaskResult,
   startTask as startTaskInProject,
@@ -18,6 +28,15 @@ export type GuideToolsOptions = {
   onRenameSuccess: (previousProject: Project, nextProject: Project) => void;
   onProjectUpdate: (project: Project) => void;
   onCreatingStart: (target: CreatingTarget, message: string) => void;
+  getLoadedSkills?: () => Skill[];
+  spawnSubagent?: (input: {
+    projectRoot: string;
+    skillName: (typeof SPAWN_SUBAGENT_SKILL_NAMES)[number];
+    args: Record<string, unknown>;
+    responseSchema: (typeof SPAWN_SUBAGENT_RESPONSE_SCHEMAS)[number];
+    loadedSkills: Skill[];
+    signal?: AbortSignal;
+  }) => Promise<SpawnSubagentResult>;
   startTask?: (input: {
     projectRoot: string;
     issuePath: string;
@@ -124,6 +143,74 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
             },
           ],
           details: { ok: true, target: params.target },
+        };
+      },
+    }),
+    defineTool({
+      name: "spawn_subagent",
+      label: "Spawn Sub-agent",
+      description:
+        "Dispatch a headless Guide Sub-agent with a named skill, structured args, and an expected structured response schema.",
+      promptSnippet: "Run isolated skill work in a headless Guide Sub-agent",
+      promptGuidelines: [
+        "Use spawn_subagent for isolated skill work; pass a known skill_name, a structured args object, and the response_schema that matches the skill's expected output.",
+        "On task_outcome complete, continue the current workflow; on failure retry once if the same call can plausibly succeed; on blocked stop and surface concrete options.",
+        "On verify_result ok true, continue; on ok false, treat it as blocked-class.",
+        "On artifact_write complete, use the returned path only as private confirmation; on failure or blocked, stop and explain plainly.",
+      ],
+      parameters: Type.Object(
+        {
+          // Keep this literal union in sync with prompts/skills and the
+          // dispatcher allowlist in spawn-subagent.ts.
+          skill_name: Type.Union(
+            SPAWN_SUBAGENT_SKILL_NAMES.map((name) => Type.Literal(name)),
+            {
+              description: "The known Guide skill to run in isolation.",
+            },
+          ),
+          args: Type.Object(
+            {},
+            {
+              additionalProperties: true,
+              description: "Structured arguments for the named skill.",
+            },
+          ),
+          response_schema: Type.Union(
+            SPAWN_SUBAGENT_RESPONSE_SCHEMAS.map((name) => Type.Literal(name)),
+            {
+              description:
+                'Expected structured response shape: "task_outcome", "verify_result", or "artifact_write".',
+            },
+          ),
+        },
+        { additionalProperties: false },
+      ),
+      executionMode: "sequential",
+      async execute(_toolCallId, params, signal) {
+        const project = options.getActiveProject();
+        if (!project) {
+          const result: SpawnSubagentResult = {
+            outcome: "blocked",
+            message: "No active project is open.",
+          };
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result,
+          };
+        }
+
+        const result = await (options.spawnSubagent ?? spawnSubagentInProject)({
+          projectRoot: project.path,
+          skillName: params.skill_name,
+          args: params.args as Record<string, unknown>,
+          responseSchema: params.response_schema,
+          loadedSkills: options.getLoadedSkills?.() ?? [],
+          signal,
+        });
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
         };
       },
     }),

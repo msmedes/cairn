@@ -11,8 +11,16 @@ import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type Context,
+  fauxAssistantMessage,
+  fauxToolCall,
+  type Model,
+  registerFauxProvider,
+} from "@mariozechner/pi-ai";
+import {
   type AgentSession,
   type AgentSessionEvent,
+  AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
@@ -28,6 +36,7 @@ import {
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
+import type { SpawnSubagentResult } from "./spawn-subagent";
 import type { StartTaskResult } from "./start-task";
 import type { VerifySliceResult } from "./verify-slice";
 
@@ -140,6 +149,66 @@ function getFakeVerifySliceResultFromEnv():
   if (!raw) return undefined;
 
   return async () => JSON.parse(raw) as VerifySliceResult;
+}
+
+function getFakeSpawnSubagentResultFromEnv():
+  | ((input: {
+      projectRoot: string;
+      skillName: string;
+      args: Record<string, unknown>;
+      responseSchema: string;
+      signal?: AbortSignal;
+    }) => Promise<SpawnSubagentResult>)
+  | undefined {
+  const raw = process.env.GUIDE_FAKE_SPAWN_SUBAGENT_RESULT;
+  if (!raw) return undefined;
+
+  return async () => JSON.parse(raw) as SpawnSubagentResult;
+}
+
+function findLastToolResultText(context: Context) {
+  for (let index = context.messages.length - 1; index >= 0; index -= 1) {
+    const message = context.messages[index];
+    if (message.role !== "toolResult") continue;
+    return message.content
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("");
+  }
+  return "";
+}
+
+function getFakeProtocolSpawnModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.GUIDE_FAKE_PROTOCOL_SPAWN_SUBAGENT !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "guide-protocol-test",
+    models: [{ id: "guide-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "spawn_subagent",
+        {
+          skill_name: "write-prd",
+          args: { slice: "first" },
+          response_schema: "task_outcome",
+        },
+        { id: "tool-spawn-subagent" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `spawn_subagent result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  return { model, authStorage };
 }
 
 function extractAssistantText(content: unknown): string {
@@ -296,11 +365,14 @@ async function openProject(
     ? SessionManager.continueRecent(cwd, sessionDir)
     : SessionManager.create(cwd, sessionDir);
 
+  const fakeProtocolSpawn = getFakeProtocolSpawnModel();
   const { session: nextSession } = await createAgentSession({
     cwd,
     agentDir: getAgentDir(),
     resourceLoader,
     sessionManager: nextSessionManager,
+    model: fakeProtocolSpawn?.model,
+    authStorage: fakeProtocolSpawn?.authStorage,
     customTools: createGuideTools({
       getActiveProject: () => activeProject,
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
@@ -311,6 +383,8 @@ async function openProject(
       onCreatingStart: (target, message) => {
         emit({ type: "creating_started", target, message });
       },
+      getLoadedSkills: () => resourceLoader.getSkills().skills,
+      spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
       startTask: getFakeStartTaskResultFromEnv(),
       verifySlice: getFakeVerifySliceResultFromEnv(),
     }),

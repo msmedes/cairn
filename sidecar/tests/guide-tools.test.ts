@@ -7,6 +7,7 @@ import type { CreatingTarget } from "../guide-tools";
 import { createGuideTools } from "../guide-tools";
 import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
+import type { SpawnSubagentResult } from "../spawn-subagent";
 import type { VerifySliceResult } from "../verify-slice";
 
 function tempProjectsRoot() {
@@ -315,5 +316,91 @@ test("verify_slice tool is registered without required persona parameters", asyn
   expect(result.details).toEqual(verifyResult);
   expect(toolText(result)).toBe(
     '{"ok":false,"message":"The build did not pass yet."}',
+  );
+});
+
+test("spawn_subagent tool has bounded skill and response schema parameters", async () => {
+  const store = new ProjectStore(tempProjectsRoot());
+  const activeProject = store.create(
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const spawnResult: SpawnSubagentResult = {
+    outcome: "blocked",
+    message: "Need a decision before continuing.",
+  };
+  const spawnSubagent = createGuideTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while spawning a sub-agent");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while spawning a sub-agent");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while spawning a sub-agent",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while spawning a sub-agent",
+      );
+    },
+    getLoadedSkills: () => [],
+    spawnSubagent: async ({ projectRoot, skillName, args, responseSchema }) => {
+      expect(projectRoot).toBe(activeProject.path);
+      expect(skillName).toBe("write-prd");
+      expect(args).toEqual({ slice: "first" });
+      expect(responseSchema).toBe("task_outcome");
+      return spawnResult;
+    },
+  }).find((tool) => tool.name === "spawn_subagent");
+
+  expect(spawnSubagent).toBeDefined();
+  if (!spawnSubagent) {
+    throw new Error("spawn_subagent tool was not registered");
+  }
+  expect(spawnSubagent.executionMode).toBe("sequential");
+  expect(
+    Value.Check(spawnSubagent.parameters, {
+      skill_name: "write-prd",
+      args: { slice: "first" },
+      response_schema: "task_outcome",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(spawnSubagent.parameters, {
+      skill_name: "wrtie-prd",
+      args: { slice: "first" },
+      response_schema: "task_outcome",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(spawnSubagent.parameters, {
+      skill_name: "write-prd",
+      args: { slice: "first" },
+      response_schema: "unknown",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(spawnSubagent.parameters, { skill_name: "write-prd" }),
+  ).toBe(false);
+
+  const result = await spawnSubagent.execute(
+    "tool-call-1",
+    {
+      skill_name: "write-prd",
+      args: { slice: "first" },
+      response_schema: "task_outcome",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual(spawnResult);
+  expect(toolText(result)).toBe(
+    '{"outcome":"blocked","message":"Need a decision before continuing."}',
   );
 });
