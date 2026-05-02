@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
@@ -42,6 +42,7 @@ export const SPAWN_SUBAGENT_SKILL_NAMES = [
   "write-prd",
   "write-issue",
   "implement-issue",
+  "review-issue",
   "verify-slice",
 ] as const;
 
@@ -87,6 +88,7 @@ export type RunSubAgent = (input: {
   cwd: string;
   prompt: string;
   systemPrompt: string;
+  skillPaths: string[];
   env: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }) => Promise<PiSubAgentResult>;
@@ -270,10 +272,9 @@ function responseShape(schema: SpawnSubagentResponseSchema) {
 }
 
 export function buildSpawnSubagentSystemPrompt(
-  skillContent: string,
   responseSchema: SpawnSubagentResponseSchema,
 ) {
-  return `${skillContent.trim()}
+  return `You are a headless Guide Sub-agent. The user message invokes the assigned skill with /skill:name; load and follow that skill using pi's native skill expansion. Also load and apply any matching available skills, especially quality-code for TypeScript or full-stack implementation/review work.
 
 Structured response instruction:
 When the work is complete, do not write a final prose answer. Call the finish_subagent tool exactly once with arguments matching this exact shape for ${responseSchema}:
@@ -282,9 +283,11 @@ ${responseShape(responseSchema)}
 The finish_subagent tool call is the only completion signal. Do not include markdown fences, prose, or additional keys.`;
 }
 
-function readSkillContent(skill: Skill) {
-  const raw = readFileSync(skill.filePath, "utf8");
-  return raw.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+function buildSpawnSubagentPrompt(
+  skillName: SpawnSubagentSkillName,
+  args: Record<string, unknown>,
+) {
+  return `/skill:${skillName} ${JSON.stringify(args, null, 2)}`;
 }
 
 function parseDepth(env: NodeJS.ProcessEnv) {
@@ -374,12 +377,14 @@ export async function runPiSubAgent({
   cwd,
   prompt,
   systemPrompt,
+  skillPaths,
   env,
   signal,
 }: {
   cwd: string;
   prompt: string;
   systemPrompt: string;
+  skillPaths: string[];
   env: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }): Promise<PiSubAgentResult> {
@@ -387,6 +392,7 @@ export async function runPiSubAgent({
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir: getAgentDir(),
+      additionalSkillPaths: skillPaths,
       systemPromptOverride: () => systemPrompt,
       appendSystemPromptOverride: () => [],
     });
@@ -643,21 +649,18 @@ export async function spawnSubagent(
     };
   }
 
-  let systemPrompt: string;
-  try {
-    systemPrompt = buildSpawnSubagentSystemPrompt(
-      readSkillContent(skill),
-      input.responseSchema,
-    );
-  } catch (err) {
+  if (!existsSync(skill.filePath)) {
     return failureForSchema(
       input.responseSchema,
-      shortMessage(
-        err instanceof Error ? err.message : String(err),
-        "Could not read sub-agent skill.",
-      ),
+      `Could not read sub-agent skill: ${skill.filePath}`,
     );
   }
+
+  const systemPrompt = buildSpawnSubagentSystemPrompt(input.responseSchema);
+  const prompt = buildSpawnSubagentPrompt(input.skillName, input.args);
+  const skillPaths = input.loadedSkills.map(
+    (loadedSkill) => loadedSkill.filePath,
+  );
 
   const nextEnv = {
     ...env,
@@ -667,8 +670,9 @@ export async function spawnSubagent(
   try {
     nativeResult = await (input.runSubAgent ?? runPiSubAgent)({
       cwd: input.projectRoot,
-      prompt: JSON.stringify(input.args),
+      prompt,
       systemPrompt,
+      skillPaths,
       env: nextEnv,
       signal: input.signal,
     });

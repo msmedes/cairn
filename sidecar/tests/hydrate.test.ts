@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 import type { SessionEntry } from "@mariozechner/pi-coding-agent";
-import { translateSessionEntriesToHydrateEvent } from "../hydrate";
+import {
+  translateSessionEntriesToDevLogMessages,
+  translateSessionEntriesToHydrateEvent,
+} from "../hydrate";
 
 function messageEntry(
   id: string,
@@ -134,4 +137,45 @@ test("translateSessionEntriesToHydrateEvent preserves multi-block text exactly",
       },
     ],
   });
+});
+
+test("translateSessionEntriesToDevLogMessages includes tool calls and results", () => {
+  const assistantEntry = messageEntry("assistant-1", "assistant", [
+    {
+      type: "toolCall",
+      id: "call-1",
+      name: "spawn_subagent",
+      arguments: {
+        skill_name: "implement-issue",
+        response_schema: "task_outcome",
+      },
+    } as never,
+  ]);
+  const toolEntry = messageEntry("tool-1", "toolResult", [
+    { type: "text", text: '{"outcome":"complete","message":"Done"}' },
+  ]);
+
+  const assistantMessage = (assistantEntry as { message: unknown }).message;
+  const toolMessage = (toolEntry as { message: unknown }).message;
+
+  expect(
+    translateSessionEntriesToDevLogMessages([assistantEntry, toolEntry]),
+  ).toEqual([
+    {
+      type: "session_event",
+      event: {
+        type: "message_end",
+        timestamp: "2026-04-28T00:00:00.000Z",
+        message: assistantMessage,
+      },
+    },
+    {
+      type: "session_event",
+      event: {
+        type: "message_end",
+        timestamp: "2026-04-28T00:00:00.000Z",
+        message: toolMessage,
+      },
+    },
+  ]);
 });

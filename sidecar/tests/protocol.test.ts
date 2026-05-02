@@ -199,7 +199,9 @@ test("Guide-bundled slicing skills are discoverable by the sidecar resource load
     "write-prd",
     "write-issue",
     "implement-issue",
+    "review-issue",
     "verify-slice",
+    "quality-code",
   ]) {
     const skill = skillByName.get(name);
     expect(skill).toBeDefined();

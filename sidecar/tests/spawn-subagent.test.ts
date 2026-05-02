@@ -254,7 +254,7 @@ test("spawnSubagent maps runner rejections to the requested failure shape", asyn
   });
 });
 
-test("spawnSubagent maps unreadable skill files to the requested failure shape", async () => {
+test("spawnSubagent maps missing skill files to the requested failure shape", async () => {
   const projectRoot = tempProjectRoot();
   const skill = writeSkill(projectRoot, "write-prd");
   skill.filePath = join(projectRoot, "missing", "SKILL.md");
@@ -276,12 +276,18 @@ test("spawnSubagent maps unreadable skill files to the requested failure shape",
   });
 });
 
-test("spawnSubagent composes the skill prompt, serializes args, and increments depth", async () => {
+test("spawnSubagent invokes skills through pi skill loading and increments depth", async () => {
   const projectRoot = tempProjectRoot();
   const skill = writeSkill(projectRoot, "write-prd", "Write the PRD.");
+  const qualitySkill = writeSkill(
+    projectRoot,
+    "quality-code",
+    "Quality rules.",
+  );
   const launches: Array<{
     prompt: string;
     systemPrompt: string;
+    skillPaths: string[];
     env: NodeJS.ProcessEnv;
   }> = [];
 
@@ -290,10 +296,10 @@ test("spawnSubagent composes the skill prompt, serializes args, and increments d
     skillName: "write-prd",
     args: { title: "First slice" },
     responseSchema: "artifact_write",
-    loadedSkills: [skill],
+    loadedSkills: [skill, qualitySkill],
     env: { GUIDE_SUBAGENT_DEPTH: "1" },
-    runSubAgent: async ({ prompt, systemPrompt, env }) => {
-      launches.push({ prompt, systemPrompt, env });
+    runSubAgent: async ({ prompt, systemPrompt, skillPaths, env }) => {
+      launches.push({ prompt, systemPrompt, skillPaths, env });
       return {
         stopReason: "end_turn",
         finalText: JSON.stringify({
@@ -311,12 +317,19 @@ test("spawnSubagent composes the skill prompt, serializes args, and increments d
     path: "prds/first.md",
   });
   expect(launches).toHaveLength(1);
-  expect(launches[0].prompt).toBe('{"title":"First slice"}');
-  expect(launches[0].systemPrompt).toContain("Write the PRD.");
+  expect(launches[0].prompt).toBe(
+    '/skill:write-prd {\n  "title": "First slice"\n}',
+  );
+  expect(launches[0].systemPrompt).not.toContain("Write the PRD.");
   expect(launches[0].systemPrompt).toContain("artifact_write");
   expect(launches[0].systemPrompt).toContain(
     "Call the finish_subagent tool exactly once",
   );
+  expect(launches[0].systemPrompt).toContain("quality-code");
+  expect(launches[0].skillPaths).toEqual([
+    skill.filePath,
+    qualitySkill.filePath,
+  ]);
   expect(launches[0].env.GUIDE_SUBAGENT_DEPTH).toBe("2");
 });
 
@@ -329,15 +342,15 @@ test("sub-agent sessions persist under a nested project session directory", () =
 });
 
 test("buildSpawnSubagentSystemPrompt names every response shape", () => {
-  expect(
-    buildSpawnSubagentSystemPrompt("Skill body", "task_outcome"),
-  ).toContain('"outcome": "complete" | "failure" | "blocked"');
-  expect(
-    buildSpawnSubagentSystemPrompt("Skill body", "verify_result"),
-  ).toContain('"ok": boolean');
-  expect(
-    buildSpawnSubagentSystemPrompt("Skill body", "artifact_write"),
-  ).toContain('"path": string');
+  expect(buildSpawnSubagentSystemPrompt("task_outcome")).toContain(
+    '"outcome": "complete" | "failure" | "blocked"',
+  );
+  expect(buildSpawnSubagentSystemPrompt("verify_result")).toContain(
+    '"ok": boolean',
+  );
+  expect(buildSpawnSubagentSystemPrompt("artifact_write")).toContain(
+    '"path": string',
+  );
 });
 
 test("sub-agent project context tool writes CONTEXT.md in the project root", async () => {

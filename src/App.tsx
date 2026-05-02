@@ -12,6 +12,7 @@ import {
   type BriefArtifactEnvelope,
   parseBriefArtifact,
 } from "./briefArtifact";
+import { DevModeLayer } from "./DevModeLayer";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { PlanArtifactView } from "./PlanArtifactView";
 import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
@@ -31,6 +32,7 @@ import {
   usePaneSplit,
 } from "./usePaneSplit";
 import { useProjectFile } from "./useProjectFile";
+import { useSidecarDevLog } from "./useSidecarDevLog";
 import { useSidecarSession } from "./useSidecarSession";
 
 type GuideSettingsStatus = {
@@ -106,6 +108,7 @@ function App() {
     onHydrate: handleHydrate,
     onError: clearCreatingOnError,
   });
+  const { events: devEvents, clearEvents: clearDevEvents } = useSidecarDevLog();
   const listRef = useAutoScroll();
   const { composerRef, inputRef } = useAutoResizingTextarea();
   const {
@@ -225,6 +228,11 @@ function App() {
             >
               API key
             </button>
+            <DevModeLayer
+              messages={messages}
+              events={devEvents}
+              onEventsCleared={clearDevEvents}
+            />
             <span
               className={`status ${statusClass}`}
               title={error ?? undefined}

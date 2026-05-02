@@ -13,6 +13,21 @@ export type HydrateEvent = {
   messages: HydrateMessage[];
 };
 
+export type HydrateDevLogMessage = {
+  type: "session_event";
+  event: {
+    type: "message_end";
+    timestamp?: string;
+    message: unknown;
+  };
+  source?: {
+    kind: "parent" | "subagent";
+    agentId: string;
+    parentAgentId?: string;
+    sessionFile?: string;
+  };
+};
+
 function extractText(content: unknown): string {
   if (typeof content === "string") {
     return content;
@@ -72,4 +87,27 @@ export function translateSessionEntriesToHydrateEvent(
       return message ? [message] : [];
     }),
   };
+}
+
+export function translateSessionEntriesToDevLogMessages(
+  entries: Array<{ type?: string; timestamp?: string; message?: unknown }>,
+  source?: HydrateDevLogMessage["source"],
+): HydrateDevLogMessage[] {
+  return entries.flatMap((entry) => {
+    if (entry.type !== "message") {
+      return [];
+    }
+
+    return [
+      {
+        type: "session_event",
+        event: {
+          type: "message_end",
+          timestamp: entry.timestamp,
+          message: entry.message,
+        },
+        ...(source ? { source } : {}),
+      },
+    ];
+  });
 }

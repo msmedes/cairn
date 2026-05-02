@@ -33,6 +33,9 @@ struct SidecarState {
     last_hydrate: StdMutex<Option<Vec<HydratedMessage>>>,
     // Empty on a fresh install until the first prompt creates a project.
     active_project: StdMutex<Option<ActiveProject>>,
+    // Recent raw sidecar dev events. The frontend pulls this after subscribing
+    // so events emitted during startup/hydration are not lost.
+    last_dev_logs: StdMutex<Vec<Value>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -85,6 +88,7 @@ const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
 const SIDECAR_BIN_NAME: &str = "guide-sidecar";
 const MAX_DEV_LOG_TEXT_CHARS: usize = 240;
+const MAX_DEV_LOG_EVENTS: usize = 1000;
 
 fn guide_store_dir() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
@@ -456,6 +460,9 @@ async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> 
     if let Ok(mut guard) = state.last_hydrate.lock() {
         *guard = Some(vec![]);
     }
+    if let Ok(mut guard) = state.last_dev_logs.lock() {
+        guard.clear();
+    }
     let payload = serde_json::json!({ "type": "new_project" });
     write_line(&state.stdin, &payload).await
 }
@@ -488,6 +495,15 @@ fn get_active_project(state: State<'_, Arc<SidecarState>>) -> Option<ActiveProje
         .lock()
         .ok()
         .and_then(|guard| guard.clone())
+}
+
+#[tauri::command]
+fn get_sidecar_dev_logs(state: State<'_, Arc<SidecarState>>) -> Vec<Value> {
+    state
+        .last_dev_logs
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -566,6 +582,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     }
     if let Ok(mut slot) = state.active_project.lock() {
         *slot = None;
+    }
+    if let Ok(mut slot) = state.last_dev_logs.lock() {
+        slot.clear();
     }
 
     let mut command = match &paths.spawn {
@@ -702,6 +721,7 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     // stderr — dev log only.
     {
         let app = app.clone();
+        let state = state.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
@@ -715,6 +735,13 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                         let log_line =
                             format_sidecar_dev_log(&value).unwrap_or_else(|| value.to_string());
                         eprintln!("[sidecar:dev] {}", log_line);
+                        if let Ok(mut slot) = state.last_dev_logs.lock() {
+                            slot.push(value.clone());
+                            if slot.len() > MAX_DEV_LOG_EVENTS {
+                                let drain_count = slot.len() - MAX_DEV_LOG_EVENTS;
+                                slot.drain(0..drain_count);
+                            }
+                        }
                         let _ = app.emit(SIDECAR_DEV_EVENT, value);
                     }
                     Err(_) => {
@@ -822,6 +849,7 @@ pub fn run() {
             get_guide_settings,
             set_anthropic_api_key,
             get_sidecar_status,
+            get_sidecar_dev_logs,
             read_project_file
         ])
         .on_window_event({
