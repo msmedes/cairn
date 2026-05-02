@@ -473,10 +473,10 @@ describe("App panel tabs", () => {
         payload: {
           type: "agent_threads",
           threads: [
-            { id: "guide", parentId: null, label: "Guide", kind: "guide" },
+            { id: "cairn", parentId: null, label: "Cairn", kind: "cairn" },
             {
               id: childAgentId,
-              parentId: "guide",
+              parentId: "cairn",
               label: "implement-issue: 01-import-screen.md",
               kind: "subagent",
               sessionFile: "/tmp/session.jsonl",
@@ -485,11 +485,11 @@ describe("App panel tabs", () => {
         },
       },
       {
-        id: "guide-tool",
+        id: "cairn-tool",
         receivedAt: "2026-05-02T12:00:01.000Z",
         payload: {
           type: "session_event",
-          source: { kind: "parent", agentId: "guide" },
+          source: { kind: "parent", agentId: "cairn" },
           event: {
             type: "message_end",
             message: {
@@ -519,7 +519,7 @@ describe("App panel tabs", () => {
           source: {
             kind: "subagent",
             agentId: childAgentId,
-            parentAgentId: "guide",
+            parentAgentId: "cairn",
             sessionFile: "/tmp/session.jsonl",
           },
           event: {
@@ -551,7 +551,7 @@ describe("App panel tabs", () => {
       name: "Agent",
     });
     expect(
-      within(agentSelect).getByRole("option", { name: "Guide (2)" }),
+      within(agentSelect).getByRole("option", { name: "Cairn (2)" }),
     ).toBeInTheDocument();
     expect(
       within(agentSelect).getByRole("option", {
@@ -571,7 +571,7 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
 
     fireEvent.change(agentSelect, {
-      target: { value: "guide" },
+      target: { value: "cairn" },
     });
 
     expect(
@@ -589,7 +589,7 @@ describe("App panel tabs", () => {
         receivedAt: "2026-05-02T12:00:01.123Z",
         payload: {
           type: "session_event",
-          source: { kind: "parent", agentId: "guide" },
+          source: { kind: "parent", agentId: "cairn" },
           event: {
             type: "message_end",
             timestamp: "2026-05-02T12:00:01.123Z",
@@ -622,7 +622,7 @@ describe("App panel tabs", () => {
         receivedAt: "2026-05-02T12:00:02.000Z",
         payload: {
           type: "session_event",
-          source: { kind: "parent", agentId: "guide" },
+          source: { kind: "parent", agentId: "cairn" },
           event: {
             type: "message_end",
             message: {
@@ -678,7 +678,7 @@ describe("App panel tabs", () => {
         receivedAt: "2026-05-02T12:00:01.123Z",
         payload: {
           type: "session_event",
-          source: { kind: "parent", agentId: "guide" },
+          source: { kind: "parent", agentId: "cairn" },
           event: {
             type: "message_end",
             timestamp: "2026-05-02T12:00:01.123Z",
@@ -715,7 +715,7 @@ describe("App panel tabs", () => {
         receivedAt: "2026-05-02T12:00:02.000Z",
         payload: {
           type: "session_event",
-          source: { kind: "parent", agentId: "guide" },
+          source: { kind: "parent", agentId: "cairn" },
           event: {
             type: "message_end",
             message: {

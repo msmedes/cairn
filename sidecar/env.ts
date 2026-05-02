@@ -39,8 +39,8 @@ export function loadRepoLocalEnv() {
   }
 }
 
-export function loadGuideSettingsEnv() {
-  const settingsPath = resolve(homedir(), ".guide", "settings.json");
+export function loadCairnSettingsEnv() {
+  const settingsPath = resolve(homedir(), ".cairn", "settings.json");
   if (!existsSync(settingsPath)) return;
 
   let parsed: unknown;

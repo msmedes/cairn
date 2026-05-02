@@ -6,7 +6,7 @@ This PRD records the historical slice design. Slice 08 and ADR 0005 supersede it
 
 ## Problem Statement
 
-The persona's main context absorbs the full bytes of every user-visible artifact it produces. Today, when the persona generates `brief.html` (~5 KB), `plan.html` (~4 KB), `tasks.html` (~2 KB), or any PRD or issue markdown, those bytes flow through Opus 4.7's context as the assistant message that contains the `Write` tool call. Per real session inspection (`~/.guide/projects/2026-04-30-new-baby-log`), a single project's planning phase emits ~20 KB of artifact bytes through the persona's context across the brief / PRD / issues / plan steps, before any Implementing work begins. At Opus pricing this is real money over time, and it scales with project complexity rather than with conversational complexity.
+The persona's main context absorbs the full bytes of every user-visible artifact it produces. Today, when the persona generates `brief.html` (~5 KB), `plan.html` (~4 KB), `tasks.html` (~2 KB), or any PRD or issue markdown, those bytes flow through Opus 4.7's context as the assistant message that contains the `Write` tool call. Per real session inspection (`~/.cairn/projects/2026-04-30-new-baby-log`), a single project's planning phase emits ~20 KB of artifact bytes through the persona's context across the brief / PRD / issues / plan steps, before any Implementing work begins. At Opus pricing this is real money over time, and it scales with project complexity rather than with conversational complexity.
 
 It also creates a coupling that hurts as the system grows. The persona is forced to be the entity producing the artifact bytes, which means every persona-prompt edit risks affecting artifact quality, and every artifact-generation prompt change happens inside the persona's monolithic system prompt. The two responsibilities — *talking to the user* and *producing engineering artifacts* — are tangled.
 
@@ -41,7 +41,7 @@ This slice's user is the developer; the end user's experience is unchanged. Stor
 
 ### `spawn_subagent` custom tool
 
-A new pi.dev custom tool registered in `sidecar/guide-tools.ts`. The thin tool surface is intentional; the deep module behind it carries the work.
+A new pi.dev custom tool registered in `sidecar/cairn-tools.ts`. The thin tool surface is intentional; the deep module behind it carries the work.
 
 Parameters:
 
@@ -69,7 +69,7 @@ The deep module is the test seam — pure-function `mapSubAgentResult` per schem
 
 ### Existing tools retired
 
-- `start_task` (the custom tool surface in `guide-tools.ts`) is removed. The persona prompt is updated to use `spawn_subagent({ skill_name: "implement-issue", args: { issuePath }, response_schema: "task_outcome" })`.
+- `start_task` (the custom tool surface in `cairn-tools.ts`) is removed. The persona prompt is updated to use `spawn_subagent({ skill_name: "implement-issue", args: { issuePath }, response_schema: "task_outcome" })`.
 - `verify_slice` (the custom tool surface) is removed. Replaced by `spawn_subagent({ skill_name: "verify-slice", args: {}, response_schema: "verify_result" })`.
 
 The deep modules `start-task.ts` and `verify-slice.ts` survive in spirit — their pi.dev sub-agent invocation patterns are absorbed into `spawn-subagent.ts`. The files themselves may be deleted if the new module fully subsumes them; that decision belongs to the implementing developer.
@@ -139,7 +139,7 @@ The existing `start_task` / `verify_slice` synthesis paths can be removed once t
 
 Both `skill_name` and `response_schema` are TypeBox literal unions, not free-form strings. Pi.dev validates tool-call parameters against the schema before dispatch; a typo (`"wrtie-plan"`) produces a tool-call rejection that the persona observes and corrects, rather than reaching the deep module and returning `blocked`. This is a defense-in-depth: the deep module still handles unknown-skill cases (in case the union grows out of sync with loaded skills), but the common case is caught earlier.
 
-When a new skill is added, the literal union in `spawn_subagent`'s parameters needs to be updated. Worth a comment in `guide-tools.ts` calling this out.
+When a new skill is added, the literal union in `spawn_subagent`'s parameters needs to be updated. Worth a comment in `cairn-tools.ts` calling this out.
 
 ## Testing Decisions
 
@@ -157,7 +157,7 @@ When a new skill is added, the literal union in `spawn_subagent`'s parameters ne
 
 - `sidecar/tests/start-task.test.ts` — terminal-state mapping pattern for pi.dev sub-agent results.
 - `sidecar/tests/dangling-tool-recovery.test.ts` — pure-function recovery synthesis pattern; extension is mechanical.
-- `sidecar/tests/guide-tools.test.ts` — custom-tool registration assertions; the new `spawn_subagent` and `tick_task` tools follow the same pattern.
+- `sidecar/tests/cairn-tools.test.ts` — custom-tool registration assertions; the new `spawn_subagent` and `tick_task` tools follow the same pattern.
 
 ### Tests deliberately not written
 

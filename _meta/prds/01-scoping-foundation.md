@@ -6,25 +6,25 @@ A non-technical person has an idea for a small piece of software — a quiz tool
 
 ## Solution
 
-A native desktop app whose front door is one person — the Guide — running a short, kind, Socratic conversation. The user types what they have in mind. The Guide asks a small number of concrete questions, in plain language, until it has enough to write a one-page summary of the project. The summary appears in a panel next to the chat as it's being written. When the Guide judges it has enough, the brief is saved as a markdown file in a workspace folder on the user's machine. The user has produced a real artifact — a project brief — without knowing they did "scoping."
+A native desktop app whose front door is one person — the Cairn — running a short, kind, Socratic conversation. The user types what they have in mind. The Cairn asks a small number of concrete questions, in plain language, until it has enough to write a one-page summary of the project. The summary appears in a panel next to the chat as it's being written. When the Cairn judges it has enough, the brief is saved as a markdown file in a workspace folder on the user's machine. The user has produced a real artifact — a project brief — without knowing they did "scoping."
 
 The user never sees code, file paths, error messages, terminal output, stack traces, tool calls, or diffs. The chat surface is the only place text appears, and the persona is the only voice that produces it.
 
 ## User Stories
 
 1. As a non-technical user, I want to open the app and see a clear, friendly invitation to describe my idea, so that I'm not staring at an empty terminal-looking screen.
-2. As a non-technical user, I want to type a vague idea ("a quiz app for training videos") and have the Guide ask follow-up questions, so that I don't have to know how to phrase a complete spec.
+2. As a non-technical user, I want to type a vague idea ("a quiz app for training videos") and have the Cairn ask follow-up questions, so that I don't have to know how to phrase a complete spec.
 3. As a non-technical user, I want each question to be one short, concrete thing in plain language, so that I don't feel grilled or confused.
-4. As a non-technical user, I want to see a project brief growing in a panel next to the chat as I answer, so that I can see what the Guide is taking from my answers and catch misunderstandings early.
+4. As a non-technical user, I want to see a project brief growing in a panel next to the chat as I answer, so that I can see what the Cairn is taking from my answers and catch misunderstandings early.
 5. As a non-technical user, I want to never see code, file paths, error messages, terminal output, or stack traces, so that the experience never breaks the persona of "talking to someone helpful."
-6. As a non-technical user, I want the Guide to write the brief to a file when there's enough information, and tell me where it saved it in plain language, so that I have a real artifact at the end of the conversation.
-7. As a non-technical user, I want the Guide's voice to feel like a thoughtful friend — short sentences, no jargon, no "great idea!" — so that the experience feels respectful of my intelligence.
-8. As a non-technical user, if the Guide doesn't understand my answer, I want it to ask a clarifying question rather than guessing, so that the brief reflects what I actually meant.
-9. As a non-technical user, if the Guide hits a technical snag while writing the brief, I want it to say "I hit a snag, let me try again" in plain language, so that I never see a stack trace or error code.
+6. As a non-technical user, I want the Cairn to write the brief to a file when there's enough information, and tell me where it saved it in plain language, so that I have a real artifact at the end of the conversation.
+7. As a non-technical user, I want the Cairn's voice to feel like a thoughtful friend — short sentences, no jargon, no "great idea!" — so that the experience feels respectful of my intelligence.
+8. As a non-technical user, if the Cairn doesn't understand my answer, I want it to ask a clarifying question rather than guessing, so that the brief reflects what I actually meant.
+9. As a non-technical user, if the Cairn hits a technical snag while writing the brief, I want it to say "I hit a snag, let me try again" in plain language, so that I never see a stack trace or error code.
 10. As the project owner, I want to start the app with a single command (`bun tauri dev`), so that v0 has zero installation ceremony for me to demo.
 11. As the project owner, I want the persona prompt to live in a versionable text file (not hardcoded in source), so that I can iterate on the voice without recompiling the Rust binary.
 12. As the project owner, I want all sub-agent tool calls (file reads/writes, etc.) to be invisible to the user but visible to me in a developer log, so that I can debug without polluting the user surface.
-13. As the project owner, I want the Guide to use pi-coding-agent's session machinery, with our persona as the system prompt, so that I inherit pi's session handling, model resolution, tool ecosystem, and tree state rather than reimplementing them.
+13. As the project owner, I want the Cairn to use pi-coding-agent's session machinery, with our persona as the system prompt, so that I inherit pi's session handling, model resolution, tool ecosystem, and tree state rather than reimplementing them.
 14. As the project owner, I want the workspace path (where the brief gets written) to be configurable, so that I can later support multiple projects without rearchitecting.
 
 ## Implementation Decisions
@@ -54,7 +54,7 @@ The user never sees code, file paths, error messages, terminal output, stack tra
 A good test for this slice exercises external behavior — what the user sees, and what artifacts get produced — rather than internal pi mechanics or React component innards. Two layers:
 
 - **Sidecar protocol smoke test (automated, `bun test`)**: spawns the sidecar binary as a subprocess, writes an `init` followed by a `prompt` on stdin, asserts the sequence of emitted event types is sensible (at minimum `ready` → at least one `text_delta` → `agent_end`). Catches protocol regressions and pi version-bump breakage independent of agent behavior. Mocks no models — runs against the real pi-coding-agent. Skipped in CI without an API key; runs locally.
-- **End-to-end smoke (manual, scripted)**: launch app, type a representative scoping prompt ("I want a quiz app for training videos"), verify (a) the Guide responds in the kind/concrete tone defined in `prompts/persona.md`, (b) the project brief panel shows content within ~10 s, (c) the brief reflects the user's stated intent, (d) no technical jargon, file paths, errors, or stack traces appear in the chat. This is the load-bearing test for v0; run it after every persona-prompt iteration.
+- **End-to-end smoke (manual, scripted)**: launch app, type a representative scoping prompt ("I want a quiz app for training videos"), verify (a) the Cairn responds in the kind/concrete tone defined in `prompts/persona.md`, (b) the project brief panel shows content within ~10 s, (c) the brief reflects the user's stated intent, (d) no technical jargon, file paths, errors, or stack traces appear in the chat. This is the load-bearing test for v0; run it after every persona-prompt iteration.
 
 We deliberately do not write:
 - **Persona-quality unit tests** — voice is tuned by reading transcripts, not asserting strings.

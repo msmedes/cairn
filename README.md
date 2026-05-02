@@ -1,8 +1,8 @@
-# Guide
+# Cairn
 
 A native (Tauri 2) app that helps non-technical people build small, useful software by walking them through a workflow they don't know exists: scope what you want, slice it into a first chunk, build that chunk, repeat.
 
-The user talks to a single voice — the **Guide** — that owns every technical decision. Headless **sub-agents** do the actual coding underneath, on a [pi-coding-agent](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) harness. The user never sees code, diffs, errors, or terminal output.
+The user talks to a single voice — the **Cairn** — that owns every technical decision. Headless **sub-agents** do the actual coding underneath, on a [pi-coding-agent](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) harness. The user never sees code, diffs, errors, or terminal output.
 
 For full domain language, see [`CONTEXT.md`](./CONTEXT.md). For the v0 scope, see [`_meta/project-brief.md`](./_meta/project-brief.md).
 
@@ -53,7 +53,7 @@ This starts Vite on `localhost:1420`, builds the sidecar in-tree, and opens the 
 
 ## Build
 
-Produce a packaged `Guide.app` and a plain `.dmg`:
+Produce a packaged `Cairn.app` and a plain `.dmg`:
 
 ```sh
 bun run build:app
@@ -86,7 +86,7 @@ scripts/         Build helpers
 _meta/           ADRs, PRDs, issues, project brief (engineering scaffolding)
 ```
 
-Per-user runtime state (the user's actual Projects) lives outside the repo at `~/.guide/projects/`.
+Per-user runtime state (the user's actual Projects) lives outside the repo at `~/.cairn/projects/`.
 
 ## License
 

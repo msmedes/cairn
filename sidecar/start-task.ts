@@ -154,7 +154,7 @@ export function buildStartTaskPrompt(input: {
   prdPath: string;
   prdMarkdown: string;
 }) {
-  return `You are a Guide Sub-agent working inside the active Project working tree.
+  return `You are a Cairn Sub-agent working inside the active Project working tree.
 
 Implement exactly the issue below. Use red-green TDD: for each acceptance criterion, write or update a test first, run it and confirm it fails for the expected reason, then make the smallest implementation change that passes it. Re-run the relevant verification before you stop.
 
@@ -201,7 +201,7 @@ export async function runPiSubAgent({
     cwd,
     agentDir: getAgentDir(),
     systemPromptOverride: () =>
-      "You are a headless Guide Sub-agent. Do the assigned coding work silently and return the requested structured JSON only.",
+      "You are a headless Cairn Sub-agent. Do the assigned coding work silently and return the requested structured JSON only.",
     appendSystemPromptOverride: () => [],
   });
   await resourceLoader.reload();

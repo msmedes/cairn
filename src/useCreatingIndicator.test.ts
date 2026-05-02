@@ -152,7 +152,7 @@ describe("useCreatingIndicator", () => {
       contentKey: "tasks" as const,
       nextContent: '{"artifact":"tasks"}',
     },
-  ])("$target clears when matching guide artifact appears", async (entry) => {
+  ])("$target clears when matching cairn artifact appears", async (entry) => {
     const { result, rerender } = renderHook(
       (content) => useCreatingIndicator(content),
       {

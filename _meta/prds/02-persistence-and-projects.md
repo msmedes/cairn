@@ -12,21 +12,21 @@ She also currently has no way to scope a *second* idea without overwriting the f
 
 ## Solution
 
-The Guide remembers. When the wife reopens it, the chat surface shows the conversation she had last time, scrolled to where they paused. If meaningful time has gone by, the persona quietly orients her — *"Last time we were sketching out who would make the quizzes — want to keep going there, or change direction?"* — without her having to ask. If she had two ideas going, she'll be able to pick which one to come back to (the picker UI itself lands in the next slice; this slice ships the on-disk shape it will need).
+The Cairn remembers. When the wife reopens it, the chat surface shows the conversation she had last time, scrolled to where they paused. If meaningful time has gone by, the persona quietly orients her — *"Last time we were sketching out who would make the quizzes — want to keep going there, or change direction?"* — without her having to ask. If she had two ideas going, she'll be able to pick which one to come back to (the picker UI itself lands in the next slice; this slice ships the on-disk shape it will need).
 
-Each idea now lives as a self-contained **project** under `~/.guide/projects/<slug>/`, holding the brief, the conversation, and (later) any code. When she's said enough for a brief to be written, the persona — in its own voice, not as a forced prompt — asks what to call the project, and the folder is renamed to a human-readable slug she can recognize on disk. She still never sees a path or an ID, but if she ever did look, what she'd see is a folder named after her idea, not a UUID.
+Each idea now lives as a self-contained **project** under `~/.cairn/projects/<slug>/`, holding the brief, the conversation, and (later) any code. When she's said enough for a brief to be written, the persona — in its own voice, not as a forced prompt — asks what to call the project, and the folder is renamed to a human-readable slug she can recognize on disk. She still never sees a path or an ID, but if she ever did look, what she'd see is a folder named after her idea, not a UUID.
 
 ## User Stories
 
 1. As a non-technical user, I want the conversation I had yesterday to be there when I reopen the app today, so that I don't have to re-explain what I'm building.
-2. As a non-technical user, I want the Guide to greet me with where we left off when I come back after meaningful time away, so that I'm oriented without having to read back through everything myself.
-3. As a non-technical user, I want the Guide *not* to greet me with "last time we were working on..." if I just reopened the app two minutes after closing it, so that the recap doesn't feel mechanical or performative.
+2. As a non-technical user, I want the Cairn to greet me with where we left off when I come back after meaningful time away, so that I'm oriented without having to read back through everything myself.
+3. As a non-technical user, I want the Cairn *not* to greet me with "last time we were working on..." if I just reopened the app two minutes after closing it, so that the recap doesn't feel mechanical or performative.
 4. As a non-technical user, I want each project I'm building to be its own thing — its own conversation, its own brief, its own folder — so that scoping a second idea doesn't blow away the first.
-5. As a non-technical user, I want the Guide to ask me what to call the project at a moment that feels natural in the conversation (after the brief is taking shape), so that I'm naming something I can already see, not naming a void.
+5. As a non-technical user, I want the Cairn to ask me what to call the project at a moment that feels natural in the conversation (after the brief is taking shape), so that I'm naming something I can already see, not naming a void.
 6. As a non-technical user, I want the project name I give to be the one I'd recognize on disk if I ever looked, so that I'm never confronted with an opaque ID.
-7. As a non-technical user, I want the Guide to handle two projects with the same name without surfacing the conflict to me, so that I can call two things "Quiz Tool" if I want to and Guide handles the disambiguation silently.
+7. As a non-technical user, I want the Cairn to handle two projects with the same name without surfacing the conflict to me, so that I can call two things "Quiz Tool" if I want to and Cairn handles the disambiguation silently.
 8. As a non-technical user, I want the brief panel to show the brief for whichever project I'm currently in, so that the right-hand context always matches the conversation in the chat.
-9. As a non-technical user, I want the conversation to keep working even after it has been going for a while, so that long iteration doesn't degrade Guide's ability to respond.
+9. As a non-technical user, I want the conversation to keep working even after it has been going for a while, so that long iteration doesn't degrade Cairn's ability to respond.
 10. As the project owner, I want session storage to live inside the project folder (not in `~/.pi/`), so that copying a project folder or initializing git in it captures everything in one place.
 11. As the project owner, I want existing pi-coding-agent session APIs (`SessionManager.create` / `continueRecent` / `getEntries` / compaction) used as-is, so that I'm not re-implementing storage that already works.
 12. As the project owner, I want the chat surface unchanged at the protocol level — the existing `text_delta` / `text_done` events handle replay too — so that the frontend doesn't grow new event types just for hydration.
@@ -39,7 +39,7 @@ Each idea now lives as a self-contained **project** under `~/.guide/projects/<sl
 
 ### Modules
 
-- **Project store** *(new, deep)*. Owns the on-disk layout under `~/.guide/projects/`. Surface: `findMostRecent()`, `create(initialMessage)`, `rename(projectId, displayName)`, `touch(projectId)` (bumps `lastOpenedAt`), `read(projectId)`, `list()`. Encapsulates folder discovery, project.json read/write, slug-collision handling, and the rename-on-naming flow. Implemented in TypeScript, lives with the sidecar so the sidecar can boot directly into a project; the Rust bridge calls the sidecar (not the store) and so doesn't need its own copy.
+- **Project store** *(new, deep)*. Owns the on-disk layout under `~/.cairn/projects/`. Surface: `findMostRecent()`, `create(initialMessage)`, `rename(projectId, displayName)`, `touch(projectId)` (bumps `lastOpenedAt`), `read(projectId)`, `list()`. Encapsulates folder discovery, project.json read/write, slug-collision handling, and the rename-on-naming flow. Implemented in TypeScript, lives with the sidecar so the sidecar can boot directly into a project; the Rust bridge calls the sidecar (not the store) and so doesn't need its own copy.
 - **Slug generator** *(new, deep)*. Pure function. Surface: `slugify(text, opts)` returns a kebab-case slug; `withDatePrefix(slug, date)` prepends `YYYY-MM-DD-`; `disambiguate(slug, existingSlugs)` appends `-2`, `-3` until unique. Pure, fully unit-testable. The project store composes these.
 - **Hydration translator** *(new, deep)*. Pure function from pi's `SessionEntry[]` to a sequence of sidecar output events (`text_delta` + `text_done` per assistant message; user messages emitted as a new event-type-equivalent the chat surface already handles, OR rendered by the sidecar via a new minimal event shape — see protocol below). Encapsulates pi's entry-tree shape so the rest of the sidecar doesn't have to think about it.
 - **Recap trigger** *(new, deep)*. Pure function `(lastEntryTimestamp, now, hasInFlightTurn) -> { fire: boolean, reason: string }`. Trivially unit-testable. Used by the sidecar after `continueRecent` to decide whether to send the synthetic recap hint to the model.
@@ -63,7 +63,7 @@ So new event: `hydrate { messages: [{id, role: "user" | "assistant", text, done:
 ### Storage layout
 
 ```
-~/.guide/projects/<slug>/
+~/.cairn/projects/<slug>/
   project.json           # {id, name, createdAt, lastOpenedAt}
   brief.md               # source of truth
   brief.html             # generated visual
@@ -83,7 +83,7 @@ On `continueRecent`, sidecar reads `getEntries()`. The hydration translator emit
 
 ### Defaults / paths
 
-- `~/.guide/` resolves via `os.homedir()` in the sidecar. Rust does not own this path.
+- `~/.cairn/` resolves via `os.homedir()` in the sidecar. Rust does not own this path.
 - Persona path stays at `<repo>/prompts/persona.md` for `bun tauri dev`. Packaging is deferred per the v0 PRD.
 - Time threshold for recap: 30 minutes. Configurable via a constant; not exposed as a setting.
 - `<repo>/.workspace/` is removed from the codebase entirely — the directory itself is left on disk for Mike to delete manually, but no code reads or writes it after this slice.
@@ -96,8 +96,8 @@ A good test for this slice exercises behavior the user can name — *"reopening 
 - **Slug generator, unit (`bun test`).** Tabular tests over edge cases: empty string, all-punctuation, very long input, collision paths, date-prefix shape, fallback to `untitled`. Pure function, exhaustive coverage is cheap.
 - **Hydration translator, unit (`bun test`).** Given a fixture set of pi `SessionEntry[]` (built from real session-manager calls in-memory), assert the produced `hydrate` event's message list matches the expected user/assistant sequence. Skips tool entries.
 - **Recap trigger, unit (`bun test`).** Tabular: `(last - now)` thresholds × `hasInFlightTurn` → expected `{fire, reason}`. Trivial.
-- **Sidecar protocol smoke, integration (`bun test`).** Extension of the slice-01 test. Spawns sidecar with a temp `~/.guide/projects/` root, sends `init`, asserts `ready`. Sends a `prompt`, asserts `text_delta` → `agent_end`. Restarts the sidecar against the same project root and asserts a `hydrate` event with at least the prior user message. Skipped without API key.
-- **End-to-end smoke, manual.** Open the app on a clean `~/.guide/`, type a scoping prompt, see the brief render, close. Reopen — verify the chat is repopulated and (after waiting >30 min, or by faking the threshold) the recap fires once. Open the app a second time without delay — verify no recap. Type a *different* idea after the brief — verify the project is named after the wife's chosen name and the folder slug matches.
+- **Sidecar protocol smoke, integration (`bun test`).** Extension of the slice-01 test. Spawns sidecar with a temp `~/.cairn/projects/` root, sends `init`, asserts `ready`. Sends a `prompt`, asserts `text_delta` → `agent_end`. Restarts the sidecar against the same project root and asserts a `hydrate` event with at least the prior user message. Skipped without API key.
+- **End-to-end smoke, manual.** Open the app on a clean `~/.cairn/`, type a scoping prompt, see the brief render, close. Reopen — verify the chat is repopulated and (after waiting >30 min, or by faking the threshold) the recap fires once. Open the app a second time without delay — verify no recap. Type a *different* idea after the brief — verify the project is named after the wife's chosen name and the folder slug matches.
 
 We deliberately do not write:
 - **Persona-quality unit tests** for naming or recap voice — same reasoning as slice 01; voice is tuned by reading transcripts.
@@ -111,7 +111,7 @@ Prior art: `sidecar/tests/` from slice 01 (sidecar protocol smoke against real p
 - **Project picker UI.** Cards, switching, rename-from-UI, delete-from-UI. Lands in the next slice. This slice ensures the on-disk shape supports it.
 - **Multi-session per project.** Cut after grilling; iteration is "continue the same session," branching is pi's tree state (deferred), separation is "different project."
 - **Tree-state / branching UI.** Pi has it; we don't expose it. Becomes a "what if?" affordance later.
-- **Custom compaction summaries.** Pi defaults handle bounded context. Custom `CompactionEntry.details` hooks for Guide-specific summaries are a tuning concern that lands when transcripts justify it.
+- **Custom compaction summaries.** Pi defaults handle bounded context. Custom `CompactionEntry.details` hooks for Cairn-specific summaries are a tuning concern that lands when transcripts justify it.
 - **Persona prompt bundling for packaging.** Sidecar still reads `<repo>/prompts/persona.md` for `bun tauri dev`. Packaging is its own slice.
 - **`git init` per project.** No code yet. Lands with the implementing phase.
 - **Migrating `<repo>/.workspace/` content.** Discarded, not migrated. Mike is the only user.
@@ -123,5 +123,5 @@ Prior art: `sidecar/tests/` from slice 01 (sidecar protocol smoke against real p
 - **The `hydrate` event is the only protocol change.** Everything else reuses existing events. If the slice ever feels like it's growing more events, that is a sign something is being conflated and worth re-examining.
 - **The recap is the highest-risk piece for voice.** Read every transcript that includes a recap during dogfooding; tune the synthetic-hint phrasing iteratively. If the recap ever feels mechanical or repetitive, the threshold or the hint shape is wrong, not the model.
 - **Pi version pin still matters.** The session-manager API surface used here (`create` / `continueRecent` / `getEntries` / `appendCompaction`) is stable in the current pin. Treat any pi upgrade as a separate slice with the protocol smoke as the regression gate, same as slice 01.
-- **The `set_project_name` tool is the first time Guide adds its own tool to pi's registry.** Document the addition pattern carefully in the sidecar runtime so future Guide-specific tools (write-prd, write-issue) follow the same shape.
+- **The `set_project_name` tool is the first time Cairn adds its own tool to pi's registry.** Document the addition pattern carefully in the sidecar runtime so future Cairn-specific tools (write-prd, write-issue) follow the same shape.
 - **Risk: pi compaction firing mid-scoping.** Unlikely (scoping conversations are short by design) but worth watching. If a compaction summary lands mid-scoping it could change what the persona "remembers" about earlier answers in subtle ways. Manual smoke catches this.

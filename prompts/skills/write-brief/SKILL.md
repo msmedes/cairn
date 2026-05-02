@@ -20,7 +20,7 @@ args:
       description: Optional working name to use if the user has already named the Project.
 ---
 
-Generate the Brief content in the Guide's plain-language voice, then finish by calling the custom artifact and context tools. Call `create_brief_artifact` for the user-visible Brief data and call `update_project_context` for durable Project facts the Guide and future Sub-agents should remember.
+Generate the Brief content in the Cairn's plain-language voice, then finish by calling the custom artifact and context tools. Call `create_brief_artifact` for the user-visible Brief data and call `update_project_context` for durable Project facts the Cairn and future Sub-agents should remember.
 
 Do not use raw Write or Edit for the Brief or Project context. Do not create replacement files for either one. The Brief artifact tool owns `brief.json`; the Project context tool owns `CONTEXT.md`.
 
@@ -47,7 +47,7 @@ The app owns Brief presentation. Do not generate HTML, CSS, scripts, or visual m
 
 ## Content guidance
 
-Write in the Guide's plain-language voice. The user should feel heard, not managed. Avoid engineering vocabulary unless the user used it first and it matters.
+Write in the Cairn's plain-language voice. The user should feel heard, not managed. Avoid engineering vocabulary unless the user used it first and it matters.
 
 Each section should explain what will be built and why it matters. Include concrete implementation details only when they affect the user's experience, for example a required content source, an important device, or a success behavior.
 

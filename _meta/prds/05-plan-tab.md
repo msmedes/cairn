@@ -8,7 +8,7 @@ This PRD records the historical slice design. Slice 08 and ADR 0005 supersede it
 
 The wife scopes her Project. The Brief lands. She names it. The persona proposes a first chunk to build, she agrees, and the persona narrates *"Putting your plan together…"* — then the panel falls silent while `write-prd` and `write-issue` run silently. When the persona finishes, it confirms in chat: *"Slice one is planned and broken into pieces. Ready to start building when you are."*
 
-She read the chat. The conversation was good. But the panel still shows the same brief slideshow she saw five minutes ago. Nothing in the panel reflects that anything happened. The PRD and issues exist on disk under `.guide/`, but those are engineering scaffolding she's not meant to see. There is **no user-visible artifact for the slicing phase** — the moment of agreement and commitment to a first chunk has no panel manifestation.
+She read the chat. The conversation was good. But the panel still shows the same brief slideshow she saw five minutes ago. Nothing in the panel reflects that anything happened. The PRD and issues exist on disk under `.cairn/`, but those are engineering scaffolding she's not meant to see. There is **no user-visible artifact for the slicing phase** — the moment of agreement and commitment to a first chunk has no panel manifestation.
 
 This was confirmed in dogfooding: *"the convo is good, I would just like to see some sort of output on the side of the broad implementation steps."* The user came to see her project move forward; the panel showing the unchanged brief during and after slicing fails that.
 
@@ -18,7 +18,7 @@ When the user agrees to a slice, the persona quietly writes a small `plan.html` 
 
 The slicing flow stays narrated as before — the persona brackets `write-prd` and `write-issue` with the existing `set_creating(target="prd"|"issues", …)` calls in user-friendly persona-voiced messages — and adds a third `set_creating(target="plan", …)` bracket immediately before writing `plan.html`. Three creating moments in sequence, each clearing as its artifact lands; the user feels the work happening at three visible beats and ends with a structured page on the Plan tab.
 
-`plan.html` is the user-visible counterpart to the engineering PRD. The PRD remains hidden under `.guide/` for the Guide and sub-agents to read; the Plan is what the user sees. ADR 0003 codifies this distinction.
+`plan.html` is the user-visible counterpart to the engineering PRD. The PRD remains hidden under `.cairn/` for the Cairn and sub-agents to read; the Plan is what the user sees. ADR 0003 codifies this distinction.
 
 ## User Stories
 
@@ -26,11 +26,11 @@ The slicing flow stays narrated as before — the persona brackets `write-prd` a
 2. As a non-technical user, I want a tab strip on the Project panel so I can navigate between the Brief and the Plan without losing access to either.
 3. As a non-technical user, I want the panel to auto-switch to the Plan tab the first time it's created, so I don't have to learn that a tab appeared and hunt for it.
 4. As a non-technical user, after that first reveal, I want full control over which tab I'm looking at — the panel never yanks me to a different tab against my intent.
-5. As a non-technical user, I want the Plan to be written in the Guide's voice — same plain-language register as the Brief — so the panel feels consistent across artifacts and doesn't suddenly look like an engineering document.
+5. As a non-technical user, I want the Plan to be written in the Cairn's voice — same plain-language register as the Brief — so the panel feels consistent across artifacts and doesn't suddenly look like an engineering document.
 6. As a non-technical user, I want the Plan content to reflect what the persona just told me in chat (the capabilities of the first chunk plus what's coming next), so the panel feels like it's saying what we just agreed on, not a different version.
 7. As a non-technical user, before I've gotten to slicing, I want the Plan tab to show a friendly empty-state message rather than be hidden or grayed out, so I understand the tab exists and what will fill it later.
 8. As a non-technical user, when I redirect the persona to a different first chunk, I want the Plan tab to update to the new chunk on the next round — but I don't want to be auto-switched to it again, since I already know the affordance.
-9. As a non-technical user, I never want to see the PRD or issue files in the panel — those are engineering scaffolding hidden under `.guide/` per ADR 0003.
+9. As a non-technical user, I never want to see the PRD or issue files in the panel — those are engineering scaffolding hidden under `.cairn/` per ADR 0003.
 10. As the project owner, I want `plan.html` written by the persona inline (Write tool, same as `brief.html`) — not via a new skill — because the persona has all the context it needs from the conversation that just produced the slice agreement.
 11. As the project owner, I want `plan.html` written *after* `write-issue` succeeds — at the end of the planning sequence — so the Plan reflects what was actually finalized at the engineering layer, and the user sees the Plan land as the climax of the slicing phase.
 12. As the project owner, I want `set_creating(target="plan", …)` to bracket the write, so the panel narrates the moment in the persona's voice, the indicator clears when `plan.html` lands, and the Plan tab populates immediately.
@@ -54,7 +54,7 @@ The slicing flow stays narrated as before — the persona brackets `write-prd` a
 
 - **Slideshow component** *(reuse, no changes)*. The existing component that parses `brief.html`'s structure and renders left index + right detail accepts an HTML string; it's source-agnostic. Pointing it at `plan.html` works without modification. If `plan.html`'s structural shape diverges from brief's (e.g., different section nesting), the slideshow is permissive enough; we revisit only if dogfooding surfaces a parsing mismatch.
 
-- **`set_creating` tool extension** *(modification to `sidecar/guide-tools.ts`)*. The `target` parameter union extends from `"brief" | "prd" | "issues"` to add `"plan"`. The `OutMsg.creating_started.target` in `sidecar/index.ts` matches. The `useCreatingIndicator` target-content map gains `plan` (watches `<project>/plan.html`); auto-clear fires when `plan.html` content changes. Same shape as slice 04-2's `prd` and `issues` extensions.
+- **`set_creating` tool extension** *(modification to `sidecar/cairn-tools.ts`)*. The `target` parameter union extends from `"brief" | "prd" | "issues"` to add `"plan"`. The `OutMsg.creating_started.target` in `sidecar/index.ts` matches. The `useCreatingIndicator` target-content map gains `plan` (watches `<project>/plan.html`); auto-clear fires when `plan.html` content changes. Same shape as slice 04-2's `prd` and `issues` extensions.
 
 - **Persona prompt** *(modification to `prompts/persona.md`)*. The Slicing bullet under "Your job" gains a new step at the end of the planning sequence: after `write-issue` completes, the persona calls `set_creating(target="plan", <message>)`, writes `plan.html` at the project root via the Write tool, and confirms in chat. The plan content guidance: 2–4 sections in plain language — *what we're building first*, *how* (broad steps, not engineering tasks), *what's coming next*. Same Kanagawa visual theme as the brief; same self-contained inline-styled HTML structure (left index, right detail).
 
@@ -66,7 +66,7 @@ The slicing flow stays narrated as before — the persona brackets `write-prd` a
 
 The architecture is captured in detail in `_meta/adr/0003-user-visible-vs-engineering-scaffolding.md`. Summary of the load-bearing choices:
 
-- **`plan.html` is a user-visible artifact at project root.** Parallel to `brief.html`. Under ADR 0003, project root holds user-visible artifacts; `.guide/` holds engineering scaffolding. The path encodes the distinction.
+- **`plan.html` is a user-visible artifact at project root.** Parallel to `brief.html`. Under ADR 0003, project root holds user-visible artifacts; `.cairn/` holds engineering scaffolding. The path encodes the distinction.
 
 - **Persona writes `plan.html` inline (no skill).** Mirrors `brief.html`. The persona has all the context it needs from the conversation that just produced the slice agreement; the just-written PRD and issues are also available if the persona wants to consult them. A separate `write-plan-html` skill would add infrastructure without gaining quality, since the work is "persist the plain-language summary the persona is already composing."
 
@@ -101,13 +101,13 @@ A good test for this slice exercises behavior the user can name — *"the panel 
   - `plan.html` content changes (regeneration) after auto-switch ref is set → active tab stays at user's last selection (no auto-switch on update).
   - `plan.html` removed (e.g., user redirects mid-slice and slate is cleared) → active tab stays where it was; ref unchanged (we do not "re-arm" auto-switch).
 
-- **`set_creating` enum extension, unit (`bun test`).** Extension of `sidecar/tests/guide-tools.test.ts`. Confirm the tool accepts `target: "plan"` and rejects an unknown value (TypeBox covers this; spot-test the new variant). Confirm the `creating_started` callback receives `"plan"` verbatim.
+- **`set_creating` enum extension, unit (`bun test`).** Extension of `sidecar/tests/cairn-tools.test.ts`. Confirm the tool accepts `target: "plan"` and rejects an unknown value (TypeBox covers this; spot-test the new variant). Confirm the `creating_started` callback receives `"plan"` verbatim.
 
 - **`useCreatingIndicator` extension, unit (Vitest).** Extension of `src/useCreatingIndicator.test.ts`. Tabular coverage: `creating_started("plan", ...)` clears when `plan.html` content changes; `agent_end` fallback for `plan` target; mixed-target overlap-replacement (e.g., `creating_started("issues", ...)` followed immediately by `creating_started("plan", ...)`).
 
 - **Tab-strip component, unit (Vitest + @testing-library/react).** Renders the active tab styled distinctly; `onSelect` fires with the clicked key; tabs with `available: false` (future-proofing for Building tab) render disabled.
 
-- **End-to-end smoke, manual.** Open the app on a clean `~/.guide/`. Scope a project. Verify:
+- **End-to-end smoke, manual.** Open the app on a clean `~/.cairn/`. Scope a project. Verify:
   1. Brief lands; Plan tab visible in the strip with empty-state copy ("Once we agree…").
   2. Click Plan tab — empty state renders, no error, no spinner stuck.
   3. Agree on a slice. Three `set_creating` brackets fire in sequence (`prd`, `issues`, `plan`); panel narrates each in persona voice.
@@ -125,12 +125,12 @@ We deliberately do not write:
 - **Persistence of `useActivePanelTab`'s `hasAutoSwitchedRef` across reopens.** Per the "auto-switch on first creation per *session*, not per *project*" sub-call from grilling: a session reopen of a project that already has `plan.html` renders the Project tab by default, and the user navigates manually if they want the plan. No on-disk state needed.
 - **Multi-window or multi-project tab-state isolation tests.** v0/v1 has one Project per Session and effectively single-window operation (Tauri); revisit when those constraints change.
 
-Prior art: `src/useCreatingIndicator.test.ts` for the hook test pattern; `sidecar/tests/guide-tools.test.ts` for the tool extension; the brief slideshow's existing render path in `App.tsx` for the panel integration shape.
+Prior art: `src/useCreatingIndicator.test.ts` for the hook test pattern; `sidecar/tests/cairn-tools.test.ts` for the tool extension; the brief slideshow's existing render path in `App.tsx` for the panel integration shape.
 
 ## Out of Scope
 
 - **Building tab.** The third tab (live status during Implementing) is a separate slice that lands when Implementing's design is real. PRD 05 ships only `Project | Plan`. The tab strip component is built to extend cleanly.
-- **PRD/issue surfacing.** Engineering scaffolding stays under `.guide/` per ADR 0003. No "show me the PRD" affordance, no "view issues" panel. The persona translates sections in chat if the user explicitly asks; that conversational behavior is unchanged.
+- **PRD/issue surfacing.** Engineering scaffolding stays under `.cairn/` per ADR 0003. No "show me the PRD" affordance, no "view issues" panel. The persona translates sections in chat if the user explicitly asks; that conversational behavior is unchanged.
 - **Plan history / versioning.** Re-slicing overwrites `plan.html`; no `01a` / `01b` / archived plans. Matches slice 04's overwrite call. v2+ concern.
 - **Persona-driven empty-state copy.** The empty Plan tab copy is a static default string in `App.tsx`. Letting the persona dynamically write the empty-state message (e.g., context-aware: "We just finished the brief — once we figure out where to start, the plan will show up here.") is a future enhancement; not in v1.
 - **Slideshow component evolution.** If the Plan's content shape diverges meaningfully from brief's (e.g., it wants a progress indicator, a "current section" highlight, a different visual language), that lands in a follow-up slice. v1 reuses the brief slideshow as-is.
@@ -147,7 +147,7 @@ Prior art: `src/useCreatingIndicator.test.ts` for the hook test pattern; `sideca
 
 - **`set_creating` target enum is now four-wide.** Future user-visible artifacts (when Implementing produces them) extend the enum in the same shape; engineering scaffolding does not get target entries (per ADR 0003).
 
-- **Risk: the persona writes `plan.html` to a wrong path.** The persona prompt instructs the project-root location. If the persona drifts (e.g., writes to `.guide/plan.html` or `<project>/plans/01.html`), the watch in `useCreatingIndicator` doesn't fire, the indicator stays up, and the Plan tab stays empty until `agent_end` clears it. Observable failure mode (the indicator gets stuck, then clears with no result), which is the right shape — surfaces drift loudly rather than silently. Mitigation: tighten persona prompt language if drift is observed; no defensive code in the sidecar.
+- **Risk: the persona writes `plan.html` to a wrong path.** The persona prompt instructs the project-root location. If the persona drifts (e.g., writes to `.cairn/plan.html` or `<project>/plans/01.html`), the watch in `useCreatingIndicator` doesn't fire, the indicator stays up, and the Plan tab stays empty until `agent_end` clears it. Observable failure mode (the indicator gets stuck, then clears with no result), which is the right shape — surfaces drift loudly rather than silently. Mitigation: tighten persona prompt language if drift is observed; no defensive code in the sidecar.
 
 - **Risk: the Plan tab's empty-state copy gets stale relative to the persona's voice.** A static string in `App.tsx` doesn't adapt. If "Once we agree on what to build first" stops landing well, swap the string. If it becomes a recurring problem, promote to persona-driven (v2+).
 

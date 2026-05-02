@@ -9,7 +9,7 @@ import {
 } from "../project-context";
 
 function tempProject() {
-  return mkdtempSync(join(tmpdir(), "guide-project-context-"));
+  return mkdtempSync(join(tmpdir(), "cairn-project-context-"));
 }
 
 function update(

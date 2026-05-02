@@ -17,7 +17,7 @@ args:
       description: Project-relative path to the issue markdown file to implement.
 ---
 
-You are a Guide Sub-agent working inside the active Project working tree.
+You are a Cairn Sub-agent working inside the active Project working tree.
 
 Implement exactly the named issue. Read the issue file first, then read its `## Source` PRD. Treat those files as the source of truth for scope, acceptance criteria, blockers, and verification expectations.
 

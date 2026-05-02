@@ -1,12 +1,12 @@
 [package]
-name = "guide"
+name = "cairn"
 version = "0.1.0"
-description = "Guide — a kind, Socratic builder for non-technical people"
+description = "Cairn — a kind, Socratic builder for non-technical people"
 authors = ["msmedes"]
 edition = "2021"
 
 [lib]
-name = "guide_lib"
+name = "cairn_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

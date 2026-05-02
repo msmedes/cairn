@@ -21,7 +21,7 @@ type AgentThread = {
   id: string;
   parentId: string | null;
   label: string;
-  kind: "guide" | "subagent";
+  kind: "cairn" | "subagent";
   sessionFile?: string;
 };
 type TokenUsage = {
@@ -140,8 +140,8 @@ function sourceKind(payload: JsonValue) {
 }
 
 function sourceAgentId(payload: JsonValue) {
-  if (!isObject(payload) || !isObject(payload.source)) return "guide";
-  return stringValue(payload.source.agentId) ?? "guide";
+  if (!isObject(payload) || !isObject(payload.source)) return "cairn";
+  return stringValue(payload.source.agentId) ?? "cairn";
 }
 
 function formatJsonInline(value: JsonValue | undefined) {
@@ -435,7 +435,7 @@ function extractAgentThreads(events: SidecarDevLogEntry[]): AgentThread[] {
       const id = stringValue(raw.id);
       const label = stringValue(raw.label);
       const kind = stringValue(raw.kind);
-      if (!id || !label || (kind !== "guide" && kind !== "subagent")) {
+      if (!id || !label || (kind !== "cairn" && kind !== "subagent")) {
         return [];
       }
       const parentId = stringValue(raw.parentId);
@@ -452,7 +452,7 @@ function extractAgentThreads(events: SidecarDevLogEntry[]): AgentThread[] {
     if (threads.length > 0) return threads;
   }
 
-  return [{ id: "guide", parentId: null, label: "Guide", kind: "guide" }];
+  return [{ id: "cairn", parentId: null, label: "Cairn", kind: "cairn" }];
 }
 
 function eventMatchesAgentFilter(
@@ -484,11 +484,11 @@ function formatSubagentPrompt(args: JsonValue | undefined) {
 }
 
 function sourceDetail(payload: JsonValue) {
-  if (!isObject(payload) || !isObject(payload.source)) return "guide";
+  if (!isObject(payload) || !isObject(payload.source)) return "cairn";
   const source = payload.source;
   const parts = [
     `kind=${stringValue(source.kind) ?? "unknown"}`,
-    `agent=${stringValue(source.agentId) ?? "guide"}`,
+    `agent=${stringValue(source.agentId) ?? "cairn"}`,
   ];
   const parentAgentId = stringValue(source.parentAgentId);
   if (parentAgentId) parts.push(`parent=${parentAgentId}`);

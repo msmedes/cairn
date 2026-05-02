@@ -35,7 +35,7 @@ import { useProjectFile } from "./useProjectFile";
 import { useSidecarDevLog } from "./useSidecarDevLog";
 import { useSidecarSession } from "./useSidecarSession";
 
-type GuideSettingsStatus = {
+type CairnSettingsStatus = {
   hasAnthropicApiKey: boolean;
 };
 
@@ -48,7 +48,7 @@ function App() {
   const [recapInteracted, setRecapInteracted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStatus, setSettingsStatus] =
-    useState<GuideSettingsStatus | null>(null);
+    useState<CairnSettingsStatus | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
@@ -123,14 +123,14 @@ function App() {
     if (!hasTauriRuntime()) return;
 
     let cancelled = false;
-    invoke<GuideSettingsStatus>("get_guide_settings")
+    invoke<CairnSettingsStatus>("get_cairn_settings")
       .then((status) => {
         if (cancelled) return;
         setSettingsStatus(status);
         setSettingsOpen(!status.hasAnthropicApiKey);
       })
       .catch((err) => {
-        console.error("get_guide_settings failed", err);
+        console.error("get_cairn_settings failed", err);
       });
 
     return () => {
@@ -152,7 +152,7 @@ function App() {
     setSavingApiKey(true);
     setSettingsMessage(null);
     try {
-      const next = await invoke<GuideSettingsStatus>("set_anthropic_api_key", {
+      const next = await invoke<CairnSettingsStatus>("set_anthropic_api_key", {
         apiKey,
       });
       setSettingsStatus(next);
@@ -212,7 +212,7 @@ function App() {
       <section className="chat">
         <header className="chat-header">
           <div className="brand">
-            <h1>Guide</h1>
+            <h1>Cairn</h1>
           </div>
           <div className="header-actions">
             {settingsStatus && !settingsStatus.hasAnthropicApiKey && (

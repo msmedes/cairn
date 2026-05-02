@@ -4,7 +4,7 @@ export const DEFAULT_CHAT_PANE_PERCENT = 41;
 export const MIN_CHAT_PANE_PERCENT = 28;
 export const MAX_CHAT_PANE_PERCENT = 62;
 
-const PANE_SPLIT_STORAGE_KEY = "guide-pane-split";
+const PANE_SPLIT_STORAGE_KEY = "cairn-pane-split";
 
 function clampPaneSplit(value: number) {
   return Math.min(

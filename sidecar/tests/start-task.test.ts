@@ -10,7 +10,7 @@ import {
 } from "../start-task";
 
 function tempProjectRoot() {
-  return mkdtempSync(join(tmpdir(), "guide-start-task-"));
+  return mkdtempSync(join(tmpdir(), "cairn-start-task-"));
 }
 
 test.each([

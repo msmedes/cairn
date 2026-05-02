@@ -66,7 +66,7 @@ test("translateSessionEntriesToHydrateEvent preserves user/assistant order and s
       id: "custom-1",
       parentId: null,
       timestamp: "2026-04-28T00:00:01.000Z",
-      customType: "guide.resume",
+      customType: "cairn.resume",
       content: "hidden recap",
       display: false,
     },

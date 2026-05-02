@@ -68,7 +68,7 @@ test("emitHydrateAndMaybeResumeRecap emits an updated hydrate after a recap fire
           id: "hidden-recap",
           parentId: "assistant-1",
           timestamp: recapTimestamp,
-          customType: "guide.resume",
+          customType: "cairn.resume",
           content: RESUME_RECAP_HINT,
           display: false,
         });
@@ -123,7 +123,7 @@ test("emitHydrateAndMaybeResumeRecap emits an updated hydrate after a recap fire
   expect(sent).toEqual([
     {
       message: {
-        customType: "guide.resume",
+        customType: "cairn.resume",
         content: RESUME_RECAP_HINT,
         display: false,
       },

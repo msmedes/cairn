@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { verifySlice } from "../verify-slice";
 
 function createProject() {
-  return mkdtempSync(join(tmpdir(), "guide-verify-slice-"));
+  return mkdtempSync(join(tmpdir(), "cairn-verify-slice-"));
 }
 
 function writePackageJson(projectRoot: string, packageJson: unknown) {

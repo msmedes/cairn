@@ -73,57 +73,57 @@ struct ActiveProjectEvent {
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GuideSettings {
+struct CairnSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     anthropic_api_key: Option<String>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GuideSettingsStatus {
+struct CairnSettingsStatus {
     has_anthropic_api_key: bool,
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
-const SIDECAR_BIN_NAME: &str = "guide-sidecar";
+const SIDECAR_BIN_NAME: &str = "cairn-sidecar";
 const MAX_DEV_LOG_TEXT_CHARS: usize = 240;
 const MAX_DEV_LOG_EVENTS: usize = 1000;
 
-fn guide_store_dir() -> Result<PathBuf, String> {
+fn cairn_store_dir() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
-    Ok(PathBuf::from(home).join(".guide"))
+    Ok(PathBuf::from(home).join(".cairn"))
 }
 
-fn guide_settings_path() -> Result<PathBuf, String> {
-    Ok(guide_store_dir()?.join("settings.json"))
+fn cairn_settings_path() -> Result<PathBuf, String> {
+    Ok(cairn_store_dir()?.join("settings.json"))
 }
 
-fn read_guide_settings() -> Result<GuideSettings, String> {
-    let path = guide_settings_path()?;
+fn read_cairn_settings() -> Result<CairnSettings, String> {
+    let path = cairn_settings_path()?;
     match fs::read_to_string(&path) {
         Ok(contents) => serde_json::from_str(&contents)
-            .map_err(|err| format!("failed to parse guide settings: {}", err)),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(GuideSettings::default()),
-        Err(err) => Err(format!("failed to read guide settings: {}", err)),
+            .map_err(|err| format!("failed to parse cairn settings: {}", err)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(CairnSettings::default()),
+        Err(err) => Err(format!("failed to read cairn settings: {}", err)),
     }
 }
 
-fn write_guide_settings(settings: &GuideSettings) -> Result<(), String> {
-    let path = guide_settings_path()?;
+fn write_cairn_settings(settings: &CairnSettings) -> Result<(), String> {
+    let path = cairn_settings_path()?;
     let Some(parent) = path.parent() else {
-        return Err("guide settings path has no parent".into());
+        return Err("cairn settings path has no parent".into());
     };
-    fs::create_dir_all(parent).map_err(|err| format!("failed to create .guide store: {}", err))?;
+    fs::create_dir_all(parent).map_err(|err| format!("failed to create .cairn store: {}", err))?;
 
     let contents = serde_json::to_vec_pretty(settings)
-        .map_err(|err| format!("failed to serialize guide settings: {}", err))?;
+        .map_err(|err| format!("failed to serialize cairn settings: {}", err))?;
     let mut file = OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
         .open(&path)
-        .map_err(|err| format!("failed to open guide settings: {}", err))?;
+        .map_err(|err| format!("failed to open cairn settings: {}", err))?;
 
     #[cfg(unix)]
     {
@@ -132,13 +132,13 @@ fn write_guide_settings(settings: &GuideSettings) -> Result<(), String> {
     }
 
     file.write_all(&contents)
-        .map_err(|err| format!("failed to write guide settings: {}", err))?;
+        .map_err(|err| format!("failed to write cairn settings: {}", err))?;
     file.write_all(b"\n")
-        .map_err(|err| format!("failed to finish guide settings: {}", err))
+        .map_err(|err| format!("failed to finish cairn settings: {}", err))
 }
 
-fn guide_settings_status(settings: GuideSettings) -> GuideSettingsStatus {
-    GuideSettingsStatus {
+fn cairn_settings_status(settings: CairnSettings) -> CairnSettingsStatus {
+    CairnSettingsStatus {
         has_anthropic_api_key: settings
             .anthropic_api_key
             .as_deref()
@@ -507,24 +507,24 @@ fn get_sidecar_dev_logs(state: State<'_, Arc<SidecarState>>) -> Vec<Value> {
 }
 
 #[tauri::command]
-fn get_guide_settings() -> Result<GuideSettingsStatus, String> {
-    read_guide_settings().map(guide_settings_status)
+fn get_cairn_settings() -> Result<CairnSettingsStatus, String> {
+    read_cairn_settings().map(cairn_settings_status)
 }
 
 #[tauri::command]
 async fn set_anthropic_api_key(
     api_key: String,
     state: State<'_, Arc<SidecarState>>,
-) -> Result<GuideSettingsStatus, String> {
+) -> Result<CairnSettingsStatus, String> {
     let trimmed = api_key.trim().to_string();
     if trimmed.is_empty() {
         return Err("API key cannot be empty".into());
     }
 
-    let settings = GuideSettings {
+    let settings = CairnSettings {
         anthropic_api_key: Some(trimmed.clone()),
     };
-    write_guide_settings(&settings)?;
+    write_cairn_settings(&settings)?;
 
     let payload = serde_json::json!({
         "type": "set_api_key",
@@ -533,7 +533,7 @@ async fn set_anthropic_api_key(
     });
     write_line(&state.stdin, &payload).await?;
 
-    Ok(guide_settings_status(settings))
+    Ok(cairn_settings_status(settings))
 }
 
 #[tauri::command]
@@ -598,7 +598,7 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     if let Some(dir) = &paths.pi_package_dir {
         command.env("PI_PACKAGE_DIR", dir);
     }
-    if let Ok(settings) = read_guide_settings() {
+    if let Ok(settings) = read_cairn_settings() {
         if let Some(api_key) = settings.anthropic_api_key {
             let trimmed = api_key.trim().to_string();
             if !trimmed.is_empty() {
@@ -846,7 +846,7 @@ pub fn run() {
             send_prompt,
             new_project,
             get_active_project,
-            get_guide_settings,
+            get_cairn_settings,
             set_anthropic_api_key,
             get_sidecar_status,
             get_sidecar_dev_logs,

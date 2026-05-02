@@ -22,11 +22,11 @@ After grilling, **(1)+(2) won as a single combined slice**. Drivers:
 
 | Term | Meaning |
 |---|---|
-| **Project** | One app the user is building. Lives at `~/.guide/projects/<slug>/`. The unit of separation in Guide; eventually `git init` will wrap it. |
-| **Workspace** | *Deprecated as a Guide-internal term.* Used to mean the v0 single-folder; from here on, say "project." |
+| **Project** | One app the user is building. Lives at `~/.cairn/projects/<slug>/`. The unit of separation in Cairn; eventually `git init` will wrap it. |
+| **Workspace** | *Deprecated as a Cairn-internal term.* Used to mean the v0 single-folder; from here on, say "project." |
 | **Session** | One continuous conversation with the persona inside a project. Stored as one pi JSONL at `<project>/sessions/<session-id>.jsonl`. Exactly one per project in v0. Append-only; tree-structured underneath but linear from the chat-surface view. |
 | **Slug** | Kebab-case, lowercase, punctuation-stripped, ≤50 chars folder name. Pre-name: `<YYYY-MM-DD>-<slug-from-first-message>`. Post-name: `<slug-of-chosen-name>`. Collision: append `-2`, `-3`. |
-| **Brief** | `<project>/brief.json` schema-validated Artifact data. What the Guide saves through the Brief artifact tool when Scoping concludes. |
+| **Brief** | `<project>/brief.json` schema-validated Artifact data. What the Cairn saves through the Brief artifact tool when Scoping concludes. |
 | **Recap greeting** | Synthetic-prompted assistant turn fired on resume when *(elapsed since last entry > 30 min) AND (no in-flight turn)*. Operationalizes the persona's "last time we were working on..." promise. |
 | **Hydration** | On app launch, sidecar reads the project's session JSONL, translates message entries into `text_delta` / `text_done` sequences, and emits them so the existing chat surface rerenders without protocol changes. |
 | **Project metadata** | `<project>/project.json`: `{id, name, createdAt, lastOpenedAt}`. Owns the display name; pi's `appendSessionInfo` stays unused in v0. |
@@ -44,7 +44,7 @@ Confirmed against `@mariozechner/pi-coding-agent` typings in `sidecar/node_modul
 
 ## Verified Tauri concerns
 
-- `~/.guide/` is the literal home directory + `.guide`, not Tauri's app-data convention. Mike's explicit choice for findability and parallel with `~/.pi/`. Sidecar resolves it via Node/Bun `os.homedir()`; no Tauri API needed.
+- `~/.cairn/` is the literal home directory + `.cairn`, not Tauri's app-data convention. Mike's explicit choice for findability and parallel with `~/.pi/`. Sidecar resolves it via Node/Bun `os.homedir()`; no Tauri API needed.
 - Persona path: in dev (`bun tauri dev`), the existing `<repo>/prompts/persona.md` continues to work since the sidecar already accepts an `init.personaPath`. Packaging-time bundling (Tauri resource dir → absolute path passed by Rust) is deferred per the v0 PRD's packaging exclusion.
 
 ## Locked-in scope decisions
