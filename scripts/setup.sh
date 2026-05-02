@@ -20,6 +20,8 @@ confirm() {
   [[ "$reply" =~ ^[Yy]$ ]]
 }
 
+INSTALLED_TOOLS=()
+
 # 1. Xcode Command Line Tools — clang and codesign for Rust/Tauri.
 if ! xcode-select -p >/dev/null 2>&1; then
   echo "==> Xcode Command Line Tools missing."
@@ -38,6 +40,7 @@ if ! command -v bun >/dev/null 2>&1; then
     # Installer adds bun to PATH via shell rc; make it visible to this script too.
     export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
     export PATH="$BUN_INSTALL/bin:$PATH"
+    INSTALLED_TOOLS+=("Bun")
   else
     echo "    Skipped. Install Bun manually and re-run." >&2
     exit 1
@@ -52,6 +55,7 @@ if ! command -v cargo >/dev/null 2>&1; then
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     # shellcheck disable=SC1091
     source "$HOME/.cargo/env"
+    INSTALLED_TOOLS+=("Rust")
   else
     echo "    Skipped. Install Rust manually and re-run." >&2
     exit 1
@@ -67,13 +71,19 @@ bun install
 echo "==> bun install (sidecar)"
 (cd sidecar && bun install)
 
-cat <<'EOF'
+echo
+echo "Setup complete."
+echo
 
-Setup complete.
-
-Start the app in dev mode:
-    bun tauri dev
-
-The first run opens a settings dialog asking for your Anthropic API key.
-Paste it there; Cairn stores it locally and won't ask again.
-EOF
+if (( ${#INSTALLED_TOOLS[@]} > 0 )); then
+  echo "Heads up: this run installed ${INSTALLED_TOOLS[*]}, which updated your"
+  echo "shell config (e.g. ~/.zshrc). This terminal window won't see the new"
+  echo "tools yet. Open a new terminal, cd back into this directory, then run:"
+else
+  echo "Start the app in dev mode:"
+fi
+echo
+echo "    bun tauri dev"
+echo
+echo "The first launch opens a settings dialog asking for your Anthropic API"
+echo "key. Paste it there; Cairn stores it locally and won't ask again."
