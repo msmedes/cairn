@@ -110,7 +110,7 @@ const MALFORMED_MESSAGE = "sub-agent returned a malformed result";
 const SpawnSubagentToolParamsSchema = z.object({
   skill_name: z
     .enum(SPAWN_SUBAGENT_SKILL_NAMES)
-    .describe("Known Guide sub-agent skill name to run."),
+    .describe("Known Cairn sub-agent skill name to run."),
   args: z
     .record(z.string(), z.unknown())
     .describe("Structured handoff arguments for the selected skill."),
@@ -274,7 +274,7 @@ function responseShape(schema: SpawnSubagentResponseSchema) {
 export function buildSpawnSubagentSystemPrompt(
   responseSchema: SpawnSubagentResponseSchema,
 ) {
-  return `You are a headless Guide Sub-agent. The user message invokes the assigned skill with /skill:name; load and follow that skill using pi's native skill expansion. Also load and apply any matching available skills, especially quality-code for TypeScript or full-stack implementation/review work.
+  return `You are a headless Cairn Sub-agent. The user message invokes the assigned skill with /skill:name; load and follow that skill using pi's native skill expansion. Also load and apply any matching available skills, especially quality-code for TypeScript or full-stack implementation/review work.
 
 Structured response instruction:
 When the work is complete, do not write a final prose answer. Call the finish_subagent tool exactly once with arguments matching this exact shape for ${responseSchema}:
@@ -291,7 +291,7 @@ function buildSpawnSubagentPrompt(
 }
 
 function parseDepth(env: NodeJS.ProcessEnv) {
-  const raw = env.GUIDE_SUBAGENT_DEPTH;
+  const raw = env.CAIRN_SUBAGENT_DEPTH;
   if (!raw) return 0;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -607,7 +607,7 @@ function createSpawnSubagentTool(options: {
     name: "spawn_subagent",
     label: "Spawn Sub-agent",
     description:
-      "Dispatch a nested headless Guide Sub-agent with a named skill, structured args, and an expected structured response schema.",
+      "Dispatch a nested headless Cairn Sub-agent with a named skill, structured args, and an expected structured response schema.",
     parameters: toolSchemaFromZod(SpawnSubagentToolParamsSchema),
     executionMode: "sequential",
     async execute(_toolCallId, params, signal) {
@@ -664,7 +664,7 @@ export async function spawnSubagent(
 
   const nextEnv = {
     ...env,
-    GUIDE_SUBAGENT_DEPTH: String(parseDepth(env) + 1),
+    CAIRN_SUBAGENT_DEPTH: String(parseDepth(env) + 1),
   };
   let nativeResult: PiSubAgentResult;
   try {

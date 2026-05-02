@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { ProjectStore } from "../project-store";
 
 function tempProjectsRoot() {
-  return mkdtempSync(join(tmpdir(), "guide-projects-"));
+  return mkdtempSync(join(tmpdir(), "cairn-projects-"));
 }
 
 test("create and read round-trip project metadata", () => {

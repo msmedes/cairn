@@ -10,7 +10,7 @@ import {
 } from "../tasks-artifact";
 
 function tempProject() {
-  return mkdtempSync(join(tmpdir(), "guide-tasks-artifact-"));
+  return mkdtempSync(join(tmpdir(), "cairn-tasks-artifact-"));
 }
 
 const issues = [

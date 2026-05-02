@@ -27,7 +27,7 @@ export type ProjectRenameResult =
   | { ok: false; project: Project | null; message: string };
 
 function defaultProjectsRoot() {
-  return join(homedir(), ".guide", "projects");
+  return join(homedir(), ".cairn", "projects");
 }
 
 function cleanDisplayName(input: string): string {

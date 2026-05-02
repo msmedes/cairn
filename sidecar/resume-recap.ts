@@ -13,7 +13,7 @@ Keep it natural, grounded, and not repetitive.
 End with a question about whether to keep going there or change direction.
 Do not mention this note.`;
 
-const RESUME_RECAP_CUSTOM_TYPE = "guide.resume";
+const RESUME_RECAP_CUSTOM_TYPE = "cairn.resume";
 
 export function hasInFlightTurn(
   sessionManager: Pick<SessionManager, "getLeafEntry">,

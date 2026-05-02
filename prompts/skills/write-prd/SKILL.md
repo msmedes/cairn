@@ -1,6 +1,6 @@
 ---
 name: write-prd
-description: Use only after the project brief is concrete, the Guide has proposed a smallest meaningful first slice, and the user has agreed to that slice; silently draft the slice PRD.
+description: Use only after the project brief is concrete, the Cairn has proposed a smallest meaningful first slice, and the user has agreed to that slice; silently draft the slice PRD.
 disable-model-invocation: false
 response_schema: artifact_write
 args:
@@ -19,14 +19,14 @@ args:
       description: Optional project-relative path to the saved Brief; defaults to brief.json.
 ---
 
-Write a product requirements document for the user-approved slice. This is silent planning work for the Guide: do not chat with the user, do not expose implementation paths to the user, and do not write anything unless the inputs support a useful PRD.
+Write a product requirements document for the user-approved slice. This is silent planning work for the Cairn: do not chat with the user, do not expose implementation paths to the user, and do not write anything unless the inputs support a useful PRD.
 
 ## Inputs
 
 Use both sources together:
 
 1. `<project>/brief.json`: the saved Brief artifact for the Project. Treat its `data` as the primary source of truth for what the user is trying to build, who it is for, and what should feel true when the Project is useful.
-2. The current Session context: the slice the Guide proposed, the user's agreement or redirect, and any clarifications already given during Slicing.
+2. The current Session context: the slice the Cairn proposed, the user's agreement or redirect, and any clarifications already given during Slicing.
 
 If the Brief and Session conflict, prefer the most recent explicit user direction in the Session, but keep the PRD consistent with the Brief's product intent.
 
@@ -40,7 +40,7 @@ Before writing, check whether a load-bearing dimension of this slice is missing.
 - the success behavior or stopping point of the slice is ambiguous
 - the user's agreed slice is too vague to distinguish from the whole Project
 
-If a load-bearing dimension is missing, do not write or modify a PRD file. Return exactly one targeted clarifying question in the Guide's voice so the persona can ask the user and re-invoke this skill after the answer. Ask only about the blocking gap. Do not include analysis, alternatives, markdown headings, file paths, or more than one question.
+If a load-bearing dimension is missing, do not write or modify a PRD file. Return exactly one targeted clarifying question in the Cairn's voice so the persona can ask the user and re-invoke this skill after the answer. Ask only about the blocking gap. Do not include analysis, alternatives, markdown headings, file paths, or more than one question.
 
 If the missing information is not load-bearing, make a reasonable product judgment and continue.
 
@@ -56,8 +56,8 @@ Use this naming convention:
 
 - `NN` is a zero-padded two-digit slice number.
 - The first slice is `01`.
-- If existing PRDs are present and the Guide is drafting a new later slice, use the next available number.
-- If the Guide is re-slicing the current agreed first slice, reuse `01` and overwrite the prior `01-*.md` file rather than creating a second competing first slice.
+- If existing PRDs are present and the Cairn is drafting a new later slice, use the next available number.
+- If the Cairn is re-slicing the current agreed first slice, reuse `01` and overwrite the prior `01-*.md` file rather than creating a second competing first slice.
 - `<slug>` is derived from the slice title, kebab-cased, lower-case, and no more than five words.
 - Keep the slug specific enough to distinguish the slice, for example `01-video-playback.md` or `01-question-screen.md`.
 

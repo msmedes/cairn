@@ -6,13 +6,13 @@ This PRD records the historical slice design. Slice 08 and ADR 0005 supersede it
 
 ## Problem Statement
 
-Slicing produces a Plan, a PRD, and a set of issues, but nothing in Guide currently turns those issues into working code. The persona prompt has one sentence on Implementing — *"sub-agents do the actual coding while the Guide narrates"* — and no concrete dispatch mechanics. A user who agrees to a Plan today has no path forward inside Guide; the Plan tab just sits there. From the user's perspective the project visibly stalls at the moment they were promised software.
+Slicing produces a Plan, a PRD, and a set of issues, but nothing in Cairn currently turns those issues into working code. The persona prompt has one sentence on Implementing — *"sub-agents do the actual coding while the Cairn narrates"* — and no concrete dispatch mechanics. A user who agrees to a Plan today has no path forward inside Cairn; the Plan tab just sits there. From the user's perspective the project visibly stalls at the moment they were promised software.
 
 The shape of the missing phase is not obvious. It needs to honor the persona's contract (single voice, never claim something works without evidence, redirect-anytime), produce visible progress for the user without exposing engineering vocabulary, handle sub-agent failures honestly, gate slice-done on real verification, and resume cleanly across app restarts. ADR 0004 settles those questions; this slice implements them.
 
 ## Solution
 
-When the user confirms the Plan, the Guide asks a short go-ahead question — *"Want me to start on this?"* — and on agreement, a new Tasks tab appears in the project panel with the Plan's pieces as a plain-language checklist, all unchecked. The Guide quietly works through them one at a time, narrating one short line per piece in chat (*"now working on the first piece"*, *"got that one"*) and ticking each box as the work lands. If something gets stuck, the Guide says so in plain language and offers options instead of staying silent. When every box is ticked, the Guide silently checks that the slice as a whole still builds, then invites the user to try it: *"the pieces are in place — give it a try and let me know how it feels."* If the user closes the app mid-slice and comes back later, the Guide picks up with a short recap and waits for their nod before continuing.
+When the user confirms the Plan, the Cairn asks a short go-ahead question — *"Want me to start on this?"* — and on agreement, a new Tasks tab appears in the project panel with the Plan's pieces as a plain-language checklist, all unchecked. The Cairn quietly works through them one at a time, narrating one short line per piece in chat (*"now working on the first piece"*, *"got that one"*) and ticking each box as the work lands. If something gets stuck, the Cairn says so in plain language and offers options instead of staying silent. When every box is ticked, the Cairn silently checks that the slice as a whole still builds, then invites the user to try it: *"the pieces are in place — give it a try and let me know how it feels."* If the user closes the app mid-slice and comes back later, the Cairn picks up with a short recap and waits for their nod before continuing.
 
 What the user does not see: code, errors, stack traces, tool output, file paths, or anything about how the work is being done.
 
@@ -24,15 +24,15 @@ What the user does not see: code, errors, stack traces, tool output, file paths,
 
 3. As a non-technical user, I want each piece to tick off as it's built, so that I have evidence the work is real without having to ask.
 
-4. As a non-technical user, I want the Guide to say one short thing in chat per piece (start, finish), so that the chat surface stays alive without becoming noisy.
+4. As a non-technical user, I want the Cairn to say one short thing in chat per piece (start, finish), so that the chat surface stays alive without becoming noisy.
 
-5. As a non-technical user, I want the Guide to tell me when it's retrying a piece, in plain language, so that I'm not staring at a silent panel wondering if anything is happening.
+5. As a non-technical user, I want the Cairn to tell me when it's retrying a piece, in plain language, so that I'm not staring at a silent panel wondering if anything is happening.
 
-6. As a non-technical user, I want the Guide to stop and offer options when it actually gets stuck, so that I can intervene with intent instead of guessing whether to wait.
+6. As a non-technical user, I want the Cairn to stop and offer options when it actually gets stuck, so that I can intervene with intent instead of guessing whether to wait.
 
-7. As a non-technical user, I want the Guide to never claim the slice is *"done"* before I've tried it, so that the word *"working"* keeps meaning something.
+7. As a non-technical user, I want the Cairn to never claim the slice is *"done"* before I've tried it, so that the word *"working"* keeps meaning something.
 
-8. As a non-technical user, I want the Guide to silently catch the case where the slice is broken at the build level before inviting me to try, so that the demo invitation isn't pointing me at something that doesn't even compile.
+8. As a non-technical user, I want the Cairn to silently catch the case where the slice is broken at the build level before inviting me to try, so that the demo invitation isn't pointing me at something that doesn't even compile.
 
 9. As a non-technical user, I want to close the app mid-slice and come back later to a short recap that lets me say *"keep going"* or redirect, so that the work is paced by my attention, not by a process running in the background.
 
@@ -139,7 +139,7 @@ Testing follows the existing repo split: frontend tests under `src/test/*` via V
 
 - **End-to-end "real sub-agent run"** tests are out of scope. Pi.dev's sub-agent primitive is exercised in pi.dev's own test suite; recreating an end-to-end coding loop in this repo's tests is expensive and brittle. The sidecar tests stop at the deep-module seam, with mocked sub-agent results.
 
-- **The persona's narration text.** Whether the Guide says *"now working on the first piece"* or *"on to the next one"* is prompt territory and changes with prompt edits. Tests on exact phrasing rot fast; we test that *one* short chat line lands per task, not *which* line.
+- **The persona's narration text.** Whether the Cairn says *"now working on the first piece"* or *"on to the next one"* is prompt territory and changes with prompt edits. Tests on exact phrasing rot fast; we test that *one* short chat line lands per task, not *which* line.
 
 - **`tasks.html` HTML structure tests beyond a smoke check.** The persona owns the HTML's shape. Pinning it down in a frontend test couples the test suite to the prompt's current visual output and breaks every time the persona's voice tightens.
 
@@ -157,7 +157,7 @@ Testing follows the existing repo split: frontend tests under `src/test/*` via V
 
 - **Multi-language build-check support.** v0 reads `package.json` and runs `build` or `typecheck` if present, otherwise returns success silently. Python, Rust, Go, etc. are out of scope until they show up as real user projects.
 
-- **ADR 0003 path-scheme reconciliation.** The slicing skills currently write to `<project>/prds/` and `<project>/issues/` (commit `66e8853`), not the `.guide/`-prefixed paths ADR 0003 documented. This slice consumes the current paths but does not amend ADR 0003. Reconciliation happens in a separate doc-only commit / amendment when someone has the energy.
+- **ADR 0003 path-scheme reconciliation.** The slicing skills currently write to `<project>/prds/` and `<project>/issues/` (commit `66e8853`), not the `.cairn/`-prefixed paths ADR 0003 documented. This slice consumes the current paths but does not amend ADR 0003. Reconciliation happens in a separate doc-only commit / amendment when someone has the energy.
 
 - **Cancel / pause buttons in the UI.** A literal *"stop"* button on the Tasks tab. The persona's redirect-anytime contract via chat is the v0 cancel surface; UI affordances for cancel are deferred.
 

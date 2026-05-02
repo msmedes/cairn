@@ -12,7 +12,7 @@ import {
 const NOW = Date.parse("2026-04-28T12:00:00.000Z");
 
 function createSessionManager() {
-  const root = mkdtempSync(join(tmpdir(), "guide-recap-"));
+  const root = mkdtempSync(join(tmpdir(), "cairn-recap-"));
   return SessionManager.create(root, join(root, "sessions"));
 }
 
@@ -123,7 +123,7 @@ test("maybeSendResumeRecap injects a hidden hint after a long absence", async ()
   expect(calls).toEqual([
     {
       message: {
-        customType: "guide.resume",
+        customType: "cairn.resume",
         content: RESUME_RECAP_HINT,
         display: false,
       },
@@ -163,7 +163,7 @@ test("maybeSendResumeRecap stays quiet when the last turn was already a recap", 
     timestamp: NOW - 119 * 60 * 1000,
   });
   sessionManager.appendCustomMessageEntry(
-    "guide.resume",
+    "cairn.resume",
     RESUME_RECAP_HINT,
     false,
   );

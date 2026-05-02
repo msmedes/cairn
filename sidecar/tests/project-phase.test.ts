@@ -7,7 +7,7 @@ import { getProjectState } from "../project-phase";
 import { createTasksArtifact, updateTaskStatus } from "../tasks-artifact";
 
 function tempProject() {
-  return mkdtempSync(join(tmpdir(), "guide-project-phase-"));
+  return mkdtempSync(join(tmpdir(), "cairn-project-phase-"));
 }
 
 function write(path: string, relativePath: string, content = "content") {

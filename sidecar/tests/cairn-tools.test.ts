@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CreatingTarget } from "../guide-tools";
-import { createGuideTools } from "../guide-tools";
+import type { CreatingTarget } from "../cairn-tools";
+import { createCairnTools } from "../cairn-tools";
 import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
 import type { SpawnSubagentResult } from "../spawn-subagent";
 
 function tempProjectsRoot() {
-  return mkdtempSync(join(tmpdir(), "guide-projects-"));
+  return mkdtempSync(join(tmpdir(), "cairn-projects-"));
 }
 
 function toolText(result: { content: Array<{ type: string; text?: string }> }) {
@@ -27,7 +27,7 @@ test("set_project_name tool renames the active project and reports the updated p
   const renamedPairs: Array<[Project, Project]> = [];
   const emittedProjects: Project[] = [];
 
-  const setProjectName = createGuideTools({
+  const setProjectName = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: (id, displayName) => store.rename(id, displayName),
     onRenameSuccess: (previousProject, nextProject) => {
@@ -72,7 +72,7 @@ test("set_project_name tool renames the active project and reports the updated p
 });
 
 test("set_project_name tool keeps voice-safe failure messages inside the tool result", async () => {
-  const setProjectName = createGuideTools({
+  const setProjectName = createCairnTools({
     getActiveProject: () => null,
     renameProject: () => {
       throw new Error("should not rename without an active project");
@@ -113,7 +113,7 @@ test.each([
   "tasks",
 ] as const)("set_creating tool accepts target %s and emits it once", async (target) => {
   const creatingEvents: Array<{ target: CreatingTarget; message: string }> = [];
-  const setCreating = createGuideTools({
+  const setCreating = createCairnTools({
     getActiveProject: () => null,
     renameProject: () => {
       throw new Error("should not rename while setting creating state");
@@ -156,8 +156,8 @@ test.each([
   expect(toolText(result)).toBe("Creating indicator is showing.");
 });
 
-test("guide tool registry does not surface retired task dispatcher tools", () => {
-  const tools = createGuideTools({
+test("cairn tool registry does not surface retired task dispatcher tools", () => {
+  const tools = createCairnTools({
     getActiveProject: () => null,
     renameProject: () => {
       throw new Error("should not rename while listing tools");
@@ -188,7 +188,7 @@ test("spawn_subagent tool routes bounded skill work to the active project", asyn
     outcome: "blocked",
     message: "Need a decision before continuing.",
   };
-  const spawnSubagent = createGuideTools({
+  const spawnSubagent = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while spawning a sub-agent");
@@ -247,7 +247,7 @@ test("create_tasks_artifact tool writes tasks.json only", async () => {
     new Date("2026-04-28T10:00:00.000Z"),
   );
 
-  const createTasks = createGuideTools({
+  const createTasks = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while creating tasks");
@@ -315,7 +315,7 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
-  const [createTasks, updateTaskStatus] = createGuideTools({
+  const [createTasks, updateTaskStatus] = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while updating task status");
@@ -410,7 +410,7 @@ test("create_brief_artifact tool writes brief.json only", async () => {
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
-  const createBrief = createGuideTools({
+  const createBrief = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while creating a brief artifact");
@@ -480,7 +480,7 @@ test("create_plan_artifact tool writes plan.json only", async () => {
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
-  const createPlan = createGuideTools({
+  const createPlan = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while creating a plan artifact");
@@ -550,7 +550,7 @@ test("update_project_context tool writes only hidden project context", async () 
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
-  const updateContext = createGuideTools({
+  const updateContext = createCairnTools({
     getActiveProject: () => activeProject,
     renameProject: () => {
       throw new Error("should not rename while updating project context");

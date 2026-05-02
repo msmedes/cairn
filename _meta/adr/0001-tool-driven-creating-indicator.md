@@ -10,7 +10,7 @@ While the persona is generating a user-visible artifact, there is a long silent 
 
 ## Decision
 
-The persona declares panel state through a custom Guide tool: `set_creating({ target, message })`. The sidecar receives the tool call and emits a typed `creating_started` event over the existing stdio protocol. The frontend swaps the placeholder headline for the model's message and tightens the ghost-line animation, then auto-clears the indicator the moment the target artifact content changes (via the existing `useProjectFile` polling hook), with `agent_end` as a fallback for the case where the persona fired the tool but the artifact never landed. The persona prompt has a top-level "When you make something the user can see" section that requires bracketing every user-visible artifact with this tool call **and** a matching short line in chat, then a confirmation line when the artifact is done.
+The persona declares panel state through a custom Cairn tool: `set_creating({ target, message })`. The sidecar receives the tool call and emits a typed `creating_started` event over the existing stdio protocol. The frontend swaps the placeholder headline for the model's message and tightens the ghost-line animation, then auto-clears the indicator the moment the target artifact content changes (via the existing `useProjectFile` polling hook), with `agent_end` as a fallback for the case where the persona fired the tool but the artifact never landed. The persona prompt has a top-level "When you make something the user can see" section that requires bracketing every user-visible artifact with this tool call **and** a matching short line in chat, then a confirmation line when the artifact is done.
 
 ## Considered alternatives
 

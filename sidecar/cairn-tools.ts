@@ -54,7 +54,7 @@ const CREATING_TARGETS = ["brief", "prd", "issues", "plan", "tasks"] as const;
 
 export type CreatingTarget = (typeof CREATING_TARGETS)[number];
 
-export type GuideToolsOptions = {
+export type CairnToolsOptions = {
   getActiveProject: () => Project | null;
   renameProject: (id: string, displayName: string) => ProjectRenameResult;
   onRenameSuccess: (previousProject: Project, nextProject: Project) => void;
@@ -113,14 +113,14 @@ const setCreatingParamsSchema = z.object({
   message: z
     .string()
     .describe(
-      "Short Guide-voice text to show while the artifact is being created.",
+      "Short Cairn-voice text to show while the artifact is being created.",
     ),
 });
 
 const spawnSubagentParamsSchema = z.object({
   skill_name: z
     .enum(SPAWN_SUBAGENT_SKILL_NAMES)
-    .describe("The known Guide skill to run in isolation."),
+    .describe("The known Cairn skill to run in isolation."),
   args: z
     .record(z.string(), z.unknown())
     .describe("Structured arguments for the named skill."),
@@ -171,8 +171,8 @@ function noActiveProjectContextResult(): ProjectContextResult {
   };
 }
 
-export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
-  // Guide-specific tools live beside pi's filesystem tools via `customTools`.
+export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
+  // Cairn-specific tools live beside pi's filesystem tools via `customTools`.
   // Keep each tool thin: validate/write domain state in deep modules, update
   // sidecar runtime state through explicit callbacks, and return a short phrase
   // the persona can fold into its own voice. Artifact-writing work such as PRDs
@@ -301,8 +301,8 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
       name: "set_project_name",
       label: "Set Project Name",
       description:
-        "Give the current Guide project a user-facing name after the brief is meaningfully drafted. The name is slugified for storage; do not mention paths or ids to the user.",
-      promptSnippet: "Name the current Guide project",
+        "Give the current Cairn project a user-facing name after the brief is meaningfully drafted. The name is slugified for storage; do not mention paths or ids to the user.",
+      promptSnippet: "Name the current Cairn project",
       promptGuidelines: [
         "After the brief is meaningfully drafted, ask the user what to call the project, then call set_project_name with their answer.",
         "Use the tool result only as private confirmation; acknowledge the name conversationally without mentioning folders, paths, ids, or slug conflicts.",
@@ -406,7 +406,7 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
         "Capture durable Project facts, terms, constraints, decisions, and open questions in hidden CONTEXT.md. Use this instead of editing CONTEXT.md directly.",
       promptSnippet: "Update hidden Project context",
       promptGuidelines: [
-        "Call update_project_context only for durable Project knowledge the Guide or Sub-agents should remember.",
+        "Call update_project_context only for durable Project knowledge Cairn or Sub-agents should remember.",
         "Project context is Engineering scaffolding, not a user-visible artifact; never call set_creating for it.",
         "Use terms for stable vocabulary, constraints for durable boundaries, decisions for settled choices, and open_questions for unresolved product questions.",
         "Do not use this as a progress log. The tool merges updates into the existing CONTEXT.md structure and avoids duplicate append-only noise.",
@@ -433,11 +433,11 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
       name: "set_creating",
       label: "Show Creating Indicator",
       description:
-        "Tell the project panel that the Guide is creating a user-visible artifact. Use this only immediately before making something the user can see, and never for hidden thinking or ordinary tool work.",
-      promptSnippet: "Show that the Guide is creating a user-visible artifact",
+        "Tell the project panel that Cairn is creating a user-visible artifact. Use this only immediately before making something the user can see, and never for hidden thinking or ordinary tool work.",
+      promptSnippet: "Show that Cairn is creating a user-visible artifact",
       promptGuidelines: [
         "Call set_creating only before creating a user-visible artifact such as the brief, Plan, or Tasks tab, or for the planning moments that create PRDs or issues; do not use it for hidden work or thinking.",
-        "Pair the tool call with one short chat line in the same turn, written in your Guide voice.",
+        "Pair the tool call with one short chat line in the same turn, written in your Cairn voice.",
         "Set message to the panel text the user should see: under about 80 characters, conversational, no paths, files, tools, or implementation details.",
         "The indicator auto-clears when the artifact appears; there is no clear_creating tool.",
       ],
@@ -461,8 +461,8 @@ export function createGuideTools(options: GuideToolsOptions): ToolDefinition[] {
       name: "spawn_subagent",
       label: "Spawn Sub-agent",
       description:
-        "Dispatch a headless Guide Sub-agent with a named skill, structured args, and an expected structured response schema.",
-      promptSnippet: "Run isolated skill work in a headless Guide Sub-agent",
+        "Dispatch a headless Cairn Sub-agent with a named skill, structured args, and an expected structured response schema.",
+      promptSnippet: "Run isolated skill work in a headless Cairn Sub-agent",
       promptGuidelines: [
         "Use spawn_subagent for isolated skill work; pass a known skill_name, a structured args object, and the response_schema that matches the skill's expected output.",
         "On task_outcome complete, continue the current workflow; on failure retry once if the same call can plausibly succeed; on blocked stop and surface concrete options.",

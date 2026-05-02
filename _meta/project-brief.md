@@ -1,10 +1,10 @@
-# Project brief — Guide
+# Project brief — Cairn
 
 ## What it is
 
 A native (Tauri) app that helps non-technical people build small, useful software for themselves and the people around them, by guiding them through a workflow they don't know exists: scope what you want, slice it into a first chunk, build that chunk, repeat.
 
-The user talks to a single voice — the Guide — that owns all the technical decisions. Sub-agents do the actual coding silently underneath, on a pi.dev-based harness. The user never sees code, diffs, errors, or terminal output.
+The user talks to a single voice — the Cairn — that owns all the technical decisions. Sub-agents do the actual coding silently underneath, on a pi.dev-based harness. The user never sees code, diffs, errors, or terminal output.
 
 ## Who it's for
 

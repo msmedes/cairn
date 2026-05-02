@@ -6,10 +6,10 @@ Accepted; amended 2026-04-30 (see Amendment below).
 
 ## Context
 
-The Guide produces multiple kinds of artifacts during a project's lifecycle: schema-validated Brief, Plan, and Tasks Artifact data, the project name, PRDs, issues, and eventually the user's app source files. Two pressures pull on where these live and how they surface:
+The Cairn produces multiple kinds of artifacts during a project's lifecycle: schema-validated Brief, Plan, and Tasks Artifact data, the project name, PRDs, issues, and eventually the user's app source files. Two pressures pull on where these live and how they surface:
 
 1. **The persona is the only voice the user hears.** Per `prompts/persona.md`, the user never sees code, file paths, diffs, raw PRDs, or engineering markdown. The persona translates everything technical into plain language before it reaches the user.
-2. **The panel surface is where artifacts manifest.** Brief data lights up the panel as the Project's identity; Plan data lights it up again as the slice's plain-language summary. The same surface is where the user looks to see "the Guide is making something for me."
+2. **The panel surface is where artifacts manifest.** Brief data lights up the panel as the Project's identity; Plan data lights it up again as the slice's plain-language summary. The same surface is where the user looks to see "the Cairn is making something for me."
 
 Slice 04 (slicing skills) shipped under the assumption — inherited from CONTEXT.md and ADR 0001's *"Future artifacts extend the same surface. `write_prd` and `write_issue` (slicing phase) add new entries to the `target` enum"* — that PRDs and issues were user-visible artifacts. The slicing PRs accordingly extended `set_creating` to bracket PRD and issue creation on the user's panel.
 
@@ -31,26 +31,26 @@ Two artifact categories, separated by file-system location and surface treatment
 User-visible artifacts:
 
 - Are written in the persona's voice, in plain language; the user reads them directly
-- Render in the Guide's panel through tabs (`Project | Plan | …`)
+- Render in the Cairn's panel through tabs (`Project | Plan | …`)
 - Are bracketed by `set_creating(target=…)` during creation, with persona-voiced messages
 - Are navigated by the user via the panel; the user does not see file paths
 
-**Engineering scaffolding lives under `<project>/.guide/`:**
+**Engineering scaffolding lives under `<project>/.cairn/`:**
 
-- `<project>/.guide/prds/<NN>-<slug>.md` — the slice's engineering interpretation
-- `<project>/.guide/issues/<NN>-<slug>.md` — implementation tasks per slice
+- `<project>/.cairn/prds/<NN>-<slug>.md` — the slice's engineering interpretation
+- `<project>/.cairn/issues/<NN>-<slug>.md` — implementation tasks per slice
 - Future hidden artifacts (session metadata, sub-agent state, etc.) go here
 
 Engineering scaffolding:
 
 - Is engineer-formatted (templates, acceptance criteria, references to deep modules)
-- Is read by the Guide and sub-agents, never rendered to the user
+- Is read by the Cairn and sub-agents, never rendered to the user
 - Is **not** bracketed by user-visible `set_creating` calls — its creation is silent on the panel
 - The persona may translate sections of these into plain language **if the user explicitly asks** (per `prompts/persona.md`'s *"the PRD or issues files unless they ask"*), but the raw files are never surfaced
 
-The dot-folder convention (`.guide/`) signals "internal" the same way `.git/` does — visible if you look, not the place the user is meant to engage.
+The dot-folder convention (`.cairn/`) signals "internal" the same way `.git/` does — visible if you look, not the place the user is meant to engage.
 
-**The slicing-phase `set_creating` brackets remain.** Slice 04-2's `target: "prd" | "issues"` enum entries stay. The clarification is in their *interpretation*: those brackets narrate the **planning phase** in user-friendly persona-voiced messages (e.g., *"Putting your plan together…"*, *"Now breaking it into pieces…"*), not the artifacts themselves. The user sees the persona working through visible moments; the engineering files those moments correspond to remain hidden under `.guide/`. Persona prompt language is updated in slice 05 to reflect this.
+**The slicing-phase `set_creating` brackets remain.** Slice 04-2's `target: "prd" | "issues"` enum entries stay. The clarification is in their *interpretation*: those brackets narrate the **planning phase** in user-friendly persona-voiced messages (e.g., *"Putting your plan together…"*, *"Now breaking it into pieces…"*), not the artifacts themselves. The user sees the persona working through visible moments; the engineering files those moments correspond to remain hidden under `.cairn/`. Persona prompt language is updated in slice 05 to reflect this.
 
 ## Considered alternatives
 
@@ -67,19 +67,19 @@ The dot-folder convention (`.guide/`) signals "internal" the same way `.git/` do
 ## Consequences
 
 - **Slice 08 updates the user-visible artifact path** so Brief, Plan, and Tasks live as schema-validated Artifact data rendered by dedicated app components.
-- **Future Guide artifacts are evaluated through this lens before implementation.** Plain-language for the user → project root + tab. Engineering content for sub-agents/Guide → `.guide/` + silent creation.
+- **Future Cairn artifacts are evaluated through this lens before implementation.** Plain-language for the user → project root + tab. Engineering content for sub-agents/Cairn → `.cairn/` + silent creation.
 - **Persona prompt updates in slice 05** to clarify that `set_creating(target="prd"|"issues")` bracket the *planning phase moments* in user-friendly messages — not literal engineering artifact creation. No code changes to slice 04-2's enum extension are needed; the framing is in the persona's prompt.
 - **CONTEXT.md is updated** to introduce `Plan` and `Engineering scaffolding` as canonical terms and to correct the `User-visible artifact` entry's outdated *"the PRD and issues later"* listing.
-- **The line between categories is judgment, not enforcement.** No schema or build check stops a future contributor from writing engineering markdown to project root or user-visible HTML to `.guide/`. The convention is documented here and in CONTEXT.md; correctness is reviewed via PRD-level ADR references and code review.
+- **The line between categories is judgment, not enforcement.** No schema or build check stops a future contributor from writing engineering markdown to project root or user-visible HTML to `.cairn/`. The convention is documented here and in CONTEXT.md; correctness is reviewed via PRD-level ADR references and code review.
 
 ## Amendment — 2026-04-30
 
-The path scheme above (`<project>/.guide/prds/...` and `<project>/.guide/issues/...`) was superseded in commit `66e8853 refactor(skills): flatten project artifact paths to <project>/{prds,issues}`. Engineering-scaffolding artifacts now live at the Project root:
+The path scheme above (`<project>/.cairn/prds/...` and `<project>/.cairn/issues/...`) was superseded in commit `66e8853 refactor(skills): flatten project artifact paths to <project>/{prds,issues}`. Engineering-scaffolding artifacts now live at the Project root:
 
 - `<project>/prds/<NN>-<slug>.md`
 - `<project>/issues/<NN>-<slug>.md`
 
-The reasoning: a Guide Project already lives under `~/.guide/projects/<project>/`, which is itself hidden by the OS default. Adding a second `.guide/` segment inside each project added no real hiding — it duplicated the dot-folder convention without gaining anything — and made paths visually ugly (`~/.guide/projects/foo/.guide/issues/...`). The Finder-exposure scenario the *"Engineering scaffolding under a non-dot folder"* alternative above was guarding against does not apply: the user is not browsing the project folder in Finder, because the project folder is already inside a hidden top-level directory. The Guide panel is the user's actual file surface, and the panel does not render `prds/` or `issues/` regardless of where they live on disk.
+The reasoning: a Cairn Project already lives under `~/.cairn/projects/<project>/`, which is itself hidden by the OS default. Adding a second `.cairn/` segment inside each project added no real hiding — it duplicated the dot-folder convention without gaining anything — and made paths visually ugly (`~/.cairn/projects/foo/.cairn/issues/...`). The Finder-exposure scenario the *"Engineering scaffolding under a non-dot folder"* alternative above was guarding against does not apply: the user is not browsing the project folder in Finder, because the project folder is already inside a hidden top-level directory. The Cairn panel is the user's actual file surface, and the panel does not render `prds/` or `issues/` regardless of where they live on disk.
 
 What this amendment **does not** change:
 

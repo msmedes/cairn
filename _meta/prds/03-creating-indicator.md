@@ -6,29 +6,29 @@ This PRD records the historical slice design. Slice 08 and ADR 0005 supersede it
 
 ## Problem Statement
 
-The wife finishes scoping. The Guide has heard enough and goes quiet to write the brief. From her side, the chat shows a `…` for ten, twenty, thirty seconds. Her eyes drift to the panel where she expects the brief to appear — and the panel has been showing the same idle "Your project will show up here as we talk." placeholder it showed when she first opened the app. Nothing about the surface tells her work is happening. The deadest part of the entire scoping experience lives in the gap between *"the Guide stopped talking"* and *"the brief materialized,"* and right now that gap is empty space wearing a friendly headline.
+The wife finishes scoping. The Cairn has heard enough and goes quiet to write the brief. From her side, the chat shows a `…` for ten, twenty, thirty seconds. Her eyes drift to the panel where she expects the brief to appear — and the panel has been showing the same idle "Your project will show up here as we talk." placeholder it showed when she first opened the app. Nothing about the surface tells her work is happening. The deadest part of the entire scoping experience lives in the gap between *"the Cairn stopped talking"* and *"the brief materialized,"* and right now that gap is empty space wearing a friendly headline.
 
 This is not a generic loading-spinner problem. The wife isn't waiting for a network request — she's waiting for a thoughtful person to put her ideas onto a page. A spinner would lie about that. A status bar in the chat header would be peripheral. What's missing is the same voice she's been talking to, telling her in plain language what it's doing right now, in the place she's already looking.
 
 ## Solution
 
-While the Guide is creating the brief, the project panel speaks in the Guide's voice. *"Putting your project plan together — give me just a sec."* — written by the Guide itself, in the same voice, sitting where the placeholder headline used to. The animated lines underneath, which used to stand for nothing, now stand for content actively being made. The moment the brief lands, the message disappears and the brief slideshow takes over.
+While the Cairn is creating the brief, the project panel speaks in the Cairn's voice. *"Putting your project plan together — give me just a sec."* — written by the Cairn itself, in the same voice, sitting where the placeholder headline used to. The animated lines underneath, which used to stand for nothing, now stand for content actively being made. The moment the brief lands, the message disappears and the brief slideshow takes over.
 
-The chat doesn't go silent either. In the same beat that the panel updates, the Guide says one short line in the chat — varying the phrasing each time so it doesn't sound canned — so the wife sees the system come alive in two places at once: the chat acknowledging the work, the panel narrating it. When the brief is saved, the Guide confirms in one short line of chat, doesn't recite what was done, doesn't expose any mechanism. The panel has already updated to the brief itself; the chat just acknowledges the moment.
+The chat doesn't go silent either. In the same beat that the panel updates, the Cairn says one short line in the chat — varying the phrasing each time so it doesn't sound canned — so the wife sees the system come alive in two places at once: the chat acknowledging the work, the panel narrating it. When the brief is saved, the Cairn confirms in one short line of chat, doesn't recite what was done, doesn't expose any mechanism. The panel has already updated to the brief itself; the chat just acknowledges the moment.
 
-This generalizes. When slicing lands and the Guide writes a PRD, the same surface narrates it. When implementing lands and the Guide ships a feature, the same surface narrates that too. The user-visible moment of "the Guide is making something for me" looks consistent across the lifetime of every project.
+This generalizes. When slicing lands and the Cairn writes a PRD, the same surface narrates it. When implementing lands and the Cairn ships a feature, the same surface narrates that too. The user-visible moment of "the Cairn is making something for me" looks consistent across the lifetime of every project.
 
 ## User Stories
 
-1. As a non-technical user, I want the project panel to tell me what the Guide is doing while it's putting my brief together, so that the wait doesn't feel dead.
-2. As a non-technical user, I want the message in the panel to be in the Guide's voice — the same voice I've been talking to — not a generic "Loading…" or a list of file operations, so that the experience stays inside one consistent conversation.
+1. As a non-technical user, I want the project panel to tell me what the Cairn is doing while it's putting my brief together, so that the wait doesn't feel dead.
+2. As a non-technical user, I want the message in the panel to be in the Cairn's voice — the same voice I've been talking to — not a generic "Loading…" or a list of file operations, so that the experience stays inside one consistent conversation.
 3. As a non-technical user, I want the chat to say something brief at the same moment the panel updates, so that I see the system come alive in the place I just typed and in the place the artifact will appear.
 4. As a non-technical user, I want the panel message to disappear the instant the brief is ready, replaced by the actual brief, so that the transition from "being made" to "made" is one motion, not two.
-5. As a non-technical user, I want the Guide to confirm in one short line in chat when the brief is saved, without reciting what it did, so that I know it's done without feeling lectured at.
-6. As a non-technical user, if the Guide gets stuck mid-creation and abandons what it was making, I want the panel to stop claiming work is in progress, so that I'm never staring at a stale "putting it together" message.
-7. As a non-technical user, if I close the app while the Guide is mid-creation and reopen it later, I want the panel to show whatever's actually true on disk — empty if no brief exists, the real brief if it does — and not a stuck indicator from a session that already died.
-8. As a non-technical user, I want the panel's behavior to feel the same in future phases — when the Guide writes a PRD, when it ships a feature — so that "the Guide is making something for me" is one consistent surface across the whole project lifecycle.
-9. As the project owner, I want the Guide — not the sidecar — to be the source of meaning for what appears in the panel, so that the architecture preserves the "single persona voice" contract instead of introducing a second engineer voice that infers status from tool names.
+5. As a non-technical user, I want the Cairn to confirm in one short line in chat when the brief is saved, without reciting what it did, so that I know it's done without feeling lectured at.
+6. As a non-technical user, if the Cairn gets stuck mid-creation and abandons what it was making, I want the panel to stop claiming work is in progress, so that I'm never staring at a stale "putting it together" message.
+7. As a non-technical user, if I close the app while the Cairn is mid-creation and reopen it later, I want the panel to show whatever's actually true on disk — empty if no brief exists, the real brief if it does — and not a stuck indicator from a session that already died.
+8. As a non-technical user, I want the panel's behavior to feel the same in future phases — when the Cairn writes a PRD, when it ships a feature — so that "the Cairn is making something for me" is one consistent surface across the whole project lifecycle.
+9. As the project owner, I want the Cairn — not the sidecar — to be the source of meaning for what appears in the panel, so that the architecture preserves the "single persona voice" contract instead of introducing a second engineer voice that infers status from tool names.
 10. As the project owner, I want the indicator to be a tool the persona explicitly invokes (`set_creating`), not a side effect of arbitrary file writes, so that the model is forced to make a deliberate authorial choice about what to tell the user, and so that misuses are visible as wrong messages rather than silent omissions.
 11. As the project owner, I want the indicator's `target` parameter to be a constrained enum starting with `"brief"` and growing to include `"prd"`, `"issues"`, etc. as future slices land, so that adding a new artifact type is one enum entry rather than parallel mechanism.
 12. As the project owner, I want indicator state to be purely ephemeral — React state only, no on-disk persistence — so that no staleness logic, no migration concern, and no second source of truth has to be maintained.
@@ -41,7 +41,7 @@ This generalizes. When slicing lands and the Guide writes a PRD, the same surfac
 
 ### Modules
 
-- **`set_creating` tool** *(modification to `sidecar/guide-tools.ts`)*. New `defineTool` entry alongside `set_project_name`. Parameters: `target` (TypeBox `Type.Union([Type.Literal("brief")])` to start), `message` (string). The tool's `execute` invokes a new `onCreatingStart(target, message)` callback supplied by `createGuideTools` options, then returns a one-line confirmation `content` (so the model knows the indicator is up and can proceed). `promptGuidelines` constrain the call: only before user-visible artifact creation, paired with one short line of chat, message phrased in persona voice, no mention of paths/files/tools.
+- **`set_creating` tool** *(modification to `sidecar/cairn-tools.ts`)*. New `defineTool` entry alongside `set_project_name`. Parameters: `target` (TypeBox `Type.Union([Type.Literal("brief")])` to start), `message` (string). The tool's `execute` invokes a new `onCreatingStart(target, message)` callback supplied by `createGuideTools` options, then returns a one-line confirmation `content` (so the model knows the indicator is up and can proceed). `promptGuidelines` constrain the call: only before user-visible artifact creation, paired with one short line of chat, message phrased in persona voice, no mention of paths/files/tools.
 
 - **Sidecar runtime** *(modification to `sidecar/index.ts`)*. `OutMsg` gains `{ type: "creating_started"; target: "brief"; message: string }`. The `onCreatingStart` callback emits this event over the existing line-delimited JSON stdio. No other protocol changes.
 
@@ -83,16 +83,16 @@ One new `OutMsg` variant: `{ type: "creating_started"; target: "brief"; message:
 
 ### Defaults / paths
 
-- Tool name: `set_creating`. Tool label: `Show Creating Indicator`. Lives in the same Guide-specific tool registry as `set_project_name`.
+- Tool name: `set_creating`. Tool label: `Show Creating Indicator`. Lives in the same Cairn-specific tool registry as `set_project_name`.
 - Target enum: `["brief"]` in this slice. Future slices extend this with `"prd"`, `"issues"`, etc. — one enum entry per artifact type, no other changes required.
 - Message length guidance: under ~80 characters, conversational, no trailing punctuation. Enforced via tool description, not schema (the persona is the constraint, not the sidecar).
 - Animation timing: ghost-line shimmer accelerates from 2.8s to 1.6s during creating; soft pulse on the wrapper at 2.4s. Tuned for "alive but not anxious"; revisit during dogfooding if the cadence feels wrong.
 
 ## Testing Decisions
 
-A good test for this slice exercises behavior the user can name — *"the panel says what the Guide is doing while the brief is being made," "the indicator clears the instant the brief lands," "abandoning mid-creation doesn't leave a stuck message"* — not React internals or pi tool dispatch internals.
+A good test for this slice exercises behavior the user can name — *"the panel says what the Cairn is doing while the brief is being made," "the indicator clears the instant the brief lands," "abandoning mid-creation doesn't leave a stuck message"* — not React internals or pi tool dispatch internals.
 
-- **`set_creating` tool, unit (`bun test`).** Extension of `sidecar/tests/guide-tools.test.ts`. Calling the tool's `execute` with a parsed `{target, message}` invokes the `onCreatingStart` callback exactly once with those args and returns a non-error `content` block. Edge case: target outside the enum is rejected by TypeBox before `execute` runs (covered by pi's existing validation; we don't re-test it).
+- **`set_creating` tool, unit (`bun test`).** Extension of `sidecar/tests/cairn-tools.test.ts`. Calling the tool's `execute` with a parsed `{target, message}` invokes the `onCreatingStart` callback exactly once with those args and returns a non-error `content` block. Edge case: target outside the enum is rejected by TypeBox before `execute` runs (covered by pi's existing validation; we don't re-test it).
 
 - **`useCreatingIndicator` hook, unit (`bun test --jsx` via Vitest + jsdom + `@testing-library/react`).** This is the testable deep module the slice exists to extract. Tabular coverage:
   - Initial state is `null`.
@@ -109,7 +109,7 @@ A good test for this slice exercises behavior the user can name — *"the panel 
 
 - **Sidecar protocol smoke, integration (`bun test`).** Extension of the existing protocol smoke (slice 01 prior art at `sidecar/tests/protocol.test.ts`). Spawn sidecar, send `init`, send a synthetic `prompt`, assert that when the model invokes `set_creating` the sidecar emits a `creating_started` event with the parsed target and message *before* any subsequent tool call. Skipped without API key, same gate as the existing smoke.
 
-- **End-to-end smoke, manual.** Open the app on a clean `~/.guide/`, scope a project to the point where the persona writes the brief. Verify: (1) the panel placeholder headline is replaced by the persona's message at the moment `set_creating` fires; (2) the chat shows a matching short line in the same beat; (3) the indicator clears the instant the brief slideshow renders; (4) reopening the app does not re-show the indicator. Negative case: kill the sidecar mid-creation; reopen; verify the panel shows the empty placeholder, not a stuck indicator from the dead session.
+- **End-to-end smoke, manual.** Open the app on a clean `~/.cairn/`, scope a project to the point where the persona writes the brief. Verify: (1) the panel placeholder headline is replaced by the persona's message at the moment `set_creating` fires; (2) the chat shows a matching short line in the same beat; (3) the indicator clears the instant the brief slideshow renders; (4) reopening the app does not re-show the indicator. Negative case: kill the sidecar mid-creation; reopen; verify the panel shows the empty placeholder, not a stuck indicator from the dead session.
 
 We deliberately do not write:
 - **Persona-quality unit tests** for the message text the model produces. Same reasoning as slices 01 and 02 — voice is tuned by reading transcripts, not asserted in tests.
@@ -117,7 +117,7 @@ We deliberately do not write:
 - **Tauri Rust unit tests for this slice.** Slice 03 does not touch Rust. The principle for future slices: when Rust *is* modified, add Rust tests in `src-tauri/`. Not applicable here.
 - **Integration tests for the React component tree** (mounting the full `App` and asserting the panel renders the indicator). The hook tests cover the state machine; the manual smoke covers the integration. A full `App` mount would exercise Tauri runtime detection, sidecar event listening, and resize observers — disproportionate setup for marginal coverage.
 
-Prior art: `sidecar/tests/guide-tools.test.ts` for the tool extension; `sidecar/tests/protocol.test.ts` for the smoke test pattern. The Vitest setup is new; follow Vite's documented Vitest integration as the canonical reference.
+Prior art: `sidecar/tests/cairn-tools.test.ts` for the tool extension; `sidecar/tests/protocol.test.ts` for the smoke test pattern. The Vitest setup is new; follow Vite's documented Vitest integration as the canonical reference.
 
 ## Out of Scope
 
@@ -135,6 +135,6 @@ Prior art: `sidecar/tests/guide-tools.test.ts` for the tool extension; `sidecar/
 - **The persona prompt is the single highest-stakes part.** A vague rule means the model forgets to call `set_creating`; an overspecified rule means parroted messages and wooden voice. The Q9 wording lands the carve-out framing ("most of your work is silent — the exception is…") and explicitly omits example messages to avoid parroting. Read transcripts during dogfooding; if the model parrots, tighten. If the model forgets, tighten differently.
 - **Regressions are observable by design.** If the persona forgets to call `set_creating`, the user sees the same dead `…` they had before. There is no silent failure mode where the indicator is broken but the surface looks fine. This is intentional — it makes prompt drift detectable.
 - **The augment-in-place treatment depends on the placeholder existing.** If we ever change the panel's empty state to render the brief slideshow's frame eagerly with empty content, the `panel-placeholder-creating` rules stop applying and the indicator goes dark. Worth pinning this assumption in `App.tsx` with a one-line comment when the integration lands; revisit if the empty-state design changes.
-- **`set_creating` is the second Guide-specific tool**, after `set_project_name`. Both follow the "thin tool, callback into sidecar runtime" pattern from slice 02. Future Guide tools (`write_prd`, `write_issue`, `dispatch_subagent`) should follow the same shape. The pattern is now established with two examples and is worth keeping consistent.
+- **`set_creating` is the second Cairn-specific tool**, after `set_project_name`. Both follow the "thin tool, callback into sidecar runtime" pattern from slice 02. Future Cairn tools (`write_prd`, `write_issue`, `dispatch_subagent`) should follow the same shape. The pattern is now established with two examples and is worth keeping consistent.
 - **Risk: model calls `set_creating` for non-artifact work** (e.g., misuses it as a "thinking…" indicator). Tool description forbids it explicitly. Worst case is a weird message in the panel; self-correcting on the next read of transcripts. No defensive code in the sidecar — the constraint is in the prompt.
 - **Risk: target file content changes for unrelated reasons** (e.g., the user manually edits `brief.html` during a creating window). Astronomically unlikely in v0; the user has no way to do that from inside the app. Worth knowing about if it ever surfaces; the fix would be a content-hash check at `creating_started` time and only clearing on hash change, but it's premature.

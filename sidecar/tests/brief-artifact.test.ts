@@ -10,7 +10,7 @@ import {
 } from "../brief-artifact";
 
 function tempProject() {
-  return mkdtempSync(join(tmpdir(), "guide-brief-artifact-"));
+  return mkdtempSync(join(tmpdir(), "cairn-brief-artifact-"));
 }
 
 function validBrief(

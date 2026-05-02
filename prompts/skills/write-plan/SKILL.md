@@ -14,7 +14,7 @@ args:
       description: Absolute path to the active Project root.
     slice_agreement:
       type: string
-      description: The slice the Guide proposed and the user agreed to.
+      description: The slice the Cairn proposed and the user agreed to.
     brief_path:
       type: string
       description: Project-relative path to the Brief, normally brief.json.
@@ -23,7 +23,7 @@ args:
       description: Project-relative path to the issue files directory, normally issues/.
 ---
 
-Generate the Plan content in the Guide's plain-language voice, then finish by calling the custom Plan artifact tool. Call `create_plan_artifact` for a new Plan. Call `update_plan_artifact` only when the inputs clearly say this is a revision of an existing Plan and provide a short reason.
+Generate the Plan content in the Cairn's plain-language voice, then finish by calling the custom Plan artifact tool. Call `create_plan_artifact` for a new Plan. Call `update_plan_artifact` only when the inputs clearly say this is a revision of an existing Plan and provide a short reason.
 
 Do not use raw Write or Edit for Plan artifact data. Do not create replacement Plan files. The Plan artifact tools own `plan.json`, its schema validation, and its envelope metadata.
 

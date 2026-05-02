@@ -1,8 +1,8 @@
 /**
- * Guide sidecar — slice 2: persisted single-project sessions.
+ * Cairn sidecar — slice 2: persisted single-project sessions.
  *
  * Communicates with the Tauri host over LF-delimited JSON on stdio.
- * `init` resumes the most recently opened project under `~/.guide/projects`.
+ * `init` resumes the most recently opened project under `~/.cairn/projects`.
  * If no project exists yet, startup stays empty; the first user prompt creates
  * a project from that message and persists the pi session inside it.
  */
@@ -26,9 +26,9 @@ import {
   getAgentDir,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import { createCairnTools } from "./cairn-tools";
 import { recoverDanglingToolCallInDir } from "./dangling-tool-recovery";
-import { loadGuideSettingsEnv, loadRepoLocalEnv } from "./env";
-import { createGuideTools } from "./guide-tools";
+import { loadCairnSettingsEnv, loadRepoLocalEnv } from "./env";
 import {
   type HydrateEvent,
   translateSessionEntriesToDevLogMessages,
@@ -98,7 +98,7 @@ type AgentThread = {
   id: string;
   parentId: string | null;
   label: string;
-  kind: "guide" | "subagent";
+  kind: "cairn" | "subagent";
   sessionFile?: string;
 };
 
@@ -117,7 +117,7 @@ const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 loadRepoLocalEnv();
-loadGuideSettingsEnv();
+loadCairnSettingsEnv();
 
 function getSessionDir(project: Project) {
   return join(project.path, "sessions");
@@ -213,7 +213,7 @@ function buildAgentThreads(
   subagentSessions: Array<{ sessionFile: string; entries: SessionEntryLike[] }>,
 ) {
   const spawnCalls = [
-    ...collectSpawnCalls("guide", parentEntries),
+    ...collectSpawnCalls("cairn", parentEntries),
     ...subagentSessions.flatMap((session) =>
       collectSpawnCalls(
         agentIdForSessionFile(session.sessionFile),
@@ -224,10 +224,10 @@ function buildAgentThreads(
 
   const threads: AgentThread[] = [
     {
-      id: "guide",
+      id: "cairn",
       parentId: null,
-      label: "Guide",
-      kind: "guide",
+      label: "Cairn",
+      kind: "cairn",
     },
   ];
 
@@ -238,7 +238,7 @@ function buildAgentThreads(
       .at(-1);
     threads.push({
       id: agentIdForSessionFile(session.sessionFile),
-      parentId: spawnCall?.parentAgentId ?? "guide",
+      parentId: spawnCall?.parentAgentId ?? "cairn",
       label: spawnCall?.label ?? "subagent",
       kind: "subagent",
       sessionFile: session.sessionFile,
@@ -268,7 +268,7 @@ function emitPersistedSessionDevLogs(
 
   for (const message of translateSessionEntriesToDevLogMessages(parentEntries, {
     kind: "parent",
-    agentId: "guide",
+    agentId: "cairn",
   })) {
     emitDevLog(message);
   }
@@ -318,7 +318,7 @@ function getFakeSpawnSubagentResultFromEnv():
       signal?: AbortSignal;
     }) => Promise<SpawnSubagentResult>)
   | undefined {
-  const raw = process.env.GUIDE_FAKE_SPAWN_SUBAGENT_RESULT;
+  const raw = process.env.CAIRN_FAKE_SPAWN_SUBAGENT_RESULT;
   if (!raw) return undefined;
 
   return async () => JSON.parse(raw) as SpawnSubagentResult;
@@ -338,13 +338,13 @@ function findLastToolResultText(context: Context) {
 function getFakeProtocolSpawnModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_SPAWN_SUBAGENT !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_SPAWN_SUBAGENT !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -365,20 +365,20 @@ function getFakeProtocolSpawnModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolUpdateTaskStatusModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_TASK_STATUS !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_UPDATE_TASK_STATUS !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -398,20 +398,20 @@ function getFakeProtocolUpdateTaskStatusModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolCreateTasksModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_CREATE_TASKS !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_CREATE_TASKS !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -439,20 +439,20 @@ function getFakeProtocolCreateTasksModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolCreateBriefModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_CREATE_BRIEF !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_CREATE_BRIEF !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -482,20 +482,20 @@ function getFakeProtocolCreateBriefModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolUpdateBriefModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_BRIEF !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_UPDATE_BRIEF !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -526,20 +526,20 @@ function getFakeProtocolUpdateBriefModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolCreatePlanModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_CREATE_PLAN !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_CREATE_PLAN !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -568,20 +568,20 @@ function getFakeProtocolCreatePlanModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolUpdatePlanModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_PLAN !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_UPDATE_PLAN !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -611,20 +611,20 @@ function getFakeProtocolUpdatePlanModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
 function getFakeProtocolUpdateProjectContextModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
-  if (process.env.GUIDE_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT !== "1") {
+  if (process.env.CAIRN_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT !== "1") {
     return undefined;
   }
 
   const registration = registerFauxProvider({
-    provider: "guide-protocol-test",
-    models: [{ id: "guide-protocol-test-model" }],
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
   });
   registration.setResponses([
     fauxAssistantMessage([
@@ -651,7 +651,7 @@ function getFakeProtocolUpdateProjectContextModel():
   ]);
   const model = registration.getModel();
   const authStorage = AuthStorage.inMemory();
-  authStorage.setRuntimeApiKey(model.provider, "guide-protocol-test-key");
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
   return { model, authStorage };
 }
 
@@ -842,7 +842,7 @@ async function openProject(
     sessionManager: nextSessionManager,
     model: fakeProtocol?.model,
     authStorage: fakeProtocol?.authStorage ?? runtimeAuthStorage,
-    customTools: createGuideTools({
+    customTools: createCairnTools({
       getActiveProject: () => activeProject,
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
       onRenameSuccess: (_previousProject, nextProject) => {

@@ -32,7 +32,7 @@ test("active prompts and tool descriptions do not name legacy HTML artifacts", (
     readRepoFile("prompts", "skills", "write-brief", "SKILL.md"),
     readRepoFile("prompts", "skills", "write-plan", "SKILL.md"),
     readRepoFile("prompts", "skills", "write-tasks", "SKILL.md"),
-    readRepoFile("sidecar", "guide-tools.ts"),
+    readRepoFile("sidecar", "cairn-tools.ts"),
     readRepoFile("sidecar", "spawn-subagent.ts"),
   ].join("\n");
 

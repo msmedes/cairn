@@ -71,20 +71,20 @@ function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function createGuideHome(): string {
-  return createTempDir("guide-home-");
+function createCairnHome(): string {
+  return createTempDir("cairn-home-");
 }
 
 function createPersonaFile(
-  contents = "You are the Guide. Ask one short scoping question at a time.",
+  contents = "You are Cairn. Ask one short scoping question at a time.",
 ): string {
-  const personaPath = join(createTempDir("guide-persona-"), "persona.md");
+  const personaPath = join(createTempDir("cairn-persona-"), "persona.md");
   writeFileSync(personaPath, contents, "utf8");
   return personaPath;
 }
 
 function projectsRootFor(homeDir: string): string {
-  return join(homeDir, ".guide", "projects");
+  return join(homeDir, ".cairn", "projects");
 }
 
 function createStoredProject(homeDir: string, id = "2026-04-30-test-project") {
@@ -179,9 +179,9 @@ async function collectEvents(
   }
 }
 
-test("Guide-bundled slicing skills are discoverable by the sidecar resource loader", async () => {
+test("Cairn-bundled slicing skills are discoverable by the sidecar resource loader", async () => {
   const loader = new DefaultResourceLoader({
-    cwd: createTempDir("guide-skill-loader-"),
+    cwd: createTempDir("cairn-skill-loader-"),
     agentDir: getAgentDir(),
     additionalSkillPaths: [resolve(REPO_ROOT, "prompts/skills")],
     noSkills: true,
@@ -222,11 +222,11 @@ test("malformed input emits an error event without killing the sidecar", async (
   expect(errorEvents.at(-1)?.type).toBe("error");
 });
 
-test("init on an empty guide home reports ready without creating a project", async () => {
-  const guideHome = createGuideHome();
-  const proc = spawnSidecar(guideHome);
+test("init on an empty cairn home reports ready without creating a project", async () => {
+  const cairnHome = createCairnHome();
+  const proc = spawnSidecar(cairnHome);
   const personaPath = createPersonaFile();
-  const projectsRoot = projectsRootFor(guideHome);
+  const projectsRoot = projectsRootFor(cairnHome);
 
   expect(existsSync(projectsRoot)).toBe(false);
 
@@ -246,10 +246,10 @@ test("init on an empty guide home reports ready without creating a project", asy
 });
 
 test("init emits an error event when personaPath does not exist", async () => {
-  const guideHome = createGuideHome();
-  const proc = spawnSidecar(guideHome);
+  const cairnHome = createCairnHome();
+  const proc = spawnSidecar(cairnHome);
   const missingPersonaPath = join(
-    createTempDir("guide-persona-missing-"),
+    createTempDir("cairn-persona-missing-"),
     "missing-persona.md",
   );
 
@@ -270,15 +270,15 @@ test("init emits an error event when personaPath does not exist", async () => {
 test(
   "spawn_subagent fake result flows through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_SPAWN_SUBAGENT: "1",
-      GUIDE_FAKE_SPAWN_SUBAGENT_RESULT: JSON.stringify({
+    const cairnHome = createCairnHome();
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_SPAWN_SUBAGENT: "1",
+      CAIRN_FAKE_SPAWN_SUBAGENT_RESULT: JSON.stringify({
         outcome: "blocked",
         message: "Need product input.",
       }),
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -311,8 +311,8 @@ test(
 test(
   "update_task_status mutates tasks.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const tasksPath = join(projectPath, "tasks.json");
     writeFileSync(
       tasksPath,
@@ -340,10 +340,10 @@ test(
       }),
       "utf8",
     );
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_UPDATE_TASK_STATUS: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_UPDATE_TASK_STATUS: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -383,13 +383,13 @@ test(
 test(
   "create_tasks_artifact writes tasks.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const tasksPath = join(projectPath, "tasks.json");
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_CREATE_TASKS: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_CREATE_TASKS: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -443,13 +443,13 @@ test(
 test(
   "create_brief_artifact writes brief.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const briefPath = join(projectPath, "brief.json");
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_CREATE_BRIEF: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_CREATE_BRIEF: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -490,8 +490,8 @@ test(
 test(
   "update_brief_artifact revises brief.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const briefPath = join(projectPath, "brief.json");
     writeFileSync(
       briefPath,
@@ -517,10 +517,10 @@ test(
       }),
       "utf8",
     );
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_UPDATE_BRIEF: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_UPDATE_BRIEF: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -562,13 +562,13 @@ test(
 test(
   "create_plan_artifact writes plan.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const planPath = join(projectPath, "plan.json");
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_CREATE_PLAN: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_CREATE_PLAN: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -609,8 +609,8 @@ test(
 test(
   "update_plan_artifact revises plan.json through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const planPath = join(projectPath, "plan.json");
     writeFileSync(
       planPath,
@@ -635,10 +635,10 @@ test(
       }),
       "utf8",
     );
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_UPDATE_PLAN: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_UPDATE_PLAN: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(
@@ -680,13 +680,13 @@ test(
 test(
   "update_project_context writes CONTEXT.md through the sidecar protocol",
   async () => {
-    const guideHome = createGuideHome();
-    const projectPath = createStoredProject(guideHome);
+    const cairnHome = createCairnHome();
+    const projectPath = createStoredProject(cairnHome);
     const contextPath = join(projectPath, "CONTEXT.md");
-    const proc = spawnSidecar(guideHome, {
-      GUIDE_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT: "1",
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT: "1",
     });
-    const personaPath = createPersonaFile("You are the Guide.");
+    const personaPath = createPersonaFile("You are Cairn.");
 
     writeJsonToSidecar(proc, { type: "init", personaPath });
     await collectEvents(

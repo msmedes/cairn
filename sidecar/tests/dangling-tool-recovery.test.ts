@@ -380,7 +380,7 @@ describe("recoverDanglingToolCall", () => {
 
 describe("recoverDanglingToolCallInDir", () => {
   test("returns null for a missing or empty session dir", () => {
-    const empty = mkdtempSync(join(tmpdir(), "guide-recovery-empty-"));
+    const empty = mkdtempSync(join(tmpdir(), "cairn-recovery-empty-"));
     expect(recoverDanglingToolCallInDir(empty)).toBeNull();
     expect(
       recoverDanglingToolCallInDir(join(empty, "does-not-exist")),
@@ -388,7 +388,7 @@ describe("recoverDanglingToolCallInDir", () => {
   });
 
   test("appends a synthetic line to the latest jsonl when dangling", () => {
-    const dir = mkdtempSync(join(tmpdir(), "guide-recovery-"));
+    const dir = mkdtempSync(join(tmpdir(), "cairn-recovery-"));
     const file = join(dir, "2026-04-30T23-12-12-409Z_abc.jsonl");
     const original = `${JSON.stringify(
       assistantWithToolCalls("a1", "u0", [
@@ -410,7 +410,7 @@ describe("recoverDanglingToolCallInDir", () => {
   });
 
   test("appends an idempotent synthetic line for dangling spawn_subagent", () => {
-    const dir = mkdtempSync(join(tmpdir(), "guide-recovery-spawn-"));
+    const dir = mkdtempSync(join(tmpdir(), "cairn-recovery-spawn-"));
     const file = join(dir, "2026-04-30T23-12-12-409Z_abc.jsonl");
     const original = `${JSON.stringify(
       assistantWithToolCalls("a1", "u0", [
@@ -440,7 +440,7 @@ describe("recoverDanglingToolCallInDir", () => {
   });
 
   test("is idempotent — second pass appends nothing", () => {
-    const dir = mkdtempSync(join(tmpdir(), "guide-recovery-idem-"));
+    const dir = mkdtempSync(join(tmpdir(), "cairn-recovery-idem-"));
     const file = join(dir, "2026-04-30T23-12-12-409Z_abc.jsonl");
     writeFileSync(
       file,
@@ -461,7 +461,7 @@ describe("recoverDanglingToolCallInDir", () => {
   });
 
   test("handles a jsonl that does not end in a newline", () => {
-    const dir = mkdtempSync(join(tmpdir(), "guide-recovery-noeol-"));
+    const dir = mkdtempSync(join(tmpdir(), "cairn-recovery-noeol-"));
     const file = join(dir, "2026-04-30T23-12-12-409Z_abc.jsonl");
     writeFileSync(
       file,

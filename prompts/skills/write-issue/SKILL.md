@@ -16,7 +16,7 @@ args:
       description: Optional project-relative path to the PRD to split; defaults to the newest markdown file under prds/.
 ---
 
-Break the most recent slice PRD into independently buildable implementation issues. This is silent planning work for the Guide: do not chat with the user, do not expose implementation paths to the user, and do not write files unless the PRD supports useful issue slices.
+Break the most recent slice PRD into independently buildable implementation issues. This is silent planning work for the Cairn: do not chat with the user, do not expose implementation paths to the user, and do not write files unless the PRD supports useful issue slices.
 
 ## Input
 
@@ -26,7 +26,7 @@ Read the most recently modified PRD under:
 
 Use only markdown PRD files in that folder. If more than one PRD exists, choose the newest file by modification time. Treat that file as the source of truth for the current slice.
 
-If there is no PRD under `<project>/prds/`, do not create issue files. Return exactly one targeted question in the Guide's voice that asks for the missing planning input.
+If there is no PRD under `<project>/prds/`, do not create issue files. Return exactly one targeted question in the Cairn's voice that asks for the missing planning input.
 
 ## Bubble-up rule
 
@@ -38,7 +38,7 @@ Before writing, check whether the PRD is sufficient to produce useful implementa
 - required data, persistence, integration, or UI behavior is unspecified
 - dependencies between issue slices would be guesswork
 
-If a load-bearing gap exists, do not write or modify issue files. Return exactly one targeted clarifying question in the Guide's voice so the persona can ask the user and re-invoke this skill after the answer. Ask only about the blocking gap. Do not include analysis, alternatives, markdown headings, file paths, or more than one question.
+If a load-bearing gap exists, do not write or modify issue files. Return exactly one targeted clarifying question in the Cairn's voice so the persona can ask the user and re-invoke this skill after the answer. Ask only about the blocking gap. Do not include analysis, alternatives, markdown headings, file paths, or more than one question.
 
 If the missing information is not load-bearing, make a reasonable implementation-planning judgment and continue.
 

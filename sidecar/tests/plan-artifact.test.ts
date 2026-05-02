@@ -10,7 +10,7 @@ import {
 } from "../plan-artifact";
 
 function tempProject() {
-  return mkdtempSync(join(tmpdir(), "guide-plan-artifact-"));
+  return mkdtempSync(join(tmpdir(), "cairn-plan-artifact-"));
 }
 
 function validPlan(

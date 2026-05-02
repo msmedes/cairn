@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build a packaged Guide.app / .zip.
+# Build a packaged Cairn.app / .zip.
 #
 # Steps:
 #   1. Compile the bun sidecar (TS + npm deps + bun runtime) into a single
 #      executable, named with the Rust target triple Tauri expects.
 #   2. Run `tauri build`, which bundles the sidecar binary + prompts +
-#      pi-coding-agent's package.json into Guide.app.
+#      pi-coding-agent's package.json into Cairn.app.
 #   3. Ad-hoc sign the app bundle and produce a zip for transfer.
 #
 # Output: src-tauri/target/release/bundle/macos/
@@ -21,7 +21,7 @@ case "$(uname -s)-$(uname -m)" in
   *) echo "unsupported host: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
 
-SIDECAR_OUT="src-tauri/binaries/guide-sidecar-${RUST_TARGET}"
+SIDECAR_OUT="src-tauri/binaries/cairn-sidecar-${RUST_TARGET}"
 
 echo "==> compiling sidecar -> ${SIDECAR_OUT}"
 mkdir -p src-tauri/binaries
@@ -38,10 +38,10 @@ bun run tauri build
 # Finder. We skip Tauri's dmg target (above) and produce a plain dmg with
 # hdiutil — no window styling, just an installable container.
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  APP_PATH="src-tauri/target/release/bundle/macos/Guide.app"
+  APP_PATH="src-tauri/target/release/bundle/macos/Cairn.app"
   VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version" 2>/dev/null || echo 0.1.0)"
-  ZIP_PATH="Guide-${VERSION}-${RUST_TARGET%-apple-darwin}-macos.zip"
-  DMG_PATH="src-tauri/target/release/bundle/macos/Guide_${VERSION}_${RUST_TARGET%-apple-darwin}.dmg"
+  ZIP_PATH="Cairn-${VERSION}-${RUST_TARGET%-apple-darwin}-macos.zip"
+  DMG_PATH="src-tauri/target/release/bundle/macos/Cairn_${VERSION}_${RUST_TARGET%-apple-darwin}.dmg"
   echo "==> ad-hoc signing -> ${APP_PATH}"
   codesign --force --deep --sign - "${APP_PATH}"
   codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
@@ -50,21 +50,21 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   rm -f "${ZIP_PATH}"
   ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
 
-  if [[ "${GUIDE_BUILD_DMG:-0}" == "1" ]]; then
+  if [[ "${CAIRN_BUILD_DMG:-0}" == "1" ]]; then
     echo "==> creating dmg -> ${DMG_PATH}"
     rm -f "${DMG_PATH}"
     hdiutil create \
-      -volname Guide \
+      -volname Cairn \
       -srcfolder "${APP_PATH}" \
       -ov \
       -format UDZO \
       "${DMG_PATH}" >/dev/null
   else
-    echo "==> skipping dmg (set GUIDE_BUILD_DMG=1 to enable)"
+    echo "==> skipping dmg (set CAIRN_BUILD_DMG=1 to enable)"
   fi
 fi
 
 echo
 echo "Done. Artifacts:"
 find src-tauri/target/release/bundle -maxdepth 4 \( -name '*.app' -o -name '*.dmg' \) -print
-find . -maxdepth 1 -name 'Guide-*-macos.zip' -print
+find . -maxdepth 1 -name 'Cairn-*-macos.zip' -print

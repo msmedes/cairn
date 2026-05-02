@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 
-Guide originally treated the Brief, Plan, and Tasks tab as model-generated HTML files (`brief.html`, `plan.html`, `tasks.html`). That gave the Guide and Sub-agents too much control over presentation, made artifact quality depend on prompt obedience, and forced the app to parse generated documents back into something renderable.
+Cairn originally treated the Brief, Plan, and Tasks tab as model-generated HTML files (`brief.html`, `plan.html`, `tasks.html`). That gave the Cairn and Sub-agents too much control over presentation, made artifact quality depend on prompt obedience, and forced the app to parse generated documents back into something renderable.
 
 The better boundary is: agents provide content, the app owns presentation.
 
@@ -12,7 +12,7 @@ The better boundary is: agents provide content, the app owns presentation.
 
 Brief, Plan, and Tasks are backed by schema-validated JSON Artifact data, not generated HTML. The canonical files are `brief.json`, `plan.json`, and `tasks.json`; the old HTML artifacts are not supported going forward and do not need migration.
 
-Each core user-visible artifact has its own schema. Guide will not use a generic document-block schema for these surfaces.
+Each core user-visible artifact has its own schema. Cairn will not use a generic document-block schema for these surfaces.
 
 Artifact persistence happens through custom tools backed by code, not raw filesystem writes:
 
@@ -28,9 +28,9 @@ Artifact files use a small tool-owned envelope around artifact-specific data. Sc
 
 ## Project context
 
-Each Project also gets Engineering scaffolding at `<project>/CONTEXT.md`. This file uses the same broad format as repo-level context docs and captures durable Project facts, language, constraints, and decisions for the Guide and Sub-agents. It is not user-visible and is not a progress log.
+Each Project also gets Engineering scaffolding at `<project>/CONTEXT.md`. This file uses the same broad format as repo-level context docs and captures durable Project facts, language, constraints, and decisions for the Cairn and Sub-agents. It is not user-visible and is not a progress log.
 
-Project context is created when the Brief is created, through an explicit context tool call. Both the Guide and Sub-agents may update it when they learn durable Project knowledge. Artifact tools do not update context automatically; context writes are explicit and may run in parallel with artifact writes only when their write targets are disjoint.
+Project context is created when the Brief is created, through an explicit context tool call. Both the Cairn and Sub-agents may update it when they learn durable Project knowledge. Artifact tools do not update context automatically; context writes are explicit and may run in parallel with artifact writes only when their write targets are disjoint.
 
 ## Consequences
 

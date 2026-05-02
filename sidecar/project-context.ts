@@ -12,7 +12,7 @@ const ProjectContextTermSchema = z.object({
     "Durable project term or phrase.",
   ),
   definition: nonEmptyString("Term definition is required.").describe(
-    "Short definition for the Guide and Sub-agents.",
+    "Short definition for Cairn and Sub-agents.",
   ),
 });
 

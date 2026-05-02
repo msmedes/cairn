@@ -19,7 +19,7 @@ import {
 } from "../spawn-subagent";
 
 function tempProjectRoot() {
-  return mkdtempSync(join(tmpdir(), "guide-spawn-subagent-"));
+  return mkdtempSync(join(tmpdir(), "cairn-spawn-subagent-"));
 }
 
 function writeSkill(projectRoot: string, name: string, body = "Do the work.") {
@@ -220,7 +220,7 @@ test("spawnSubagent gates recursion depth before launching", async () => {
     args: {},
     responseSchema: "task_outcome",
     loadedSkills: [skill],
-    env: { GUIDE_SUBAGENT_DEPTH: "2" },
+    env: { CAIRN_SUBAGENT_DEPTH: "2" },
     runSubAgent: async () => {
       throw new Error("should not launch");
     },
@@ -297,7 +297,7 @@ test("spawnSubagent invokes skills through pi skill loading and increments depth
     args: { title: "First slice" },
     responseSchema: "artifact_write",
     loadedSkills: [skill, qualitySkill],
-    env: { GUIDE_SUBAGENT_DEPTH: "1" },
+    env: { CAIRN_SUBAGENT_DEPTH: "1" },
     runSubAgent: async ({ prompt, systemPrompt, skillPaths, env }) => {
       launches.push({ prompt, systemPrompt, skillPaths, env });
       return {
@@ -330,7 +330,7 @@ test("spawnSubagent invokes skills through pi skill loading and increments depth
     skill.filePath,
     qualitySkill.filePath,
   ]);
-  expect(launches[0].env.GUIDE_SUBAGENT_DEPTH).toBe("2");
+  expect(launches[0].env.CAIRN_SUBAGENT_DEPTH).toBe("2");
 });
 
 test("sub-agent sessions persist under a nested project session directory", () => {

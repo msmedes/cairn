@@ -8,9 +8,9 @@ Accepted.
 
 Slicing produces three artifacts: a PRD (engineering interpretation of the slice), a set of issue files (vertical slices through the layers, each with acceptance criteria), and `plan.json` schema-validated Artifact data for the user-visible Plan. Implementing is the phase that turns those issues into working code.
 
-Until this ADR, the persona prompt has only one sentence on Implementing: *"sub-agents do the actual coding while the Guide narrates."* That undersells a phase with several real forks: where the dispatch loop lives, what a sub-agent's terminal contract looks like, how progress reaches the chat surface, how failures are handled, when the slice is "done," and how the phase resumes after the app is closed mid-run. Without an explicit shape, ad-hoc decisions land each time and drift the persona's contract — most importantly its single-voice rule and its *"never claim something is working without seeing evidence"* rule.
+Until this ADR, the persona prompt has only one sentence on Implementing: *"sub-agents do the actual coding while the Cairn narrates."* That undersells a phase with several real forks: where the dispatch loop lives, what a sub-agent's terminal contract looks like, how progress reaches the chat surface, how failures are handled, when the slice is "done," and how the phase resumes after the app is closed mid-run. Without an explicit shape, ad-hoc decisions land each time and drift the persona's contract — most importantly its single-voice rule and its *"never claim something is working without seeing evidence"* rule.
 
-The shape competes against an external alternative: `ralph.sh`, the meta-build's autonomous Codex-driven loop that consumes GitHub issues and ships PRs. `ralph.sh` is fine for the team's own engineering work but a wrong fit inside a user's Project — there is no GitHub, no PR ceremony, and the persona is meant to be the only entity holding state. An Implementing flow inside Guide-the-product needs to be designed for the persona's contract first, not borrowed from the meta-build's CI harness.
+The shape competes against an external alternative: `ralph.sh`, the meta-build's autonomous Codex-driven loop that consumes GitHub issues and ships PRs. `ralph.sh` is fine for the team's own engineering work but a wrong fit inside a user's Project — there is no GitHub, no PR ceremony, and the persona is meant to be the only entity holding state. An Implementing flow inside Cairn-the-product needs to be designed for the persona's contract first, not borrowed from the meta-build's CI harness.
 
 ## Decision
 
@@ -18,7 +18,7 @@ The persona itself is the orchestrator. During Implementing, the persona's tool-
 
 ### Persona-in-the-loop dispatch
 
-The persona dispatches sub-agents directly, via `spawn_subagent` registered in `sidecar/guide-tools.ts`. The tool wraps a pi.dev sub-agent / sub-session (per ADR 0002), launched against the project's working tree, with the issue file and PRD as the explicit handoff artifacts. The dispatch is synchronous from the persona's perspective: the tool call blocks until the sub-agent returns. The persona's chat thread is therefore the long-running thing during Implementing.
+The persona dispatches sub-agents directly, via `spawn_subagent` registered in `sidecar/cairn-tools.ts`. The tool wraps a pi.dev sub-agent / sub-session (per ADR 0002), launched against the project's working tree, with the issue file and PRD as the explicit handoff artifacts. The dispatch is synchronous from the persona's perspective: the tool call blocks until the sub-agent returns. The persona's chat thread is therefore the long-running thing during Implementing.
 
 Out-of-loop dispatch (a separate worker process the persona observes) was considered and rejected — see Considered alternatives.
 
@@ -99,9 +99,9 @@ The `target` enum gains a new entry `"tasks"`. The `creating_started` event payl
 
 ## Consequences
 
-- **Custom sub-agent dispatch in `sidecar/guide-tools.ts`** via `spawn_subagent`. Side-effecting; registers with the pi.dev `AgentSession`. Returns a structured `{ outcome: "complete" | "failure" | "blocked", message: string }` payload for implementation work. Wraps a pi.dev sub-agent / sub-session, launched in the project working tree with the issue file and PRD as the explicit handoff artifacts and a red-green TDD instruction.
+- **Custom sub-agent dispatch in `sidecar/cairn-tools.ts`** via `spawn_subagent`. Side-effecting; registers with the pi.dev `AgentSession`. Returns a structured `{ outcome: "complete" | "failure" | "blocked", message: string }` payload for implementation work. Wraps a pi.dev sub-agent / sub-session, launched in the project working tree with the issue file and PRD as the explicit handoff artifacts and a red-green TDD instruction.
 
-- **Task artifact tools in `sidecar/guide-tools.ts`** create `tasks.json` through `create_tasks_artifact` and update progress through `update_task_status(task_slug, status)`.
+- **Task artifact tools in `sidecar/cairn-tools.ts`** create `tasks.json` through `create_tasks_artifact` and update progress through `update_task_status(task_slug, status)`.
 
 - **`creating_started` `target` enum extends to include `"tasks"`** for the initial Tasks artifact creation.
 
