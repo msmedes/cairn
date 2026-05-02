@@ -29,11 +29,17 @@ The persona and skill prompts live in `prompts/` and are bundled into the app at
 
 ## Setup
 
+On a fresh Mac (no Bun, no Rust, no Xcode tools), run:
+
 ```sh
-bun install
+./scripts/setup.sh
 ```
 
-Create `.env.local` at the repo root with your API key:
+The script checks for each prerequisite and offers to install anything missing (Xcode Command Line Tools, Bun, Rust via rustup), then runs `bun install` at the root and inside `sidecar/`. macOS only.
+
+If you already have the toolchain, `bun install && (cd sidecar && bun install)` is enough.
+
+You can supply your Anthropic API key either through the in-app settings dialog (it opens on first launch) or by creating `.env.local` at the repo root:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
