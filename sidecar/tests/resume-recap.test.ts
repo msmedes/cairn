@@ -132,6 +132,81 @@ test("maybeSendResumeRecap injects a hidden hint after a long absence", async ()
   ]);
 });
 
+test("maybeSendResumeRecap stays quiet when the last turn was already a recap", async () => {
+  const sessionManager = createSessionManager();
+  sessionManager.appendMessage({
+    role: "user",
+    content: "Build me a quiz app.",
+    timestamp: NOW - 120 * 60 * 1000,
+  });
+  sessionManager.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "Who will use it?" }],
+    api: "anthropic-messages",
+    provider: "anthropic",
+    model: "claude-sonnet-4-5",
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        total: 0,
+      },
+    },
+    stopReason: "stop",
+    timestamp: NOW - 119 * 60 * 1000,
+  });
+  sessionManager.appendCustomMessageEntry(
+    "guide.resume",
+    RESUME_RECAP_HINT,
+    false,
+  );
+  sessionManager.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "Recap of where we left off..." }],
+    api: "anthropic-messages",
+    provider: "anthropic",
+    model: "claude-sonnet-4-5",
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        total: 0,
+      },
+    },
+    stopReason: "stop",
+    timestamp: NOW - 60 * 60 * 1000,
+  });
+  shiftLeafTimestamp(sessionManager, 60 * 60 * 1000);
+
+  const calls: unknown[] = [];
+  const fired = await maybeSendResumeRecap(
+    {
+      sendCustomMessage: async (...args: unknown[]) => {
+        calls.push(args);
+      },
+    },
+    sessionManager,
+    NOW,
+  );
+
+  expect(fired).toBe(false);
+  expect(calls).toEqual([]);
+});
+
 test("maybeSendResumeRecap stays quiet for recent or in-flight sessions", async () => {
   const recentSession = createSessionManager();
   recentSession.appendMessage({
