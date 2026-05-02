@@ -1,11 +1,26 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import type { CreatingTarget } from "./useCreatingIndicator";
 import { useProjectFile } from "./useProjectFile";
 
+const devLogMock = vi.hoisted(() => ({
+  events: [] as Array<{
+    id: string;
+    receivedAt: string;
+    payload: unknown;
+  }>,
+}));
+
 vi.mock("./useProjectFile", () => ({
   useProjectFile: vi.fn(),
+}));
+
+vi.mock("./useSidecarDevLog", () => ({
+  useSidecarDevLog: () => ({
+    events: devLogMock.events,
+    clearEvents: vi.fn(),
+  }),
 }));
 
 type SidecarSessionHandlers = {
@@ -16,13 +31,19 @@ type SidecarSessionHandlers = {
 };
 
 let sidecarSessionHandlers: SidecarSessionHandlers | null = null;
+let mockMessages: Array<{
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  done: boolean;
+}> = [];
 
 vi.mock("./useSidecarSession", () => ({
   useSidecarSession: (handlers: SidecarSessionHandlers) => {
     sidecarSessionHandlers = handlers;
 
     return {
-      messages: [],
+      messages: mockMessages,
       ready: true,
       error: null,
       sending: false,
@@ -36,6 +57,8 @@ const mockUseProjectFile = vi.mocked(useProjectFile);
 describe("App panel tabs", () => {
   beforeEach(() => {
     sidecarSessionHandlers = null;
+    mockMessages = [];
+    devLogMock.events = [];
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
         case "brief.json":
@@ -403,5 +426,363 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Project Context")).not.toBeInTheDocument();
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
+  });
+
+  test("opens a dev mode layer with visible chat messages and event counts", () => {
+    mockMessages = [
+      {
+        id: "user-1",
+        role: "user",
+        text: "Build a small quiz helper.",
+        done: true,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        text: "I'll ask one scoping question.",
+        done: true,
+      },
+    ];
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+
+    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    expect(devLayer).toBeInTheDocument();
+    expect(screen.getByText("Session Debug")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Messages" }));
+    expect(
+      within(devLayer).getByText("Build a small quiz helper."),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).getByText("I'll ask one scoping question."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    expect(
+      within(devLayer).getByText("No dev events yet."),
+    ).toBeInTheDocument();
+  });
+
+  test("filters dev events by agent thread", () => {
+    const childAgentId = "subagent:/tmp/session.jsonl";
+    devLogMock.events = [
+      {
+        id: "threads",
+        receivedAt: "2026-05-02T12:00:00.000Z",
+        payload: {
+          type: "agent_threads",
+          threads: [
+            { id: "guide", parentId: null, label: "Guide", kind: "guide" },
+            {
+              id: childAgentId,
+              parentId: "guide",
+              label: "implement-issue: 01-import-screen.md",
+              kind: "subagent",
+              sessionFile: "/tmp/session.jsonl",
+            },
+          ],
+        },
+      },
+      {
+        id: "guide-tool",
+        receivedAt: "2026-05-02T12:00:01.000Z",
+        payload: {
+          type: "session_event",
+          source: { kind: "parent", agentId: "guide" },
+          event: {
+            type: "message_end",
+            message: {
+              role: "assistant",
+              usage: {
+                input: 10,
+                output: 4,
+                cacheRead: 2,
+                cacheWrite: 1,
+              },
+              content: [
+                {
+                  type: "toolCall",
+                  name: "set_creating",
+                  arguments: { target: "brief" },
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        id: "subagent-tool",
+        receivedAt: "2026-05-02T12:00:02.000Z",
+        payload: {
+          type: "session_event",
+          source: {
+            kind: "subagent",
+            agentId: childAgentId,
+            parentAgentId: "guide",
+            sessionFile: "/tmp/session.jsonl",
+          },
+          event: {
+            type: "message_end",
+            message: {
+              role: "assistant",
+              content: [
+                {
+                  type: "toolCall",
+                  name: "read",
+                  arguments: { path: "issues/01-import-screen.md" },
+                },
+              ],
+            },
+          },
+        },
+      },
+    ];
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+
+    expect(
+      within(devLayer).getByRole("combobox", { name: "Agent" }),
+    ).toBeInTheDocument();
+    expect(within(devLayer).getByText("All agents (3)")).toBeInTheDocument();
+    const agentSelect = within(devLayer).getByRole("combobox", {
+      name: "Agent",
+    });
+    expect(
+      within(agentSelect).getByRole("option", { name: "Guide (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      within(agentSelect).getByRole("option", {
+        name: /implement-issue: 01-import-screen\.md \(1\)/,
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(agentSelect, {
+      target: { value: childAgentId },
+    });
+
+    expect(
+      within(devLayer).getByText("subagent tool call: read"),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).queryByText("tool call: set_creating"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(agentSelect, {
+      target: { value: "guide" },
+    });
+
+    expect(
+      within(devLayer).getByText("tool call: set_creating"),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).queryByText("subagent tool call: read"),
+    ).not.toBeInTheDocument();
+  });
+
+  test("searches dev tool events by tool name and subagent prompt details", () => {
+    devLogMock.events = [
+      {
+        id: "spawn-subagent",
+        receivedAt: "2026-05-02T12:00:01.123Z",
+        payload: {
+          type: "session_event",
+          source: { kind: "parent", agentId: "guide" },
+          event: {
+            type: "message_end",
+            timestamp: "2026-05-02T12:00:01.123Z",
+            message: {
+              role: "assistant",
+              usage: {
+                input: 10,
+                output: 4,
+                cacheRead: 2,
+                cacheWrite: 1,
+              },
+              content: [
+                {
+                  type: "toolCall",
+                  name: "spawn_subagent",
+                  arguments: {
+                    skill_name: "implement-issue",
+                    args: {
+                      issuePath: "issues/01-import-screen.md",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        id: "write-tool",
+        receivedAt: "2026-05-02T12:00:02.000Z",
+        payload: {
+          type: "session_event",
+          source: { kind: "parent", agentId: "guide" },
+          event: {
+            type: "message_end",
+            message: {
+              role: "assistant",
+              content: [
+                {
+                  type: "toolCall",
+                  name: "write",
+                  arguments: { path: "src/App.tsx" },
+                },
+              ],
+            },
+          },
+        },
+      },
+    ];
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
+
+    fireEvent.change(
+      within(devLayer).getByRole("searchbox", { name: "Search" }),
+      {
+        target: { value: "spawn_subagent 01-import" },
+      },
+    );
+
+    expect(
+      within(devLayer).getByText("subagent fork: spawn_subagent"),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).queryByText("tool call: write"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(
+      within(devLayer).getByRole("searchbox", { name: "Search" }),
+      {
+        target: { value: "not-a-real-tool" },
+      },
+    );
+
+    expect(
+      within(devLayer).getByText("No matching tool calls."),
+    ).toBeInTheDocument();
+  });
+
+  test("shows tool-only dev events with expandable subagent prompt details", () => {
+    devLogMock.events = [
+      {
+        id: "spawn-subagent",
+        receivedAt: "2026-05-02T12:00:01.123Z",
+        payload: {
+          type: "session_event",
+          source: { kind: "parent", agentId: "guide" },
+          event: {
+            type: "message_end",
+            timestamp: "2026-05-02T12:00:01.123Z",
+            message: {
+              role: "assistant",
+              usage: {
+                input: 10,
+                output: 4,
+                cacheRead: 2,
+                cacheWrite: 1,
+              },
+              content: [
+                {
+                  type: "toolCall",
+                  name: "spawn_subagent",
+                  arguments: {
+                    skill_name: "implement-issue",
+                    args: {
+                      issuePath: "issues/01-import-screen.md",
+                    },
+                    response_schema: {
+                      type: "object",
+                      required: ["summary"],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        id: "assistant-message",
+        receivedAt: "2026-05-02T12:00:02.000Z",
+        payload: {
+          type: "session_event",
+          source: { kind: "parent", agentId: "guide" },
+          event: {
+            type: "message_end",
+            message: {
+              role: "assistant",
+              usage: {
+                input: 5,
+                output: 3,
+                cacheRead: 1,
+                cacheWrite: 0,
+              },
+              content: [{ type: "text", text: "Plain assistant text." }],
+            },
+          },
+        },
+      },
+    ];
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+
+    fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
+
+    expect(
+      within(devLayer).getByText("subagent fork: spawn_subagent"),
+    ).toBeInTheDocument();
+    expect(within(devLayer).getByText("New input")).toBeInTheDocument();
+    expect(within(devLayer).getByText("Cache read")).toBeInTheDocument();
+    expect(within(devLayer).getByText("Cache write")).toBeInTheDocument();
+    expect(within(devLayer).getByText("Output")).toBeInTheDocument();
+    expect(within(devLayer).getByText("15")).toBeInTheDocument();
+    expect(within(devLayer).getByText("7")).toBeInTheDocument();
+    expect(within(devLayer).getByText("3")).toBeInTheDocument();
+    expect(within(devLayer).getByText("1")).toBeInTheDocument();
+    expect(
+      within(devLayer).getByText("in 10 / out 4 / cached 3"),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).queryByText("assistant ended"),
+    ).not.toBeInTheDocument();
+
+    const row = within(devLayer)
+      .getByText("subagent fork: spawn_subagent")
+      .closest("li");
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLElement).getByText(
+        (_, element) =>
+          element?.tagName === "TIME" &&
+          element.getAttribute("datetime") === "2026-05-02T12:00:01.123Z" &&
+          /^\d{2}:\d{2}:\d{2}$/.test(element.textContent ?? ""),
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      within(row as HTMLElement).getByRole("button", { name: "Expand event" }),
+    );
+
+    expect(within(devLayer).getByText("Subagent Prompt")).toBeInTheDocument();
+    expect(within(devLayer).getByText("Token Usage")).toBeInTheDocument();
+    expect(
+      within(devLayer).getByText(/\/skill:implement-issue/),
+    ).toBeInTheDocument();
+    expect(
+      within(devLayer).getAllByText(/issues\/01-import-screen\.md/).length,
+    ).toBeGreaterThan(0);
+    expect(
+      within(devLayer).getByText("Subagent Response Schema"),
+    ).toBeInTheDocument();
   });
 });

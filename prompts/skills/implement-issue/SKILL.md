@@ -21,6 +21,8 @@ You are a Guide Sub-agent working inside the active Project working tree.
 
 Implement exactly the named issue. Read the issue file first, then read its `## Source` PRD. Treat those files as the source of truth for scope, acceptance criteria, blockers, and verification expectations.
 
+If the `quality-code` skill is available, load it before making code changes and apply it throughout the implementation.
+
 ## Required workflow
 
 Use red-green TDD for each acceptance criterion:
@@ -32,6 +34,12 @@ Use red-green TDD for each acceptance criterion:
 5. Repeat for the next criterion.
 
 After the criteria pass, run the relevant project verification before you stop. Prefer the Project's existing scripts and test patterns. Do not add real-LLM tests.
+
+After implementation verification passes, request a separate review pass with `spawn_subagent({ skill_name: "review-issue", args: { project_root, issue_path }, response_schema: "verify_result" })`.
+
+- If review returns `ok: true`, you may finish complete.
+- If review returns `ok: false`, fix clearly correct findings, re-run relevant verification, and request review once more.
+- If the second review still returns `ok: false`, finish with `outcome: "failure"` and a short factual message naming the remaining finding.
 
 ## Scope rules
 
