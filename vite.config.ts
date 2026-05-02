@@ -6,6 +6,14 @@ import { defineConfig } from "vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+const nonCodeWatchIgnores = [
+  "**/src-tauri/**",
+  "**/.ralph-worktrees/**",
+  "**/.workspace/**",
+  "**/_meta/**",
+  "**/*.{md,mdx,txt,rst,adoc}",
+] satisfies string[];
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
@@ -32,8 +40,8 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore non-frontend source churn during development
+      ignored: nonCodeWatchIgnores,
     },
   },
 }));

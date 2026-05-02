@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Build a packaged Guide.app / .dmg.
+# Build a packaged Guide.app / .zip.
 #
 # Steps:
 #   1. Compile the bun sidecar (TS + npm deps + bun runtime) into a single
 #      executable, named with the Rust target triple Tauri expects.
 #   2. Run `tauri build`, which bundles the sidecar binary + prompts +
-#      pi-coding-agent's package.json into Guide.app and produces a .dmg.
+#      pi-coding-agent's package.json into Guide.app.
+#   3. Ad-hoc sign the app bundle and produce a zip for transfer.
 #
-# Output: src-tauri/target/release/bundle/{macos,dmg}/
+# Output: src-tauri/target/release/bundle/macos/
 
 set -euo pipefail
 
@@ -39,17 +40,31 @@ bun run tauri build
 if [[ "$(uname -s)" == "Darwin" ]]; then
   APP_PATH="src-tauri/target/release/bundle/macos/Guide.app"
   VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version" 2>/dev/null || echo 0.1.0)"
+  ZIP_PATH="Guide-${VERSION}-${RUST_TARGET%-apple-darwin}-macos.zip"
   DMG_PATH="src-tauri/target/release/bundle/macos/Guide_${VERSION}_${RUST_TARGET%-apple-darwin}.dmg"
-  echo "==> creating dmg -> ${DMG_PATH}"
-  rm -f "${DMG_PATH}"
-  hdiutil create \
-    -volname Guide \
-    -srcfolder "${APP_PATH}" \
-    -ov \
-    -format UDZO \
-    "${DMG_PATH}" >/dev/null
+  echo "==> ad-hoc signing -> ${APP_PATH}"
+  codesign --force --deep --sign - "${APP_PATH}"
+  codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
+  echo "==> creating zip -> ${ZIP_PATH}"
+  rm -f "${ZIP_PATH}"
+  ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
+
+  if [[ "${GUIDE_BUILD_DMG:-0}" == "1" ]]; then
+    echo "==> creating dmg -> ${DMG_PATH}"
+    rm -f "${DMG_PATH}"
+    hdiutil create \
+      -volname Guide \
+      -srcfolder "${APP_PATH}" \
+      -ov \
+      -format UDZO \
+      "${DMG_PATH}" >/dev/null
+  else
+    echo "==> skipping dmg (set GUIDE_BUILD_DMG=1 to enable)"
+  fi
 fi
 
 echo
 echo "Done. Artifacts:"
 find src-tauri/target/release/bundle -maxdepth 4 \( -name '*.app' -o -name '*.dmg' \) -print
+find . -maxdepth 1 -name 'Guide-*-macos.zip' -print

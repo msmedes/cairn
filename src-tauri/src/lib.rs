@@ -2,7 +2,8 @@
 // Rust-to-frontend event fan-out. Frontend talks to us via Tauri commands;
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -67,9 +68,79 @@ struct ActiveProjectEvent {
     project: ActiveProject,
 }
 
+#[derive(Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GuideSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    anthropic_api_key: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GuideSettingsStatus {
+    has_anthropic_api_key: bool,
+}
+
 const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
 const SIDECAR_BIN_NAME: &str = "guide-sidecar";
+const MAX_DEV_LOG_TEXT_CHARS: usize = 240;
+
+fn guide_store_dir() -> Result<PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
+    Ok(PathBuf::from(home).join(".guide"))
+}
+
+fn guide_settings_path() -> Result<PathBuf, String> {
+    Ok(guide_store_dir()?.join("settings.json"))
+}
+
+fn read_guide_settings() -> Result<GuideSettings, String> {
+    let path = guide_settings_path()?;
+    match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents)
+            .map_err(|err| format!("failed to parse guide settings: {}", err)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(GuideSettings::default()),
+        Err(err) => Err(format!("failed to read guide settings: {}", err)),
+    }
+}
+
+fn write_guide_settings(settings: &GuideSettings) -> Result<(), String> {
+    let path = guide_settings_path()?;
+    let Some(parent) = path.parent() else {
+        return Err("guide settings path has no parent".into());
+    };
+    fs::create_dir_all(parent).map_err(|err| format!("failed to create .guide store: {}", err))?;
+
+    let contents = serde_json::to_vec_pretty(settings)
+        .map_err(|err| format!("failed to serialize guide settings: {}", err))?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&path)
+        .map_err(|err| format!("failed to open guide settings: {}", err))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = file.set_permissions(fs::Permissions::from_mode(0o600));
+    }
+
+    file.write_all(&contents)
+        .map_err(|err| format!("failed to write guide settings: {}", err))?;
+    file.write_all(b"\n")
+        .map_err(|err| format!("failed to finish guide settings: {}", err))
+}
+
+fn guide_settings_status(settings: GuideSettings) -> GuideSettingsStatus {
+    GuideSettingsStatus {
+        has_anthropic_api_key: settings
+            .anthropic_api_key
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty()),
+    }
+}
 
 struct ResolvedPaths {
     spawn: SpawnTarget,
@@ -144,6 +215,204 @@ fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
         SIDECAR_EVENT,
         serde_json::json!({ "type": "error", "message": message }),
     );
+}
+
+fn quote_dev_log_text(text: &str) -> String {
+    let single_line = text.replace('\n', "\\n").replace('\r', "\\r");
+    let mut shortened = single_line
+        .chars()
+        .take(MAX_DEV_LOG_TEXT_CHARS)
+        .collect::<String>();
+    if single_line.chars().count() > MAX_DEV_LOG_TEXT_CHARS {
+        shortened.push_str("...");
+    }
+    serde_json::to_string(&shortened).unwrap_or_else(|_| "\"<unprintable>\"".into())
+}
+
+fn text_from_content(content: Option<&Value>) -> Option<String> {
+    let text = content?
+        .as_array()?
+        .iter()
+        .filter_map(|part| {
+            if part.get("type").and_then(Value::as_str) == Some("text") {
+                part.get("text").and_then(Value::as_str)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("");
+
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+fn format_usage(message: &Value) -> String {
+    let Some(usage) = message.get("usage") else {
+        return String::new();
+    };
+
+    let mut parts = Vec::new();
+    if let Some(tokens) = usage.get("totalTokens").and_then(Value::as_u64) {
+        parts.push(format!("tokens={}", tokens));
+    }
+    if let Some(total_cost) = usage
+        .get("cost")
+        .and_then(|cost| cost.get("total"))
+        .and_then(Value::as_f64)
+    {
+        parts.push(format!("cost={:.6}", total_cost));
+    }
+
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", parts.join(" "))
+    }
+}
+
+fn format_session_dev_event(event: &Value) -> Option<String> {
+    let event_type = event.get("type").and_then(Value::as_str)?;
+
+    match event_type {
+        "agent_start" | "turn_start" => Some(event_type.to_string()),
+        "agent_end" => {
+            let message_count = event
+                .get("messages")
+                .and_then(Value::as_array)
+                .map(|messages| messages.len())
+                .unwrap_or(0);
+            Some(format!("agent_end messages={}", message_count))
+        }
+        "turn_end" => {
+            let tool_result_count = event
+                .get("toolResults")
+                .and_then(Value::as_array)
+                .map(|results| results.len())
+                .unwrap_or(0);
+            Some(format!("turn_end toolResults={}", tool_result_count))
+        }
+        "message_start" => {
+            let message = event.get("message")?;
+            let role = message
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            if role == "assistant" {
+                let model = message
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown-model");
+                Some(format!("assistant_start model={}", model))
+            } else {
+                Some(format!("{}_start", role))
+            }
+        }
+        "message_end" => {
+            let message = event.get("message")?;
+            let role = message
+                .get("role")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let text = text_from_content(message.get("content"))
+                .map(|text| format!(" {}", quote_dev_log_text(&text)))
+                .unwrap_or_default();
+            let usage = if role == "assistant" {
+                format_usage(message)
+            } else {
+                String::new()
+            };
+            Some(format!("{}_final{}{}", role, text, usage))
+        }
+        "message_update" => {
+            let assistant_event = event.get("assistantMessageEvent")?;
+            let assistant_event_type = assistant_event.get("type").and_then(Value::as_str)?;
+            match assistant_event_type {
+                "text_delta" => {
+                    let delta = assistant_event
+                        .get("delta")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
+                    Some(format!("assistant_delta {}", quote_dev_log_text(delta)))
+                }
+                "text_start" => Some("assistant_text_start".into()),
+                "text_end" => Some("assistant_text_end".into()),
+                other => Some(format!("assistant_event {}", other)),
+            }
+        }
+        "tool_execution_start" => {
+            let name = event
+                .get("toolName")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            Some(format!("tool_start {}", name))
+        }
+        "tool_execution_end" => {
+            let name = event
+                .get("toolName")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let ok = !event
+                .get("isError")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            Some(format!("tool_end {} ok={}", name, ok))
+        }
+        other => Some(format!("session_event {}", other)),
+    }
+}
+
+fn format_sidecar_dev_log(value: &Value) -> Option<String> {
+    match value.get("type").and_then(Value::as_str)? {
+        "project_state" => {
+            let phase = value
+                .get("phase")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let brief = value.get("brief").and_then(Value::as_bool).unwrap_or(false);
+            let prd_count = value
+                .get("prds")
+                .and_then(Value::as_array)
+                .map(|prds| prds.len())
+                .unwrap_or(0);
+            let issue_count = value
+                .get("issues")
+                .and_then(Value::as_array)
+                .map(|issues| issues.len())
+                .unwrap_or(0);
+            Some(format!(
+                "project_state phase={} brief={} prds={} issues={}",
+                phase, brief, prd_count, issue_count
+            ))
+        }
+        "session_event" => format_session_dev_event(value.get("event")?),
+        "tool_start" => {
+            let name = value
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            Some(format!("tool_start {}", name))
+        }
+        "tool_end" => {
+            let name = value
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let ok = value.get("ok").and_then(Value::as_bool).unwrap_or(false);
+            Some(format!("tool_end {} ok={}", name, ok))
+        }
+        "assistant_error" => {
+            let message = value
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown assistant error");
+            Some(format!("assistant_error {}", quote_dev_log_text(message)))
+        }
+        other => Some(format!("{} {}", other, value)),
+    }
 }
 
 async fn write_json_line<W: AsyncWrite + Unpin>(
@@ -222,6 +491,36 @@ fn get_active_project(state: State<'_, Arc<SidecarState>>) -> Option<ActiveProje
 }
 
 #[tauri::command]
+fn get_guide_settings() -> Result<GuideSettingsStatus, String> {
+    read_guide_settings().map(guide_settings_status)
+}
+
+#[tauri::command]
+async fn set_anthropic_api_key(
+    api_key: String,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<GuideSettingsStatus, String> {
+    let trimmed = api_key.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("API key cannot be empty".into());
+    }
+
+    let settings = GuideSettings {
+        anthropic_api_key: Some(trimmed.clone()),
+    };
+    write_guide_settings(&settings)?;
+
+    let payload = serde_json::json!({
+        "type": "set_api_key",
+        "provider": "anthropic",
+        "apiKey": trimmed,
+    });
+    write_line(&state.stdin, &payload).await?;
+
+    Ok(guide_settings_status(settings))
+}
+
+#[tauri::command]
 fn read_project_file(name: String, state: State<'_, Arc<SidecarState>>) -> Result<String, String> {
     let active_project = match state
         .active_project
@@ -279,6 +578,14 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     };
     if let Some(dir) = &paths.pi_package_dir {
         command.env("PI_PACKAGE_DIR", dir);
+    }
+    if let Ok(settings) = read_guide_settings() {
+        if let Some(api_key) = settings.anthropic_api_key {
+            let trimmed = api_key.trim().to_string();
+            if !trimmed.is_empty() {
+                command.env("ANTHROPIC_API_KEY", trimmed);
+            }
+        }
     }
     let spawn_label = match &paths.spawn {
         SpawnTarget::BunScript(_) => "bun in PATH?",
@@ -405,7 +712,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
 
                 match serde_json::from_str::<Value>(trimmed) {
                     Ok(value) => {
-                        eprintln!("[sidecar:dev] {}", value);
+                        let log_line =
+                            format_sidecar_dev_log(&value).unwrap_or_else(|| value.to_string());
+                        eprintln!("[sidecar:dev] {}", log_line);
                         let _ = app.emit(SIDECAR_DEV_EVENT, value);
                     }
                     Err(_) => {
@@ -431,6 +740,74 @@ fn shutdown_sidecar(state: &SidecarState) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn formats_streaming_text_delta_without_nested_json() {
+        let value = json!({
+            "type": "session_event",
+            "event": {
+                "type": "message_update",
+                "assistantMessageEvent": {
+                    "type": "text_delta",
+                    "delta": "hello\nworld"
+                },
+                "message": {
+                    "role": "assistant",
+                    "content": [{ "type": "text", "text": "hello\nworld" }]
+                }
+            }
+        });
+
+        assert_eq!(
+            format_sidecar_dev_log(&value).as_deref(),
+            Some("assistant_delta \"hello\\\\nworld\"")
+        );
+    }
+
+    #[test]
+    fn formats_assistant_final_with_usage_summary() {
+        let value = json!({
+            "type": "session_event",
+            "event": {
+                "type": "message_end",
+                "message": {
+                    "role": "assistant",
+                    "content": [{ "type": "text", "text": "Done." }],
+                    "usage": {
+                        "totalTokens": 42,
+                        "cost": { "total": 0.1234567 }
+                    }
+                }
+            }
+        });
+
+        assert_eq!(
+            format_sidecar_dev_log(&value).as_deref(),
+            Some("assistant_final \"Done.\" tokens=42 cost=0.123457")
+        );
+    }
+
+    #[test]
+    fn formats_project_state_as_counts() {
+        let value = json!({
+            "type": "project_state",
+            "brief": false,
+            "phase": "scoping",
+            "prds": ["a.md", "b.md"],
+            "issues": ["1.md"]
+        });
+
+        assert_eq!(
+            format_sidecar_dev_log(&value).as_deref(),
+            Some("project_state phase=scoping brief=false prds=2 issues=1")
+        );
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sidecar_state = Arc::new(SidecarState::default());
@@ -442,6 +819,8 @@ pub fn run() {
             send_prompt,
             new_project,
             get_active_project,
+            get_guide_settings,
+            set_anthropic_api_key,
             get_sidecar_status,
             read_project_file
         ])

@@ -27,7 +27,7 @@ import {
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { recoverDanglingToolCallInDir } from "./dangling-tool-recovery";
-import { loadRepoLocalEnv } from "./env";
+import { loadGuideSettingsEnv, loadRepoLocalEnv } from "./env";
 import { createGuideTools } from "./guide-tools";
 import {
   type HydrateEvent,
@@ -41,7 +41,8 @@ import type { SpawnSubagentResult } from "./spawn-subagent";
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
   | { type: "prompt"; text: string }
-  | { type: "new_project" };
+  | { type: "new_project" }
+  | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
 
 type OutMsg =
   | HydrateEvent
@@ -88,6 +89,7 @@ const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 loadRepoLocalEnv();
+loadGuideSettingsEnv();
 
 function getSessionDir(project: Project) {
   return join(project.path, "sessions");
@@ -485,6 +487,15 @@ function getFakeProtocolModel():
   );
 }
 
+function createAuthStorageFromRuntimeEnv() {
+  const key = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!key) return undefined;
+
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey("anthropic", key);
+  return authStorage;
+}
+
 function extractAssistantText(content: unknown): string {
   if (!Array.isArray(content)) return "";
 
@@ -640,13 +651,14 @@ async function openProject(
     : SessionManager.create(cwd, sessionDir);
 
   const fakeProtocol = getFakeProtocolModel();
+  const runtimeAuthStorage = createAuthStorageFromRuntimeEnv();
   const { session: nextSession } = await createAgentSession({
     cwd,
     agentDir: getAgentDir(),
     resourceLoader,
     sessionManager: nextSessionManager,
     model: fakeProtocol?.model,
-    authStorage: fakeProtocol?.authStorage,
+    authStorage: fakeProtocol?.authStorage ?? runtimeAuthStorage,
     customTools: createGuideTools({
       getActiveProject: () => activeProject,
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
@@ -734,6 +746,22 @@ async function handleNewProject() {
   emitProjectState();
 }
 
+async function handleSetApiKey(msg: Extract<InMsg, { type: "set_api_key" }>) {
+  const apiKey = msg.apiKey.trim();
+  if (!apiKey) {
+    throw new Error("API key cannot be empty");
+  }
+
+  process.env.ANTHROPIC_API_KEY = apiKey;
+
+  if (activeProject && activePersonaPath) {
+    const project = activeProject;
+    await openProject(project, activePersonaPath, { emitHydrate: true });
+  }
+
+  emit({ type: "ready" });
+}
+
 async function handleLine(line: string) {
   const trimmed = line.trim();
   if (!trimmed) return;
@@ -755,6 +783,9 @@ async function handleLine(line: string) {
       break;
     case "new_project":
       await handleNewProject();
+      break;
+    case "set_api_key":
+      await handleSetApiKey(msg);
       break;
   }
 }

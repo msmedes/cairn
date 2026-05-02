@@ -33,9 +33,23 @@ import {
 import { useProjectFile } from "./useProjectFile";
 import { useSidecarSession } from "./useSidecarSession";
 
+type GuideSettingsStatus = {
+  hasAnthropicApiKey: boolean;
+};
+
+function hasTauriRuntime() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsStatus, setSettingsStatus] =
+    useState<GuideSettingsStatus | null>(null);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [savingApiKey, setSavingApiKey] = useState(false);
   const projectBriefJson = useProjectFile("brief.json");
   const projectPlanJson = useProjectFile("plan.json");
   const projectTasksJson = useProjectFile("tasks.json");
@@ -102,11 +116,52 @@ function App() {
     startResizing,
   } = usePaneSplit();
 
+  useEffect(() => {
+    if (!hasTauriRuntime()) return;
+
+    let cancelled = false;
+    invoke<GuideSettingsStatus>("get_guide_settings")
+      .then((status) => {
+        if (cancelled) return;
+        setSettingsStatus(status);
+        setSettingsOpen(!status.hasAnthropicApiKey);
+      })
+      .catch((err) => {
+        console.error("get_guide_settings failed", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function send() {
     const text = input.trim();
     if (!text || sending || !ready) return;
     setInput("");
     void sendPrompt(text);
+  }
+
+  async function saveApiKey() {
+    const apiKey = apiKeyInput.trim();
+    if (!apiKey || savingApiKey) return;
+
+    setSavingApiKey(true);
+    setSettingsMessage(null);
+    try {
+      const next = await invoke<GuideSettingsStatus>("set_anthropic_api_key", {
+        apiKey,
+      });
+      setSettingsStatus(next);
+      setApiKeyInput("");
+      setSettingsOpen(false);
+      setSettingsMessage("API key saved.");
+    } catch (err) {
+      console.error("set_anthropic_api_key failed", err);
+      setSettingsMessage("Could not save API key.");
+    } finally {
+      setSavingApiKey(false);
+    }
   }
 
   useEffect(() => {
@@ -156,10 +211,60 @@ function App() {
           <div className="brand">
             <h1>Guide</h1>
           </div>
-          <span className={`status ${statusClass}`} title={error ?? undefined}>
-            {statusLabel}
-          </span>
+          <div className="header-actions">
+            {settingsStatus && !settingsStatus.hasAnthropicApiKey && (
+              <span className="key-warning">API key missing</span>
+            )}
+            <button
+              type="button"
+              className="settings-button"
+              onClick={() => {
+                setSettingsOpen((open) => !open);
+                setSettingsMessage(null);
+              }}
+            >
+              API key
+            </button>
+            <span
+              className={`status ${statusClass}`}
+              title={error ?? undefined}
+            >
+              {statusLabel}
+            </span>
+          </div>
         </header>
+        {settingsOpen && (
+          <form
+            className="api-key-settings"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveApiKey();
+            }}
+          >
+            <label htmlFor="anthropic-api-key">Anthropic API key</label>
+            <input
+              id="anthropic-api-key"
+              type="password"
+              value={apiKeyInput}
+              onChange={(event) => setApiKeyInput(event.currentTarget.value)}
+              placeholder={
+                settingsStatus?.hasAnthropicApiKey
+                  ? "Key is already saved"
+                  : "sk-ant-..."
+              }
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              disabled={!apiKeyInput.trim() || savingApiKey}
+            >
+              {savingApiKey ? "Saving…" : "Save"}
+            </button>
+            {settingsMessage && (
+              <p className="api-key-settings-message">{settingsMessage}</p>
+            )}
+          </form>
+        )}
 
         <div
           className="messages"

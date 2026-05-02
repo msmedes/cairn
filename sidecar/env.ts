@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 function parseEnvAssignment(line: string): [string, string] | null {
@@ -35,5 +36,27 @@ export function loadRepoLocalEnv() {
     if (!(key in process.env)) {
       process.env[key] = value;
     }
+  }
+}
+
+export function loadGuideSettingsEnv() {
+  const settingsPath = resolve(homedir(), ".guide", "settings.json");
+  if (!existsSync(settingsPath)) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(settingsPath, "utf8"));
+  } catch {
+    return;
+  }
+
+  if (!parsed || typeof parsed !== "object") return;
+  if (
+    "anthropicApiKey" in parsed &&
+    typeof parsed.anthropicApiKey === "string" &&
+    parsed.anthropicApiKey.trim() &&
+    !process.env.ANTHROPIC_API_KEY
+  ) {
+    process.env.ANTHROPIC_API_KEY = parsed.anthropicApiKey.trim();
   }
 }

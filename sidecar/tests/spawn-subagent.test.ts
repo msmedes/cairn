@@ -10,6 +10,7 @@ import {
   buildSpawnSubagentSystemPrompt,
   createSubagentArtifactTools,
   createSubagentUpdateProjectContextTool,
+  getSubagentSessionDir,
   mapSubAgentResult,
   type PiSubAgentResult,
   type SpawnSubagentResponseSchema,
@@ -147,6 +148,19 @@ test.each(
       schema,
     ),
   ).toEqual(malformed);
+});
+
+test("maps finish_subagent tool results before falling back to final text parsing", () => {
+  expect(
+    mapSubAgentResult(
+      {
+        stopReason: "end_turn",
+        finalText: "This prose should not be parsed.",
+        finishResult: { outcome: "complete", message: "Done via tool." },
+      },
+      "task_outcome",
+    ),
+  ).toEqual({ outcome: "complete", message: "Done via tool." });
 });
 
 test.each([
@@ -301,9 +315,17 @@ test("spawnSubagent composes the skill prompt, serializes args, and increments d
   expect(launches[0].systemPrompt).toContain("Write the PRD.");
   expect(launches[0].systemPrompt).toContain("artifact_write");
   expect(launches[0].systemPrompt).toContain(
-    "return only one JSON object matching this exact shape",
+    "Call the finish_subagent tool exactly once",
   );
   expect(launches[0].env.GUIDE_SUBAGENT_DEPTH).toBe("2");
+});
+
+test("sub-agent sessions persist under a nested project session directory", () => {
+  const projectRoot = tempProjectRoot();
+
+  expect(getSubagentSessionDir(projectRoot)).toBe(
+    join(projectRoot, "sessions", "subagents"),
+  );
 });
 
 test("buildSpawnSubagentSystemPrompt names every response shape", () => {

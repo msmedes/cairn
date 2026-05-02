@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import { getModel, Type } from "@mariozechner/pi-ai";
+import { getModel } from "@mariozechner/pi-ai";
 import {
   type AgentSessionEvent,
   createAgentSession,
@@ -10,6 +11,7 @@ import {
   SessionManager,
   type Skill,
 } from "@mariozechner/pi-coding-agent";
+import { z } from "zod";
 import {
   createTasksArtifactToolParamsSchema,
   PlanArtifactToolParamsSchema,
@@ -77,6 +79,8 @@ export type PiSubAgentResult = {
   stopReason?: string;
   errorMessage?: string;
   finalText?: string;
+  sessionFile?: string;
+  finishResult?: unknown;
 };
 
 export type RunSubAgent = (input: {
@@ -100,6 +104,36 @@ export type SpawnSubagentInput = {
 };
 
 const MALFORMED_MESSAGE = "sub-agent returned a malformed result";
+
+const SpawnSubagentToolParamsSchema = z.object({
+  skill_name: z
+    .enum(SPAWN_SUBAGENT_SKILL_NAMES)
+    .describe("Known Guide sub-agent skill name to run."),
+  args: z
+    .record(z.string(), z.unknown())
+    .describe("Structured handoff arguments for the selected skill."),
+  response_schema: z
+    .enum(SPAWN_SUBAGENT_RESPONSE_SCHEMAS)
+    .describe("Expected structured response shape from the selected skill."),
+});
+
+const subagentOutcomeSchema = z.enum(["complete", "failure", "blocked"]);
+
+const FinishSubagentToolParamsSchema = z.union([
+  z.object({
+    outcome: subagentOutcomeSchema,
+    message: z.string(),
+  }),
+  z.object({
+    ok: z.boolean(),
+    message: z.string(),
+  }),
+  z.object({
+    outcome: subagentOutcomeSchema,
+    message: z.string(),
+    path: z.string(),
+  }),
+]);
 
 function shortMessage(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -216,7 +250,8 @@ export function mapSubAgentResult(
     );
   }
 
-  const parsed = extractJsonObject(result.finalText ?? "");
+  const parsed =
+    result.finishResult ?? extractJsonObject(result.finalText ?? "");
   const normalized = normalizeParsedResult(parsed, schema);
   if (normalized) return normalized;
 
@@ -241,10 +276,10 @@ export function buildSpawnSubagentSystemPrompt(
   return `${skillContent.trim()}
 
 Structured response instruction:
-return only one JSON object matching this exact shape for ${responseSchema}:
+When the work is complete, do not write a final prose answer. Call the finish_subagent tool exactly once with arguments matching this exact shape for ${responseSchema}:
 ${responseShape(responseSchema)}
 
-Do not include markdown fences, prose, or additional keys.`;
+The finish_subagent tool call is the only completion signal. Do not include markdown fences, prose, or additional keys.`;
 }
 
 function readSkillContent(skill: Skill) {
@@ -272,6 +307,40 @@ function getLastAssistantText(messages: AgentMessage[]) {
       .join("");
   }
   return "";
+}
+
+export function getSubagentSessionDir(projectRoot: string) {
+  return join(projectRoot, "sessions", "subagents");
+}
+
+function createFinishSubagentTool(options: {
+  onFinish: (result: unknown) => void;
+}) {
+  return defineTool({
+    name: "finish_subagent",
+    label: "Finish Sub-agent",
+    description:
+      "Finish this sub-agent run with the structured result requested by the handoff. Call this exactly once instead of writing a final prose answer.",
+    promptSnippet: "Finish this sub-agent run with a structured result",
+    promptGuidelines: [
+      "Call finish_subagent exactly once when the sub-agent work is complete.",
+      "Do not write a final prose answer after finish_subagent; the tool call is the completion signal.",
+    ],
+    parameters: toolSchemaFromZod(FinishSubagentToolParamsSchema),
+    executionMode: "sequential",
+    async execute(_toolCallId, params) {
+      options.onFinish(params);
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Sub-agent result recorded.",
+          },
+        ],
+        details: params,
+      };
+    },
+  });
 }
 
 async function withTemporaryEnv<T>(
@@ -324,29 +393,44 @@ export async function runPiSubAgent({
     await resourceLoader.reload();
     const loadedSkills = resourceLoader.getSkills().skills;
 
+    const subagentSessionManager = SessionManager.create(
+      cwd,
+      getSubagentSessionDir(cwd),
+    );
+
+    let finishResult: unknown;
+
     const { session } = await createAgentSession({
       cwd,
       agentDir: getAgentDir(),
       resourceLoader,
-      sessionManager: SessionManager.inMemory(cwd),
+      sessionManager: subagentSessionManager,
       model: getModel("anthropic", "claude-sonnet-4-6"),
       customTools: [
         createSpawnSubagentTool({
           projectRoot: cwd,
           getLoadedSkills: () => loadedSkills,
         }),
+        createFinishSubagentTool({
+          onFinish: (result) => {
+            finishResult = result;
+          },
+        }),
         ...createSubagentArtifactTools({ projectRoot: cwd }),
         createSubagentUpdateProjectContextTool({ projectRoot: cwd }),
       ],
     });
 
-    let terminal: PiSubAgentResult = {};
+    let terminal: PiSubAgentResult = {
+      sessionFile: subagentSessionManager.getSessionFile(),
+    };
     const abort = () => session.dispose();
     signal?.addEventListener("abort", abort, { once: true });
     const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       if (event.type === "message_end" && event.message.role === "assistant") {
         terminal = {
           ...terminal,
+          finishResult,
           stopReason: event.message.stopReason,
           errorMessage: event.message.errorMessage,
           finalText: getLastAssistantText([event.message]),
@@ -355,6 +439,7 @@ export async function runPiSubAgent({
       if (event.type === "agent_end") {
         terminal = {
           ...terminal,
+          finishResult,
           finalText: terminal.finalText || getLastAssistantText(event.messages),
         };
       }
@@ -371,6 +456,8 @@ export async function runPiSubAgent({
         stopReason: signal?.aborted ? "aborted" : "error",
         errorMessage: err instanceof Error ? err.message : String(err),
         finalText: terminal.finalText,
+        finishResult,
+        sessionFile: terminal.sessionFile,
       };
     } finally {
       signal?.removeEventListener("abort", abort);
@@ -515,18 +602,7 @@ function createSpawnSubagentTool(options: {
     label: "Spawn Sub-agent",
     description:
       "Dispatch a nested headless Guide Sub-agent with a named skill, structured args, and an expected structured response schema.",
-    parameters: Type.Object(
-      {
-        skill_name: Type.Union(
-          SPAWN_SUBAGENT_SKILL_NAMES.map((name) => Type.Literal(name)),
-        ),
-        args: Type.Object({}, { additionalProperties: true }),
-        response_schema: Type.Union(
-          SPAWN_SUBAGENT_RESPONSE_SCHEMAS.map((name) => Type.Literal(name)),
-        ),
-      },
-      { additionalProperties: false },
-    ),
+    parameters: toolSchemaFromZod(SpawnSubagentToolParamsSchema),
     executionMode: "sequential",
     async execute(_toolCallId, params, signal) {
       const result = await spawnSubagent({
