@@ -21,6 +21,9 @@ describe("bugReportUrl", () => {
     );
     expect(parsed.searchParams.get("body")).toContain("Training Quiz");
     expect(parsed.searchParams.get("body")).toContain("0.1.0");
+    expect(parsed.searchParams.get("body")).toContain(
+      "Attach any screenshots directly to this GitHub issue",
+    );
   });
 
   test("round-trips special characters through decodeURIComponent", () => {

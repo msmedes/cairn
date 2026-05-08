@@ -26,6 +26,7 @@ export function bugReportUrl({
     `- Active project: ${displayProjectName}`,
     "",
     "The bug report zip is ready in Finder. Drag it into this issue before submitting.",
+    "Attach any screenshots directly to this GitHub issue too.",
   ].join("\n");
 
   return [

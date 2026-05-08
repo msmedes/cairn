@@ -711,16 +711,34 @@ fn copy_dir_all(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn create_bug_report_bundle(
+fn bug_report_output_dir() -> PathBuf {
+    if let Ok(home) = std::env::var("HOME") {
+        let home = PathBuf::from(home);
+        let downloads = home.join("Downloads");
+        if downloads.is_dir() {
+            return downloads;
+        }
+        let desktop = home.join("Desktop");
+        if desktop.is_dir() {
+            return desktop;
+        }
+    }
+
+    std::env::temp_dir()
+}
+
+fn create_bug_report_bundle_in_dir(
     project_path: Option<&Path>,
     dev_events_json: &str,
     meta_json: &str,
     unix_seconds: u64,
+    output_dir: &Path,
 ) -> Result<PathBuf, String> {
     let bundle_name = format!("cairn-bug-{}", unix_seconds);
     let temp_dir = std::env::temp_dir();
     let staging_dir = temp_dir.join(&bundle_name);
-    let zip_path = temp_dir.join(format!("{}.zip", bundle_name));
+    fs::create_dir_all(output_dir).map_err(|err| bug_report_error("create_output_dir", err))?;
+    let zip_path = output_dir.join(format!("{}.zip", bundle_name));
 
     if staging_dir.exists() {
         fs::remove_dir_all(&staging_dir)
@@ -768,6 +786,22 @@ fn create_bug_report_bundle(
     Ok(zip_path)
 }
 
+#[cfg(test)]
+fn create_bug_report_bundle(
+    project_path: Option<&Path>,
+    dev_events_json: &str,
+    meta_json: &str,
+    unix_seconds: u64,
+) -> Result<PathBuf, String> {
+    create_bug_report_bundle_in_dir(
+        project_path,
+        dev_events_json,
+        meta_json,
+        unix_seconds,
+        &std::env::temp_dir(),
+    )
+}
+
 #[tauri::command]
 fn bug_report_bundler(
     app: AppHandle,
@@ -781,8 +815,14 @@ fn bug_report_bundler(
         .map_err(|err| bug_report_error("timestamp", err))?
         .as_secs();
     let project_path = project_path.as_deref().map(Path::new);
-    let zip_path =
-        create_bug_report_bundle(project_path, &dev_events_json, &meta_json, unix_seconds)?;
+    let output_dir = bug_report_output_dir();
+    let zip_path = create_bug_report_bundle_in_dir(
+        project_path,
+        &dev_events_json,
+        &meta_json,
+        unix_seconds,
+        &output_dir,
+    )?;
 
     app.opener()
         .open_url(github_url, None::<&str>)
@@ -1232,6 +1272,25 @@ mod tests {
         )
         .unwrap();
 
+        assert_eq!(zip_entries(&zip_path), vec!["dev-events.json", "meta.json"]);
+        let _ = fs::remove_file(zip_path);
+    }
+
+    #[test]
+    fn bug_report_bundle_writes_zip_to_requested_output_dir() {
+        let temp = unique_temp_dir("cairn-bug-report-output-dir");
+        let output_dir = temp.join("Downloads");
+        fs::create_dir_all(&output_dir).unwrap();
+        let zip_path = create_bug_report_bundle_in_dir(
+            None,
+            "[]",
+            "{\"title\":\"Output\"}",
+            1_777_000_004,
+            &output_dir,
+        )
+        .unwrap();
+
+        assert_eq!(zip_path, output_dir.join("cairn-bug-1777000004.zip"));
         assert_eq!(zip_entries(&zip_path), vec!["dev-events.json", "meta.json"]);
         let _ = fs::remove_file(zip_path);
     }
