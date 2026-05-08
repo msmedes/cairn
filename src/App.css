@@ -911,7 +911,7 @@ body {
 
 .empty {
   margin: auto;
-  max-width: 28rem;
+  width: min(34rem, 100%);
   padding: 32px 30px;
   border-radius: var(--radius-card);
   background: linear-gradient(
@@ -928,13 +928,98 @@ body {
   margin: 0;
 }
 
-.empty-kicker {
+.empty-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin-bottom: 10px;
+}
+
+.empty-kicker {
   color: var(--accent);
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  text-align: left;
+}
+
+.open-folder-button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: var(--accent-soft);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.open-folder-button:hover:not(:disabled),
+.open-folder-button:focus-visible:not(:disabled) {
+  background: rgba(126, 156, 216, 0.24);
+  outline: 1px solid rgba(126, 156, 216, 0.42);
+}
+
+.recents-list {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.recent-project {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: rgba(22, 22, 29, 0.42);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recent-project:hover:not(:disabled),
+.recent-project:focus-visible:not(:disabled) {
+  background: rgba(126, 156, 216, 0.14);
+  outline: 1px solid rgba(126, 156, 216, 0.34);
+}
+
+.recent-name,
+.recent-path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.recent-path {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.open-project-error {
+  margin-top: 14px;
+  color: #e46876;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
 .empty p:not(.empty-kicker) {

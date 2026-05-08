@@ -14,10 +14,17 @@ type ActiveProject = {
   displayName: string;
 };
 
+export type RecentProject = {
+  path: string;
+  displayName: string;
+  lastOpenedAt: string;
+};
+
 type SidecarEvent =
   | { type: "hydrate"; messages: ChatMessage[] }
   | { type: "active_project"; project: ActiveProject }
   | { type: "ready" }
+  | { type: "recents"; entries: RecentProject[] }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
   | {
@@ -26,13 +33,14 @@ type SidecarEvent =
       message: string;
     }
   | { type: "agent_end" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; recoverable?: boolean };
 
 type SidecarStatusSnapshot = {
   ready: boolean;
   error: string | null;
   hydrate: ChatMessage[] | null;
   activeProject: ActiveProject | null;
+  recents?: RecentProject[];
 };
 
 type SessionStatus =
@@ -65,7 +73,9 @@ export function useSidecarSession({
   onError,
 }: SidecarSessionHandlers) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [recents, setRecents] = useState<RecentProject[]>([]);
   const [status, setStatus] = useState<SessionStatus>({ type: "starting" });
+  const [projectOpenError, setProjectOpenError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const activeAssistantId = useRef<string | null>(null);
   const hydratedFromStartupRef = useRef(false);
@@ -115,6 +125,9 @@ export function useSidecarSession({
           break;
         case "active_project":
           break;
+        case "recents":
+          setRecents(payload.entries);
+          break;
         case "text_delta": {
           sendingRef.current = true;
           setSending(true);
@@ -147,6 +160,11 @@ export function useSidecarSession({
         case "error":
           onError();
           console.error("[sidecar error]", payload.message);
+          if (payload.recoverable) {
+            setProjectOpenError(payload.message);
+            finalizeActive();
+            break;
+          }
           setStatus({ type: "error", message: payload.message });
           finalizeActive();
           break;
@@ -178,6 +196,9 @@ export function useSidecarSession({
               setStatus({ type: "error", message: snapshot.error });
             } else if (snapshot.ready) {
               setStatus({ type: "ready" });
+            }
+            if (snapshot.recents) {
+              setRecents(snapshot.recents);
             }
           })
           .catch((err) => console.error("get_sidecar_status failed", err));
@@ -229,11 +250,36 @@ export function useSidecarSession({
     }
   }
 
+  async function openProject(path: string) {
+    if (!path || status.type !== "ready") return;
+    setProjectOpenError(null);
+    try {
+      await invoke("open_project", { path });
+    } catch (err) {
+      console.error("open_project failed", err);
+    }
+  }
+
+  async function openProjectDialog() {
+    if (status.type !== "ready") return;
+    setProjectOpenError(null);
+    try {
+      const path = await invoke<string | null>("open_project_dialog");
+      if (path) await openProject(path);
+    } catch (err) {
+      console.error("open_project_dialog failed", err);
+    }
+  }
+
   return {
     messages,
+    recents,
+    projectOpenError,
     ready: status.type === "ready",
     error: status.type === "error" ? status.message : null,
     sending,
     sendPrompt,
+    openProject,
+    openProjectDialog,
   };
 }

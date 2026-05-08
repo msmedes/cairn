@@ -1,20 +1,13 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { CairnDir } from "./cairn-dir";
 import { migrateLegacyProject } from "./legacy-migrator";
-import { disambiguate, slugify, withDatePrefix } from "./slug";
+import { slugify, withDatePrefix } from "./slug";
 
 export type ProjectJson = {
   id: string;
   name: string;
+  displayName?: string;
   createdAt: string;
   lastOpenedAt: string;
 };
@@ -27,10 +20,6 @@ export type Project = ProjectJson & {
 export type ProjectRenameResult =
   | { ok: true; project: Project; message: string }
   | { ok: false; project: Project | null; message: string };
-
-function defaultProjectsRoot() {
-  return join(homedir(), ".cairn", "projects");
-}
 
 function cleanDisplayName(input: string): string {
   const compact = input.replace(/\s+/g, " ").trim();
@@ -62,6 +51,10 @@ function parseProjectJson(value: unknown): ProjectJson | null {
   return {
     id: candidate.id,
     name: candidate.name,
+    displayName:
+      typeof candidate.displayName === "string"
+        ? candidate.displayName
+        : undefined,
     createdAt: candidate.createdAt,
     lastOpenedAt: candidate.lastOpenedAt,
   };
@@ -72,79 +65,50 @@ function isSafeProjectId(id: string): boolean {
 }
 
 export class ProjectStore {
-  constructor(private readonly projectsRoot = defaultProjectsRoot()) {}
-
-  list(): Project[] {
-    if (!existsSync(this.projectsRoot)) return [];
-
-    return readdirSync(this.projectsRoot)
-      .flatMap((name) => {
-        const path = join(this.projectsRoot, name);
-        try {
-          if (!statSync(path).isDirectory()) return [];
-          const project = this.read(name);
-          return project ? [project] : [];
-        } catch {
-          return [];
-        }
-      })
-      .sort((a, b) => a.id.localeCompare(b.id));
-  }
-
-  findMostRecent(): Project | null {
-    return (
-      this.list().sort((a, b) => {
-        const byLastOpened =
-          Date.parse(b.lastOpenedAt) - Date.parse(a.lastOpenedAt);
-        if (byLastOpened !== 0) return byLastOpened;
-        return b.id.localeCompare(a.id);
-      })[0] ?? null
-    );
-  }
-
-  create(firstMessage: string, now: Date = new Date()): Project {
-    mkdirSync(this.projectsRoot, { recursive: true });
-    const baseSlug = withDatePrefix(slugify(firstMessage), now);
-    const id = disambiguate(baseSlug, this.existingProjectIds());
-    const path = join(this.projectsRoot, id);
-    const timestamp = now.toISOString();
-    const metadata: ProjectJson = {
-      id,
-      name: cleanDisplayName(firstMessage),
-      createdAt: timestamp,
-      lastOpenedAt: timestamp,
-    };
-
-    mkdirSync(path, { recursive: false });
-    this.writeProjectJson(path, metadata);
-    return this.enrich(metadata);
-  }
-
-  read(id: string): Project | null {
-    if (!isSafeProjectId(id)) return null;
-    const path = join(this.projectsRoot, id);
-    migrateLegacyProject(path, { projectsRoot: this.projectsRoot });
+  read(projectPath: string): Project | null {
+    const path = resolve(projectPath);
+    migrateLegacyProject(path);
     const jsonPath = CairnDir.metadataPath(path);
     if (!existsSync(jsonPath)) return null;
 
     const metadata = parseProjectJson(
       JSON.parse(readFileSync(jsonPath, "utf8")),
     );
-    if (!metadata) return null;
-    if (metadata.id !== id || !isSafeProjectId(metadata.id)) return null;
+    if (!metadata || !isSafeProjectId(metadata.id)) return null;
 
     return this.enrich(metadata, path);
   }
 
-  touch(id: string, now: Date = new Date()): Project {
-    const project = this.read(id);
+  create(
+    projectPath: string,
+    firstMessage: string,
+    now: Date = new Date(),
+  ): Project {
+    const path = resolve(projectPath);
+    const displayName = cleanDisplayName(firstMessage);
+    const timestamp = now.toISOString();
+    const metadata: ProjectJson = {
+      id: withDatePrefix(slugify(firstMessage), now),
+      name: displayName,
+      displayName,
+      createdAt: timestamp,
+      lastOpenedAt: timestamp,
+    };
+
+    this.writeProjectJson(path, metadata);
+    return this.enrich(metadata, path);
+  }
+
+  touch(projectPath: string, now: Date = new Date()): Project {
+    const project = this.read(projectPath);
     if (!project) {
-      throw new Error(`project not found: ${id}`);
+      throw new Error(`project not found: ${projectPath}`);
     }
 
     const metadata: ProjectJson = {
       id: project.id,
       name: project.name,
+      displayName: project.displayName,
       createdAt: project.createdAt,
       lastOpenedAt: now.toISOString(),
     };
@@ -152,14 +116,8 @@ export class ProjectStore {
     return this.enrich(metadata, project.path);
   }
 
-  rename(id: string, displayName: string): ProjectRenameResult {
-    // Renaming updates displayName in metadata only. The on-disk directory
-    // and project id stay fixed at their create-time slug so any path the
-    // running agent has already learned (artifact absolute paths, the
-    // project root passed into skills) remains valid for the rest of the
-    // session. Without this, a rename mid-session would orphan subsequent
-    // writes into a phantom directory recreated at the old path.
-    const project = this.read(id);
+  rename(projectPath: string, displayName: string): ProjectRenameResult {
+    const project = this.read(projectPath);
     if (!project) {
       return {
         ok: false,
@@ -177,7 +135,7 @@ export class ProjectStore {
     }
 
     const cleanedName = cleanDisplayName(displayName);
-    if (cleanedName === project.name) {
+    if (cleanedName === project.displayName) {
       return {
         ok: true,
         project,
@@ -188,6 +146,7 @@ export class ProjectStore {
     const metadata: ProjectJson = {
       id: project.id,
       name: cleanedName,
+      displayName: cleanedName,
       createdAt: project.createdAt,
       lastOpenedAt: new Date().toISOString(),
     };
@@ -209,27 +168,13 @@ export class ProjectStore {
     }
   }
 
-  private existingProjectIds(): string[] {
-    if (!existsSync(this.projectsRoot)) return [];
-    return readdirSync(this.projectsRoot).flatMap((name) => {
-      try {
-        return statSync(join(this.projectsRoot, name)).isDirectory()
-          ? [name]
-          : [];
-      } catch {
-        return [];
-      }
-    });
-  }
-
-  private enrich(
-    metadata: ProjectJson,
-    path = join(this.projectsRoot, metadata.id),
-  ): Project {
+  private enrich(metadata: ProjectJson, path: string): Project {
+    const displayName = metadata.displayName || metadata.name || metadata.id;
     return {
       ...metadata,
+      name: metadata.name || displayName,
+      displayName,
       path,
-      displayName: metadata.name || metadata.id,
     };
   }
 
