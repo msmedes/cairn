@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
+use tauri_plugin_opener::OpenerExt;
 use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::Mutex as AsyncMutex;
@@ -688,6 +689,111 @@ fn read_project_file(name: String, state: State<'_, Arc<SidecarState>>) -> Resul
     }
 }
 
+fn bug_report_error(stage: &str, err: impl std::fmt::Display) -> String {
+    format!("bug_report_bundle:{}:{}", stage, err)
+}
+
+fn copy_dir_all(from: &Path, to: &Path) -> Result<(), String> {
+    fs::create_dir_all(to).map_err(|err| bug_report_error("create_cairn_dir", err))?;
+    for entry in fs::read_dir(from).map_err(|err| bug_report_error("read_cairn_dir", err))? {
+        let entry = entry.map_err(|err| bug_report_error("read_cairn_entry", err))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|err| bug_report_error("read_cairn_entry_type", err))?;
+        let target = to.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), &target)
+                .map_err(|err| bug_report_error("copy_cairn_file", err))?;
+        }
+    }
+    Ok(())
+}
+
+fn create_bug_report_bundle(
+    project_path: Option<&Path>,
+    dev_events_json: &str,
+    meta_json: &str,
+    unix_seconds: u64,
+) -> Result<PathBuf, String> {
+    let bundle_name = format!("cairn-bug-{}", unix_seconds);
+    let temp_dir = std::env::temp_dir();
+    let staging_dir = temp_dir.join(&bundle_name);
+    let zip_path = temp_dir.join(format!("{}.zip", bundle_name));
+
+    if staging_dir.exists() {
+        fs::remove_dir_all(&staging_dir)
+            .map_err(|err| bug_report_error("clear_existing_staging", err))?;
+    }
+    if zip_path.exists() {
+        fs::remove_file(&zip_path).map_err(|err| bug_report_error("clear_existing_zip", err))?;
+    }
+    fs::create_dir_all(&staging_dir).map_err(|err| bug_report_error("create_staging", err))?;
+
+    let mut zip_inputs = Vec::new();
+    if let Some(project_path) = project_path {
+        let cairn_dir = project_path.join(".cairn");
+        if cairn_dir.is_dir() {
+            copy_dir_all(&cairn_dir, &staging_dir.join("cairn"))?;
+            zip_inputs.push("cairn");
+        }
+    }
+
+    fs::write(staging_dir.join("dev-events.json"), dev_events_json)
+        .map_err(|err| bug_report_error("write_dev_events", err))?;
+    fs::write(staging_dir.join("meta.json"), meta_json)
+        .map_err(|err| bug_report_error("write_meta", err))?;
+    zip_inputs.push("dev-events.json");
+    zip_inputs.push("meta.json");
+
+    let output = std::process::Command::new("/usr/bin/zip")
+        .arg("-rq")
+        .arg(&zip_path)
+        .args(zip_inputs)
+        .current_dir(&staging_dir)
+        .output()
+        .map_err(|err| bug_report_error("run_zip", err))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let _ = fs::remove_dir_all(&staging_dir);
+        return Err(bug_report_error(
+            "zip_failed",
+            format!("status={} stderr={}", output.status, stderr.trim()),
+        ));
+    }
+
+    fs::remove_dir_all(&staging_dir).map_err(|err| bug_report_error("remove_staging", err))?;
+    Ok(zip_path)
+}
+
+#[tauri::command]
+fn bug_report_bundler(
+    app: AppHandle,
+    project_path: Option<String>,
+    dev_events_json: String,
+    meta_json: String,
+    github_url: String,
+) -> Result<String, String> {
+    let unix_seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|err| bug_report_error("timestamp", err))?
+        .as_secs();
+    let project_path = project_path.as_deref().map(Path::new);
+    let zip_path =
+        create_bug_report_bundle(project_path, &dev_events_json, &meta_json, unix_seconds)?;
+
+    app.opener()
+        .open_url(github_url, None::<&str>)
+        .map_err(|err| bug_report_error("open_github", err))?;
+    app.opener()
+        .reveal_item_in_dir(&zip_path)
+        .map_err(|err| bug_report_error("reveal_zip", err))?;
+
+    Ok(zip_path.to_string_lossy().to_string())
+}
+
 async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), String> {
     let paths = resolve_paths(&app)?;
 
@@ -1068,6 +1174,85 @@ mod tests {
         assert_eq!(resolve_startup_project_path(&missing).unwrap(), missing);
     }
 
+    #[test]
+    fn bug_report_bundle_includes_cairn_dir_and_json_files() {
+        let temp = unique_temp_dir("cairn-bug-report-fixture");
+        let project = temp.join("project");
+        fs::create_dir_all(project.join(".cairn").join("sessions")).unwrap();
+        fs::write(
+            project.join(".cairn").join("sessions").join("0.jsonl"),
+            "{}\n",
+        )
+        .unwrap();
+        fs::write(
+            project.join(".cairn").join("project.json"),
+            "{\"name\":\"Demo\"}",
+        )
+        .unwrap();
+
+        let zip_path = create_bug_report_bundle(
+            Some(project.as_path()),
+            "[{\"type\":\"tool_start\"}]",
+            "{\"title\":\"Bug\"}",
+            1_777_000_001,
+        )
+        .unwrap();
+
+        assert_eq!(
+            zip_entries(&zip_path),
+            vec![
+                "cairn/project.json",
+                "cairn/sessions/0.jsonl",
+                "dev-events.json",
+                "meta.json",
+            ]
+        );
+        let _ = fs::remove_file(zip_path);
+    }
+
+    #[test]
+    fn bug_report_bundle_without_project_only_includes_json_files() {
+        let zip_path =
+            create_bug_report_bundle(None, "[]", "{\"title\":\"Startup\"}", 1_777_000_002).unwrap();
+
+        assert_eq!(zip_entries(&zip_path), vec!["dev-events.json", "meta.json"]);
+        let _ = fs::remove_file(zip_path);
+    }
+
+    #[test]
+    fn bug_report_bundle_project_without_cairn_only_includes_json_files() {
+        let temp = unique_temp_dir("cairn-bug-report-no-cairn");
+        let project = temp.join("project");
+        fs::create_dir_all(&project).unwrap();
+        let zip_path = create_bug_report_bundle(
+            Some(project.as_path()),
+            "[]",
+            "{\"title\":\"Missing\"}",
+            1_777_000_003,
+        )
+        .unwrap();
+
+        assert_eq!(zip_entries(&zip_path), vec!["dev-events.json", "meta.json"]);
+        let _ = fs::remove_file(zip_path);
+    }
+
+    fn zip_entries(path: &Path) -> Vec<String> {
+        let output = std::process::Command::new("/usr/bin/unzip")
+            .arg("-Z1")
+            .arg(path)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        let mut entries = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .filter(|entry| !entry.ends_with('/'))
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        entries.sort();
+        entries
+    }
+
     fn unique_temp_dir(prefix: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
             "{}-{}",
@@ -1110,7 +1295,8 @@ pub fn run() {
             set_anthropic_api_key,
             get_sidecar_status,
             get_sidecar_dev_logs,
-            read_project_file
+            read_project_file,
+            bug_report_bundler
         ])
         .on_window_event({
             let state = sidecar_state.clone();

@@ -7,7 +7,7 @@ import {
   markAssistantDone,
 } from "./chat-stream";
 
-type ActiveProject = {
+export type ActiveProject = {
   id: string;
   name: string;
   path: string;
@@ -77,6 +77,9 @@ export function useSidecarSession({
   const [recents, setRecents] = useState<RecentProject[]>([]);
   const [status, setStatus] = useState<SessionStatus>({ type: "starting" });
   const [projectOpenError, setProjectOpenError] = useState<string | null>(null);
+  const [activeProject, setActiveProject] = useState<ActiveProject | null>(
+    null,
+  );
   const [sending, setSending] = useState(false);
   const activeAssistantId = useRef<string | null>(null);
   const hydratedFromStartupRef = useRef(false);
@@ -125,6 +128,8 @@ export function useSidecarSession({
           setStatus({ type: "ready" });
           break;
         case "active_project":
+          setActiveProject(payload.project);
+          setProjectOpenError(null);
           break;
         case "recents":
           setRecents(payload.entries);
@@ -200,6 +205,9 @@ export function useSidecarSession({
             }
             if (snapshot.projectOpenError) {
               setProjectOpenError(snapshot.projectOpenError);
+            }
+            if (snapshot.activeProject) {
+              setActiveProject(snapshot.activeProject);
             }
             if (snapshot.recents) {
               setRecents(snapshot.recents);
@@ -279,6 +287,7 @@ export function useSidecarSession({
     messages,
     recents,
     projectOpenError,
+    activeProject,
     ready: status.type === "ready",
     error: status.type === "error" ? status.message : null,
     sending,
