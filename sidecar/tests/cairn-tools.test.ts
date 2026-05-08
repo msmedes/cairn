@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import type { CreatingTarget } from "../cairn-tools";
 import { createCairnTools } from "../cairn-tools";
 import type { Project } from "../project-store";
@@ -302,10 +303,10 @@ test("create_tasks_artifact tool writes tasks.json only", async () => {
     '{"ok":true,"artifact":"tasks","path":"tasks.json","schemaVersion":1,"taskCount":2}',
   );
   expect(
-    readFileSync(join(activeProject.path, "tasks.json"), "utf8"),
+    readFileSync(CairnDir.tasksPath(activeProject.path), "utf8"),
   ).toContain('"slug": "create-the-first-quiz-draft"');
   expect(() =>
-    readFileSync(join(activeProject.path, "tasks.html"), "utf8"),
+    readFileSync(join(CairnDir.root(activeProject.path), "tasks.html"), "utf8"),
   ).toThrow();
 });
 
@@ -360,7 +361,7 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
     {} as never,
   );
   const beforeMissing = readFileSync(
-    join(activeProject.path, "tasks.json"),
+    CairnDir.tasksPath(activeProject.path),
     "utf8",
   );
 
@@ -377,7 +378,7 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
     code: "unknown_task_slug",
     field: "task_slug",
   });
-  expect(readFileSync(join(activeProject.path, "tasks.json"), "utf8")).toBe(
+  expect(readFileSync(CairnDir.tasksPath(activeProject.path), "utf8")).toBe(
     beforeMissing,
   );
 
@@ -400,7 +401,7 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
     '{"ok":true,"artifact":"tasks","path":"tasks.json","taskSlug":"preview-it-as-a-learner","status":"in_progress"}',
   );
   expect(
-    readFileSync(join(activeProject.path, "tasks.json"), "utf8"),
+    readFileSync(CairnDir.tasksPath(activeProject.path), "utf8"),
   ).toContain('"status": "in_progress"');
 });
 
@@ -466,11 +467,13 @@ test("create_brief_artifact tool writes brief.json only", async () => {
     '{"ok":true,"artifact":"brief","path":"brief.json","schemaVersion":1,"title":"Video Quiz Helper","sectionCount":1}',
   );
   expect(
-    readFileSync(join(activeProject.path, "brief.json"), "utf8"),
+    readFileSync(CairnDir.briefPath(activeProject.path), "utf8"),
   ).toContain('"artifact": "brief"');
-  expect(existsSync(join(activeProject.path, "CONTEXT.md"))).toBe(false);
+  expect(existsSync(CairnDir.projectContextPath(activeProject.path))).toBe(
+    false,
+  );
   expect(() =>
-    readFileSync(join(activeProject.path, "brief.html"), "utf8"),
+    readFileSync(join(CairnDir.root(activeProject.path), "brief.html"), "utf8"),
   ).toThrow();
 });
 
@@ -536,11 +539,11 @@ test("create_plan_artifact tool writes plan.json only", async () => {
   expect(toolText(result)).toBe(
     '{"ok":true,"artifact":"plan","path":"plan.json","schemaVersion":1,"title":"First playable quiz","pieceCount":3}',
   );
-  expect(readFileSync(join(activeProject.path, "plan.json"), "utf8")).toContain(
+  expect(readFileSync(CairnDir.planPath(activeProject.path), "utf8")).toContain(
     '"artifact": "plan"',
   );
   expect(() =>
-    readFileSync(join(activeProject.path, "plan.html"), "utf8"),
+    readFileSync(join(CairnDir.root(activeProject.path), "plan.html"), "utf8"),
   ).toThrow();
 });
 
@@ -609,7 +612,9 @@ test("update_project_context tool writes only hidden project context", async () 
     '{"ok":true,"path":"CONTEXT.md","termCount":1,"constraintCount":1,"decisionCount":1,"openQuestionCount":1}',
   );
   expect(
-    readFileSync(join(activeProject.path, "CONTEXT.md"), "utf8"),
+    readFileSync(CairnDir.projectContextPath(activeProject.path), "utf8"),
   ).toContain("**Instructor**:");
-  expect(existsSync(join(activeProject.path, "context.json"))).toBe(false);
+  expect(
+    existsSync(join(CairnDir.root(activeProject.path), "context.json")),
+  ).toBe(false);
 });

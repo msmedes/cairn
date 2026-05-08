@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { z } from "zod";
+import { CairnDir } from "./cairn-dir";
 
 export const PLAN_ARTIFACT_PATH = "plan.json";
 export const PLAN_SCHEMA_VERSION = 1;
@@ -141,8 +141,9 @@ function writeEnvelope(
   envelope: PlanArtifactEnvelope,
 ): PlanArtifactResult {
   try {
+    CairnDir.ensure(projectRoot);
     writeFileSync(
-      join(projectRoot, PLAN_ARTIFACT_PATH),
+      CairnDir.planPath(projectRoot),
       `${JSON.stringify(envelope, null, 2)}\n`,
       "utf8",
     );
@@ -160,7 +161,7 @@ function writeEnvelope(
 export function createPlanArtifact(
   input: CreatePlanArtifactInput,
 ): PlanArtifactResult {
-  if (existsSync(join(input.projectRoot, PLAN_ARTIFACT_PATH))) {
+  if (existsSync(CairnDir.planPath(input.projectRoot))) {
     return {
       ok: false,
       code: "plan_already_exists",
@@ -188,7 +189,7 @@ export function createPlanArtifact(
 export function loadPlanArtifact(
   projectRoot: string,
 ): PlanArtifactEnvelope | null {
-  const path = join(projectRoot, PLAN_ARTIFACT_PATH);
+  const path = CairnDir.planPath(projectRoot);
   if (!existsSync(path)) return null;
 
   let parsed: unknown;
@@ -222,7 +223,7 @@ export function updatePlanArtifact(
 
   const existing = loadPlanArtifact(input.projectRoot);
   if (!existing) {
-    if (existsSync(join(input.projectRoot, PLAN_ARTIFACT_PATH))) {
+    if (existsSync(CairnDir.planPath(input.projectRoot))) {
       return {
         ok: false,
         code: "invalid_existing_artifact",

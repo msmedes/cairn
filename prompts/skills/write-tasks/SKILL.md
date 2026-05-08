@@ -17,7 +17,7 @@ args:
       description: Issue file paths and their plain-language descriptions from the Plan's pieces list.
     plan_path:
       type: string
-      description: Optional project-relative path to the Plan, normally plan.json.
+      description: Optional path to the Plan, normally .cairn/plan.json.
 ---
 
 Generate the Tasks tab content from the ordered issue list, then finish by calling the custom Tasks artifact tool. Call `create_tasks_artifact` with one item per issue, using the same plain-language wording as the Plan's pieces.
@@ -32,7 +32,7 @@ If any issue is missing its path or user-visible title, return `outcome: "blocke
 
 ## Output path
 
-The canonical Tasks path is `<project>/tasks.json`, but you do not write it directly. `create_tasks_artifact` owns initial creation, and `update_task_status` owns routine progress changes after implementation starts.
+The canonical Tasks path is `<project>/.cairn/tasks.json`, but you do not write it directly. `create_tasks_artifact` owns initial creation, and `update_task_status` owns routine progress changes after implementation starts.
 
 ## Tool sequence
 

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import {
   createPlanArtifact,
   loadPlanArtifact,
@@ -51,10 +52,10 @@ test("createPlanArtifact persists canonical plan.json without writing plan.html"
     title: "First playable quiz",
     pieceCount: 3,
   });
-  expect(existsSync(join(projectRoot, "plan.html"))).toBe(false);
+  expect(existsSync(join(CairnDir.root(projectRoot), "plan.html"))).toBe(false);
 
   const parsed = JSON.parse(
-    readFileSync(join(projectRoot, "plan.json"), "utf8"),
+    readFileSync(CairnDir.planPath(projectRoot), "utf8"),
   );
   expect(parsed).toEqual({
     artifact: "plan",
@@ -87,10 +88,10 @@ test("updatePlanArtifact preserves createdAt and records the update reason", () 
     path: "plan.json",
     title: "Updated first quiz",
   });
-  expect(existsSync(join(projectRoot, "plan.html"))).toBe(false);
+  expect(existsSync(join(CairnDir.root(projectRoot), "plan.html"))).toBe(false);
 
   const parsed = JSON.parse(
-    readFileSync(join(projectRoot, "plan.json"), "utf8"),
+    readFileSync(CairnDir.planPath(projectRoot), "utf8"),
   );
   expect(parsed.createdAt).toBe("2026-05-01T12:00:00.000Z");
   expect(parsed.updatedAt).toBe("2026-05-01T13:00:00.000Z");
@@ -99,7 +100,8 @@ test("updatePlanArtifact preserves createdAt and records the update reason", () 
 
 test("updatePlanArtifact identifies an invalid existing plan.json", () => {
   const projectRoot = tempProject();
-  writeFileSync(join(projectRoot, "plan.json"), '{"artifact":"plan"}', "utf8");
+  CairnDir.ensure(projectRoot);
+  writeFileSync(CairnDir.planPath(projectRoot), '{"artifact":"plan"}', "utf8");
 
   const result = updatePlanArtifact({
     projectRoot,

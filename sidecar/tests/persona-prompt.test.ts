@@ -29,6 +29,7 @@ test("persona prompt uses slug-based task status transitions for Implementing", 
 test("persona prompt keeps Project context hidden and explicitly tool-owned", () => {
   expect(personaPrompt).toContain("update_project_context");
   expect(personaPrompt).toContain("Never show raw `<project>/CONTEXT.md`");
+  expect(personaPrompt).toContain("<project>/.cairn/CONTEXT.md");
   expect(personaPrompt).toContain(
     "Artifact tools do not update Project context automatically",
   );
@@ -40,7 +41,7 @@ test("persona prompt routes visible artifact creation through tool-owned JSON da
   expect(personaPrompt).toContain("create_tasks_artifact");
   expect(personaPrompt).toContain("schema-validated artifact data");
   expect(personaPrompt).toContain(
-    "Never use raw `Write` or `Edit` against `<project>/brief.json`, `<project>/plan.json`, `<project>/tasks.json`, or `<project>/CONTEXT.md`.",
+    "Never use raw `Write` or `Edit` against `<project>/.cairn/brief.json`, `<project>/.cairn/plan.json`, `<project>/.cairn/tasks.json`, or `<project>/.cairn/CONTEXT.md`.",
   );
   expect(personaPrompt).not.toContain("brief.html");
   expect(personaPrompt).not.toContain("plan.html");

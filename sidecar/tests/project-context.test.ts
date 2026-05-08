@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import {
   loadProjectContext,
   type ProjectContextUpdateInput,
@@ -46,7 +47,7 @@ test("updateProjectContext creates canonical CONTEXT.md with durable project fac
     decisionCount: 1,
     openQuestionCount: 1,
   });
-  expect(existsSync(join(projectRoot, "CONTEXT.md"))).toBe(true);
+  expect(existsSync(CairnDir.projectContextPath(projectRoot))).toBe(true);
   expect(loadProjectContext(projectRoot)).toEqual({
     terms: [
       {
@@ -58,7 +59,7 @@ test("updateProjectContext creates canonical CONTEXT.md with durable project fac
     decisions: ["Start with one video and one quiz before adding analytics."],
     openQuestions: ["Should quizzes be shareable by link or export first?"],
   });
-  const text = readFileSync(join(projectRoot, "CONTEXT.md"), "utf8");
+  const text = readFileSync(CairnDir.projectContextPath(projectRoot), "utf8");
   expect(text.match(/^## Language$/gm)).toHaveLength(1);
   expect(text.match(/^## Constraints$/gm)).toHaveLength(1);
   expect(text.match(/^## Decisions$/gm)).toHaveLength(1);
@@ -89,15 +90,16 @@ test("updateProjectContext does not promote empty placeholders into durable fact
     decisions: [],
     openQuestions: [],
   });
-  expect(readFileSync(join(projectRoot, "CONTEXT.md"), "utf8")).not.toContain(
-    "- None yet.\n- Keep setup non-technical.",
-  );
+  expect(
+    readFileSync(CairnDir.projectContextPath(projectRoot), "utf8"),
+  ).not.toContain("- None yet.\n- Keep setup non-technical.");
 });
 
 test("updateProjectContext preserves existing section structure and avoids duplicate noise", () => {
   const projectRoot = tempProject();
+  CairnDir.ensure(projectRoot);
   writeFileSync(
-    join(projectRoot, "CONTEXT.md"),
+    CairnDir.projectContextPath(projectRoot),
     [
       "# Project Context",
       "",
@@ -145,7 +147,7 @@ test("updateProjectContext preserves existing section structure and avoids dupli
     ],
   });
 
-  const text = readFileSync(join(projectRoot, "CONTEXT.md"), "utf8");
+  const text = readFileSync(CairnDir.projectContextPath(projectRoot), "utf8");
   expect(text).toContain(
     "## Notes\n\nThis section is owned by a future workflow.",
   );
@@ -186,13 +188,14 @@ test("updateProjectContext rejects empty updates without creating CONTEXT.md", (
     message:
       "Provide at least one term, constraint, decision, or open question.",
   });
-  expect(existsSync(join(projectRoot, "CONTEXT.md"))).toBe(false);
+  expect(existsSync(CairnDir.projectContextPath(projectRoot))).toBe(false);
 });
 
 test("updateProjectContext rejects malformed existing CONTEXT.md", () => {
   const projectRoot = tempProject();
+  CairnDir.ensure(projectRoot);
   writeFileSync(
-    join(projectRoot, "CONTEXT.md"),
+    CairnDir.projectContextPath(projectRoot),
     "# Not Project Context\n",
     "utf8",
   );

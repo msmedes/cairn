@@ -26,6 +26,7 @@ import {
   createBriefArtifact,
   updateBriefArtifact,
 } from "./brief-artifact";
+import { CairnDir } from "./cairn-dir";
 import { createPlanArtifact, updatePlanArtifact } from "./plan-artifact";
 import {
   ProjectContextUpdateToolParamsSchema,
@@ -313,7 +314,7 @@ function getLastAssistantText(messages: AgentMessage[]) {
 }
 
 export function getSubagentSessionDir(projectRoot: string) {
-  return join(projectRoot, "sessions", "subagents");
+  return join(CairnDir.sessionsDir(projectRoot), "subagents");
 }
 
 function createFinishSubagentTool(options: {

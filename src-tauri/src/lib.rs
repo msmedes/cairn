@@ -206,7 +206,9 @@ fn project_file_path(name: &str, active_project: &ActiveProject) -> Result<PathB
         }
     }
 
-    Ok(PathBuf::from(&active_project.path).join(relative))
+    Ok(PathBuf::from(&active_project.path)
+        .join(".cairn")
+        .join(relative))
 }
 
 fn record_error(state: &SidecarState, message: String, app: &AppHandle) {
@@ -832,6 +834,23 @@ mod tests {
             format_sidecar_dev_log(&value).as_deref(),
             Some("project_state phase=scoping brief=false prds=2 issues=1")
         );
+    }
+
+    #[test]
+    fn project_file_path_reads_from_cairn_dir_and_rejects_traversal() {
+        let active_project = ActiveProject {
+            id: "demo".into(),
+            name: "Demo".into(),
+            path: "/tmp/demo-project".into(),
+            display_name: "Demo".into(),
+        };
+
+        assert_eq!(
+            project_file_path("brief.json", &active_project).unwrap(),
+            PathBuf::from("/tmp/demo-project/.cairn/brief.json")
+        );
+        assert!(project_file_path("../brief.json", &active_project).is_err());
+        assert!(project_file_path("../../etc/passwd", &active_project).is_err());
     }
 }
 

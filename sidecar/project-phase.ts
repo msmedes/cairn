@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { loadBriefArtifact } from "./brief-artifact";
+import { CairnDir } from "./cairn-dir";
 import { loadTasksArtifact } from "./tasks-artifact";
 
 export type ProjectPhase =
@@ -36,8 +36,8 @@ function deriveTasksPhase(projectPath: string): ProjectPhase | null {
 
 export function getProjectState(projectPath: string): ProjectState {
   const brief = loadBriefArtifact(projectPath) !== null;
-  const prds = listMarkdown(join(projectPath, "prds"));
-  const issues = listMarkdown(join(projectPath, "issues"));
+  const prds = listMarkdown(CairnDir.prdsDir(projectPath));
+  const issues = listMarkdown(CairnDir.issuesDir(projectPath));
 
   let phase: ProjectPhase;
   if (!brief) phase = "scoping";

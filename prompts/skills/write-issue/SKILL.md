@@ -1,6 +1,6 @@
 ---
 name: write-issue
-description: Use only after a fresh slice PRD exists under the Project's prds/ folder and the user-approved slice needs to be broken into local implementation issue files.
+description: Use only after a fresh slice PRD exists under the Project's .cairn/prds/ folder and the user-approved slice needs to be broken into local implementation issue files.
 disable-model-invocation: false
 response_schema: artifact_write
 args:
@@ -13,7 +13,7 @@ args:
       description: Absolute path to the active Project root.
     prd_path:
       type: string
-      description: Optional project-relative path to the PRD to split; defaults to the newest markdown file under prds/.
+      description: Optional Cairn storage-relative path to the PRD to split; defaults to the newest markdown file under .cairn/prds/.
 ---
 
 Break the most recent slice PRD into independently buildable implementation issues. This is silent planning work for the Cairn: do not chat with the user, do not expose implementation paths to the user, and do not write files unless the PRD supports useful issue slices.
@@ -22,11 +22,11 @@ Break the most recent slice PRD into independently buildable implementation issu
 
 Read the most recently modified PRD under:
 
-`<project>/prds/`
+`<project>/.cairn/prds/`
 
 Use only markdown PRD files in that folder. If more than one PRD exists, choose the newest file by modification time. Treat that file as the source of truth for the current slice.
 
-If there is no PRD under `<project>/prds/`, do not create issue files. Return exactly one targeted question in the Cairn's voice that asks for the missing planning input.
+If there is no PRD under `<project>/.cairn/prds/`, do not create issue files. Return exactly one targeted question in the Cairn's voice that asks for the missing planning input.
 
 ## Bubble-up rule
 
@@ -46,9 +46,9 @@ If the missing information is not load-bearing, make a reasonable implementation
 
 Write issue files under:
 
-`<project>/issues/<NN>-<slug>.md`
+`<project>/.cairn/issues/<NN>-<slug>.md`
 
-Create `<project>/issues/` if it does not exist; the Write tool may create parent directories as needed.
+Create `<project>/.cairn/issues/` if it does not exist; the Write tool may create parent directories as needed.
 
 Use this naming convention:
 
@@ -81,7 +81,7 @@ Use this exact section structure for every issue file:
 
 ## Source
 
-`<project-relative path to the PRD>`
+`<Cairn storage-relative path to the PRD>`
 
 ## What to build
 
@@ -100,7 +100,7 @@ A concise description of this vertical slice. Describe the end-to-end behavior, 
 
 Template rules:
 
-- `## Source` always references the PRD path relative to the Project root, for example `prds/01-video-playback.md`.
+- `## Source` always references the PRD path relative to `.cairn/`, for example `prds/01-video-playback.md`.
 - Omit `## Parent`. There is no upstream GitHub issue in the Project folder workflow.
 - If there are no blockers, write `None - can start immediately` under `## Blocked by`.
 - If there are blockers, reference other issue files by slug only, without `.md` and without GitHub issue numbers, for example `- Blocked by 01-video-runtime`.
@@ -113,4 +113,4 @@ After writing the files, return only one JSON object matching `artifact_write`:
 { "outcome": "complete", "message": "Issues written.", "path": "issues/" }
 ```
 
-Use `path: "issues/"` when the current slice's issue files were created or updated successfully.
+Use `path: "issues/"` when the current slice's issue files were created or updated successfully. Do not include the `.cairn/` prefix in the returned path.

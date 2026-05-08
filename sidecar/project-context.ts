@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { z } from "zod";
+import { CairnDir } from "./cairn-dir";
 
 export const PROJECT_CONTEXT_PATH = "CONTEXT.md";
 
@@ -333,7 +333,7 @@ export function paramsToProjectContextUpdates(
 }
 
 export function loadProjectContext(projectRoot: string): ProjectContext | null {
-  const path = join(projectRoot, PROJECT_CONTEXT_PATH);
+  const path = CairnDir.projectContextPath(projectRoot);
   if (!existsSync(path)) return null;
 
   try {
@@ -373,7 +373,7 @@ export function updateProjectContext(
     };
   }
 
-  const path = join(input.projectRoot, PROJECT_CONTEXT_PATH);
+  const path = CairnDir.projectContextPath(input.projectRoot);
   const existingText = existsSync(path) ? readFileSync(path, "utf8") : null;
   const parsedExisting = existingText ? parseMarkdown(existingText) : null;
   if (existingText && !parsedExisting) {
@@ -399,6 +399,7 @@ export function updateProjectContext(
   };
 
   try {
+    CairnDir.ensure(input.projectRoot);
     writeFileSync(path, renderContext(context, parsedExisting), "utf8");
   } catch {
     return {

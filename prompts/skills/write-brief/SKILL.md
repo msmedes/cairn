@@ -37,9 +37,9 @@ Read only the provided inputs and any existing Project files needed to understan
 
 ## Output path
 
-The canonical Brief path is `<project>/brief.json`, but you do not write it directly. The `create_brief_artifact` and `update_brief_artifact` tools own that file and its envelope.
+The canonical Brief path is `<project>/.cairn/brief.json`, but you do not write it directly. The `create_brief_artifact` and `update_brief_artifact` tools own that file and its envelope.
 
-The canonical Project context path is `<project>/CONTEXT.md`, but you do not write it directly. The `update_project_context` tool owns durable context updates.
+The canonical Project context path is `<project>/.cairn/CONTEXT.md`, but you do not write it directly. The `update_project_context` tool owns durable context updates.
 
 ## Visual shell
 

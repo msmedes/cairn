@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import {
   createTasksArtifact,
   loadTasksArtifact,
@@ -43,10 +44,12 @@ test("createTasksArtifact persists canonical tasks.json with issue-derived slugs
     schemaVersion: 1,
     taskCount: 3,
   });
-  expect(existsSync(join(projectRoot, "tasks.html"))).toBe(false);
+  expect(existsSync(join(CairnDir.root(projectRoot), "tasks.html"))).toBe(
+    false,
+  );
 
   const parsed = JSON.parse(
-    readFileSync(join(projectRoot, "tasks.json"), "utf8"),
+    readFileSync(CairnDir.tasksPath(projectRoot), "utf8"),
   );
   expect(parsed).toMatchObject({
     artifact: "tasks",
@@ -127,7 +130,7 @@ test("updateTaskStatus reports unknown slugs without rewriting task state", () =
     issues,
     now: () => new Date("2026-05-01T12:00:00.000Z"),
   });
-  const before = readFileSync(join(projectRoot, "tasks.json"), "utf8");
+  const before = readFileSync(CairnDir.tasksPath(projectRoot), "utf8");
 
   expect(
     updateTaskStatus({
@@ -146,5 +149,5 @@ test("updateTaskStatus reports unknown slugs without rewriting task state", () =
       "share-the-finished-quiz",
     ],
   });
-  expect(readFileSync(join(projectRoot, "tasks.json"), "utf8")).toBe(before);
+  expect(readFileSync(CairnDir.tasksPath(projectRoot), "utf8")).toBe(before);
 });

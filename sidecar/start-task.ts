@@ -8,6 +8,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import { CairnDir } from "./cairn-dir";
 
 export type StartTaskOutcome = "complete" | "failure" | "blocked";
 
@@ -130,8 +131,9 @@ function resolveProjectPath(projectRoot: string, projectRelativePath: string) {
     throw new Error("start_task issuePath must stay inside the project.");
   }
 
-  const resolved = join(projectRoot, normalized);
-  if (relative(projectRoot, resolved).startsWith("..")) {
+  const cairnRoot = CairnDir.root(projectRoot);
+  const resolved = join(cairnRoot, normalized);
+  if (relative(cairnRoot, resolved).startsWith("..")) {
     throw new Error("start_task issuePath must stay inside the project.");
   }
   return resolved;
