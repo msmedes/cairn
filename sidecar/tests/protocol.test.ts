@@ -105,6 +105,22 @@ function createStoredProject(homeDir: string, id = "2026-04-30-test-project") {
   return projectPath;
 }
 
+function createCairnProjectAt(projectPath: string, id = "2026-05-08-project") {
+  CairnDir.ensure(projectPath);
+  mkdirSync(CairnDir.sessionsDir(projectPath), { recursive: true });
+  writeFileSync(
+    CairnDir.metadataPath(projectPath),
+    JSON.stringify({
+      id,
+      name: "Located Project",
+      displayName: "Located Project",
+      createdAt: "2026-05-08T12:00:00.000Z",
+      lastOpenedAt: "2026-05-08T12:00:00.000Z",
+    }),
+    "utf8",
+  );
+}
+
 function kill(proc: SubprocessHandle) {
   try {
     proc.kill();
@@ -347,6 +363,37 @@ test("open_project migrates a legacy-shaped project before opening it", async ()
 
   expect(existsSync(CairnDir.metadataPath(legacyPath))).toBe(true);
   expect(existsSync(join(legacyPath, "project.json"))).toBe(false);
+});
+
+test("startup-style open_project locates the nearest project root from a subdirectory", async () => {
+  const cairnHome = createCairnHome();
+  const projectPath = createTempDir("cairn-located-project-");
+  const subdir = join(projectPath, "src", "nested");
+  mkdirSync(subdir, { recursive: true });
+  createCairnProjectAt(projectPath);
+  const proc = spawnSidecar(cairnHome);
+  const personaPath = createPersonaFile("You are Cairn.");
+
+  writeJsonToSidecar(proc, { type: "init", personaPath });
+  await collectEvents(
+    proc,
+    (event) => event.type === "ready",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  writeJsonToSidecar(proc, {
+    type: "open_project",
+    path: subdir,
+    locateProjectRoot: true,
+  });
+  const events = await collectEvents(
+    proc,
+    (event) => event.type === "active_project",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  expect(events.at(-1)?.project).toMatchObject({ path: projectPath });
+  expect(existsSync(join(subdir, ".cairn"))).toBe(false);
 });
 
 test("open_project failure prunes the stale recent and remains recoverable", async () => {

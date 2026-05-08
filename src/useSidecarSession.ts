@@ -38,6 +38,7 @@ type SidecarEvent =
 type SidecarStatusSnapshot = {
   ready: boolean;
   error: string | null;
+  projectOpenError?: string | null;
   hydrate: ChatMessage[] | null;
   activeProject: ActiveProject | null;
   recents?: RecentProject[];
@@ -196,6 +197,9 @@ export function useSidecarSession({
               setStatus({ type: "error", message: snapshot.error });
             } else if (snapshot.ready) {
               setStatus({ type: "ready" });
+            }
+            if (snapshot.projectOpenError) {
+              setProjectOpenError(snapshot.projectOpenError);
             }
             if (snapshot.recents) {
               setRecents(snapshot.recents);

@@ -44,6 +44,7 @@ import {
 } from "./hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { migrateLegacyProject } from "./legacy-migrator";
+import { findProjectRoot } from "./project-locator";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
 import { type RecentProjectEntry, RecentsRegistry } from "./recents-registry";
@@ -51,10 +52,15 @@ import { disambiguate, slugify, withDatePrefix } from "./slug";
 import type { SpawnSubagentResult } from "./spawn-subagent";
 
 type InMsg =
-  | { type: "init"; personaPath?: string; skillsPath?: string }
+  | {
+      type: "init";
+      personaPath?: string;
+      skillsPath?: string;
+      skipAutoOpen?: boolean;
+    }
   | { type: "prompt"; text: string }
   | { type: "new_project" }
-  | { type: "open_project"; path: string }
+  | { type: "open_project"; path: string; locateProjectRoot?: boolean }
   | { type: "list_recents" }
   | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
 
@@ -1024,14 +1030,16 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
   recentsRegistry.bootstrapFromLegacyProjects();
 
   let openedRecent = false;
-  for (const recent of recentsRegistry.list()) {
-    if (!isOpenableRecent(recent)) {
-      recentsRegistry.remove(recent.path);
-      continue;
+  if (!msg.skipAutoOpen) {
+    for (const recent of recentsRegistry.list()) {
+      if (!isOpenableRecent(recent)) {
+        recentsRegistry.remove(recent.path);
+        continue;
+      }
+      await openProjectPath(recent.path, { emitHydrate: true });
+      openedRecent = true;
+      break;
     }
-    await openProjectPath(recent.path, { emitHydrate: true });
-    openedRecent = true;
-    break;
   }
   if (!openedRecent) emit({ type: "hydrate", messages: [] });
   emitRecents();
@@ -1040,12 +1048,15 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
 
 async function openProjectPath(
   rawPath: string,
-  options: { emitHydrate: boolean },
+  options: { emitHydrate: boolean; locateProjectRoot?: boolean },
 ) {
   if (!activePersonaPath) {
     throw new Error("sidecar not initialized");
   }
-  const projectPath = resolve(rawPath);
+  const resolvedPath = resolve(rawPath);
+  const projectPath = options.locateProjectRoot
+    ? (findProjectRoot(resolvedPath) ?? resolvedPath)
+    : resolvedPath;
   try {
     assertDirectoryPath(projectPath);
   } catch (err) {
@@ -1099,7 +1110,10 @@ async function handleOpenProject(
   msg: Extract<InMsg, { type: "open_project" }>,
 ) {
   try {
-    await openProjectPath(msg.path, { emitHydrate: true });
+    await openProjectPath(msg.path, {
+      emitHydrate: true,
+      locateProjectRoot: msg.locateProjectRoot,
+    });
   } catch (err) {
     emit({ type: "error", message: formatError(err), recoverable: true });
   }
