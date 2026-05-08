@@ -135,7 +135,10 @@ select_issue_context() {
   OPEN_PRS_JSON="$(mktemp "$TMP_ROOT/prs.XXXXXX")"
   OPEN_ISSUE_NUMBERS_FILE="$(mktemp "$TMP_ROOT/open-issues.XXXXXX")"
 
-  gh issue list --repo "$REPO" --state open --limit 200 --json number,title,body,url >"$OPEN_ISSUES_JSON"
+  # Full open set drives the dependency-blocked check below. A non-agent-ready
+  # blocker still has to keep its dependents off the backlog, so we cannot
+  # filter this list by label.
+  gh issue list --repo "$REPO" --state open --limit 200 --json number,title,body,url,labels >"$OPEN_ISSUES_JSON"
   gh pr list --repo "$REPO" --state open --limit 200 --json number,headRefName,title,url >"$OPEN_PRS_JSON"
   jq -r '.[].number' "$OPEN_ISSUES_JSON" | sort -n >"$OPEN_ISSUE_NUMBERS_FILE"
 
@@ -172,7 +175,7 @@ select_issue_context() {
     ACTIVE_MODE="new"
     ACTIVE_PR_NUMBER=""
     return 0
-  done < <(jq -c 'sort_by(.number)[]' "$OPEN_ISSUES_JSON")
+  done < <(jq -c '[.[] | select(any(.labels[]?; .name == "agent-ready"))] | sort_by(.number)[]' "$OPEN_ISSUES_JSON")
 
   ACTIVE_MODE="no_ready_issues"
   return 0

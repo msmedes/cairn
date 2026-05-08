@@ -9,8 +9,8 @@ Rules:
 - Do not use GitHub MCP / connector tools for GitHub operations in this run.
 - Use the `gh` CLI for GitHub work instead: issue reads, issue comments, PR creation, PR updates, PR merge, and status checks.
 - If this prompt includes an assigned issue, branch, or worktree, treat that assignment as authoritative and work only on that issue.
-- If no issue is assigned, inspect the full open-issue list and choose the next ready issue yourself.
-- Treat issue body lines like `Blocked by #123` as hard dependencies only while the referenced issue is still open. If the referenced issue is closed, treat that dependency as satisfied.
+- If no issue is assigned, inspect the open-issue list, restrict candidates to those carrying the `agent-ready` label, and choose the next ready issue yourself. Issues without that label are off-limits — a human is meant to handle them.
+- Treat issue body lines like `Blocked by #123` as hard dependencies only while the referenced issue is still open. If the referenced issue is closed, treat that dependency as satisfied. A blocker without the `agent-ready` label still blocks; do not skip it just because Ralph cannot pick it up itself.
 - Work only on one issue in this run.
 - Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
 - Read the relevant in-repo design docs before coding — PRDs in `_meta/prds/`, ADRs in `_meta/adr/`, and the root `CONTEXT.md` — especially anything referenced by the issue's `Source` section.
