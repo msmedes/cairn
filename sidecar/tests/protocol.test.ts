@@ -21,6 +21,7 @@ import {
   DefaultResourceLoader,
   getAgentDir,
 } from "@mariozechner/pi-coding-agent";
+import { CairnDir } from "../cairn-dir";
 import { loadRepoLocalEnv } from "../env";
 
 const SIDECAR_ENTRY = resolve(import.meta.dir, "..", "index.ts");
@@ -313,9 +314,9 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const tasksPath = join(projectPath, "tasks.json");
+    const tasksPath = CairnDir.tasksPath(projectPath);
     writeFileSync(
-      tasksPath,
+      join(projectPath, "tasks.json"),
       JSON.stringify({
         artifact: "tasks",
         schemaVersion: 1,
@@ -375,7 +376,9 @@ test(
         ],
       },
     });
-    expect(existsSync(join(projectPath, "tasks.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "tasks.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -385,7 +388,7 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const tasksPath = join(projectPath, "tasks.json");
+    const tasksPath = CairnDir.tasksPath(projectPath);
     const proc = spawnSidecar(cairnHome, {
       CAIRN_FAKE_PROTOCOL_CREATE_TASKS: "1",
     });
@@ -435,7 +438,9 @@ test(
         ],
       },
     });
-    expect(existsSync(join(projectPath, "tasks.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "tasks.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -445,7 +450,7 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const briefPath = join(projectPath, "brief.json");
+    const briefPath = CairnDir.briefPath(projectPath);
     const proc = spawnSidecar(cairnHome, {
       CAIRN_FAKE_PROTOCOL_CREATE_BRIEF: "1",
     });
@@ -482,7 +487,9 @@ test(
         title: "Video Quiz Helper",
       },
     });
-    expect(existsSync(join(projectPath, "brief.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "brief.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -492,9 +499,9 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const briefPath = join(projectPath, "brief.json");
+    const briefPath = CairnDir.briefPath(projectPath);
     writeFileSync(
-      briefPath,
+      join(projectPath, "brief.json"),
       JSON.stringify({
         artifact: "brief",
         schemaVersion: 1,
@@ -554,7 +561,9 @@ test(
         title: "Focused Video Quiz Helper",
       },
     });
-    expect(existsSync(join(projectPath, "brief.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "brief.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -564,7 +573,7 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const planPath = join(projectPath, "plan.json");
+    const planPath = CairnDir.planPath(projectPath);
     const proc = spawnSidecar(cairnHome, {
       CAIRN_FAKE_PROTOCOL_CREATE_PLAN: "1",
     });
@@ -601,7 +610,9 @@ test(
         title: "First playable quiz",
       },
     });
-    expect(existsSync(join(projectPath, "plan.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "plan.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -611,9 +622,9 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const planPath = join(projectPath, "plan.json");
+    const planPath = CairnDir.planPath(projectPath);
     writeFileSync(
-      planPath,
+      join(projectPath, "plan.json"),
       JSON.stringify({
         artifact: "plan",
         schemaVersion: 1,
@@ -672,7 +683,9 @@ test(
         title: "Focused first quiz",
       },
     });
-    expect(existsSync(join(projectPath, "plan.html"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "plan.html"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );
@@ -682,7 +695,7 @@ test(
   async () => {
     const cairnHome = createCairnHome();
     const projectPath = createStoredProject(cairnHome);
-    const contextPath = join(projectPath, "CONTEXT.md");
+    const contextPath = CairnDir.projectContextPath(projectPath);
     const proc = spawnSidecar(cairnHome, {
       CAIRN_FAKE_PROTOCOL_UPDATE_PROJECT_CONTEXT: "1",
     });
@@ -714,7 +727,9 @@ test(
     const contextText = readFileSync(contextPath, "utf8");
     expect(contextText).toContain("**Instructor**:");
     expect(contextText).toContain("- Keep setup non-technical and app-owned.");
-    expect(existsSync(join(projectPath, "context.json"))).toBe(false);
+    expect(existsSync(join(CairnDir.root(projectPath), "context.json"))).toBe(
+      false,
+    );
   },
   DEFAULT_TIMEOUT_MS,
 );

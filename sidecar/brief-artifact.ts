@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { z } from "zod";
+import { CairnDir } from "./cairn-dir";
 
 export const BRIEF_ARTIFACT_PATH = "brief.json";
 export const BRIEF_SCHEMA_VERSION = 1;
@@ -145,8 +145,9 @@ function writeEnvelope(
   envelope: BriefArtifactEnvelope,
 ): BriefArtifactResult {
   try {
+    CairnDir.ensure(projectRoot);
     writeFileSync(
-      join(projectRoot, BRIEF_ARTIFACT_PATH),
+      CairnDir.briefPath(projectRoot),
       `${JSON.stringify(envelope, null, 2)}\n`,
       "utf8",
     );
@@ -164,7 +165,7 @@ function writeEnvelope(
 export function createBriefArtifact(
   input: CreateBriefArtifactInput,
 ): BriefArtifactResult {
-  if (existsSync(join(input.projectRoot, BRIEF_ARTIFACT_PATH))) {
+  if (existsSync(CairnDir.briefPath(input.projectRoot))) {
     return {
       ok: false,
       code: "brief_already_exists",
@@ -192,7 +193,7 @@ export function createBriefArtifact(
 export function loadBriefArtifact(
   projectRoot: string,
 ): BriefArtifactEnvelope | null {
-  const path = join(projectRoot, BRIEF_ARTIFACT_PATH);
+  const path = CairnDir.briefPath(projectRoot);
   if (!existsSync(path)) return null;
 
   let parsed: unknown;
@@ -226,7 +227,7 @@ export function updateBriefArtifact(
 
   const existing = loadBriefArtifact(input.projectRoot);
   if (!existing) {
-    if (existsSync(join(input.projectRoot, BRIEF_ARTIFACT_PATH))) {
+    if (existsSync(CairnDir.briefPath(input.projectRoot))) {
       return {
         ok: false,
         code: "invalid_existing_artifact",

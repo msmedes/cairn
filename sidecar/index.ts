@@ -26,6 +26,7 @@ import {
   getAgentDir,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import { CairnDir } from "./cairn-dir";
 import { createCairnTools } from "./cairn-tools";
 import { recoverDanglingToolCallInDir } from "./dangling-tool-recovery";
 import { loadCairnSettingsEnv, loadRepoLocalEnv } from "./env";
@@ -120,7 +121,7 @@ loadRepoLocalEnv();
 loadCairnSettingsEnv();
 
 function getSessionDir(project: Project) {
-  return join(project.path, "sessions");
+  return CairnDir.sessionsDir(project.path);
 }
 
 function hasExistingSession(sessionDir: string) {
@@ -811,6 +812,7 @@ async function openProject(
   const cwd = project.path;
   const sessionDir = getSessionDir(project);
   mkdirSync(cwd, { recursive: true });
+  CairnDir.ensure(cwd);
   mkdirSync(sessionDir, { recursive: true });
   process.chdir(cwd);
   const personaContent = readFileSync(personaPath, "utf8");

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import {
   buildStartTaskPrompt,
   mapSubAgentResult,
@@ -81,13 +82,17 @@ test("start_task handoff prompt includes the issue file, source PRD, and fixed T
 
 test("startTask loads the issue and source PRD before dispatching a pi sub-agent", async () => {
   const projectRoot = tempProjectRoot();
-  mkdirSync(join(projectRoot, "issues"));
-  mkdirSync(join(projectRoot, "prds"));
+  CairnDir.ensure(projectRoot);
+  mkdirSync(CairnDir.issuesDir(projectRoot));
+  mkdirSync(CairnDir.prdsDir(projectRoot));
   writeFileSync(
-    join(projectRoot, "issues", "06-2-start-task.md"),
+    join(CairnDir.issuesDir(projectRoot), "06-2-start-task.md"),
     "## Source\n\n`prds/06-implementing.md`\n\n## Work\nBuild it.",
   );
-  writeFileSync(join(projectRoot, "prds", "06-implementing.md"), "# PRD");
+  writeFileSync(
+    join(CairnDir.prdsDir(projectRoot), "06-implementing.md"),
+    "# PRD",
+  );
 
   const prompts: string[] = [];
   const result = await startTask({
@@ -131,13 +136,17 @@ test("startTask reports invalid issue paths as blocked outcomes", async () => {
 
 test("startTask maps sub-agent runner rejections to failure outcomes", async () => {
   const projectRoot = tempProjectRoot();
-  mkdirSync(join(projectRoot, "issues"));
-  mkdirSync(join(projectRoot, "prds"));
+  CairnDir.ensure(projectRoot);
+  mkdirSync(CairnDir.issuesDir(projectRoot));
+  mkdirSync(CairnDir.prdsDir(projectRoot));
   writeFileSync(
-    join(projectRoot, "issues", "06-2-start-task.md"),
+    join(CairnDir.issuesDir(projectRoot), "06-2-start-task.md"),
     "## Source\n\n`prds/06-implementing.md`\n\n## Work\nBuild it.",
   );
-  writeFileSync(join(projectRoot, "prds", "06-implementing.md"), "# PRD");
+  writeFileSync(
+    join(CairnDir.prdsDir(projectRoot), "06-implementing.md"),
+    "# PRD",
+  );
 
   const result = await startTask({
     projectRoot,

@@ -6,6 +6,7 @@ import {
   createSyntheticSourceInfo,
   type Skill,
 } from "@mariozechner/pi-coding-agent";
+import { CairnDir } from "../cairn-dir";
 import {
   buildSpawnSubagentSystemPrompt,
   createSubagentArtifactTools,
@@ -337,7 +338,7 @@ test("sub-agent sessions persist under a nested project session directory", () =
   const projectRoot = tempProjectRoot();
 
   expect(getSubagentSessionDir(projectRoot)).toBe(
-    join(projectRoot, "sessions", "subagents"),
+    join(CairnDir.sessionsDir(projectRoot), "subagents"),
   );
 });
 
@@ -353,7 +354,7 @@ test("buildSpawnSubagentSystemPrompt names every response shape", () => {
   );
 });
 
-test("sub-agent project context tool writes CONTEXT.md in the project root", async () => {
+test("sub-agent project context tool writes CONTEXT.md in .cairn", async () => {
   const projectRoot = tempProjectRoot();
   const tool = createSubagentUpdateProjectContextTool({ projectRoot });
 
@@ -375,12 +376,12 @@ test("sub-agent project context tool writes CONTEXT.md in the project root", asy
     decisionCount: 1,
     openQuestionCount: 0,
   });
-  expect(readFileSync(join(projectRoot, "CONTEXT.md"), "utf8")).toContain(
-    "- Start with one video and one quiz.",
-  );
+  expect(
+    readFileSync(CairnDir.projectContextPath(projectRoot), "utf8"),
+  ).toContain("- Start with one video and one quiz.");
 });
 
-test("sub-agent artifact tools write schema-validated artifacts in the project root", async () => {
+test("sub-agent artifact tools write schema-validated artifacts in .cairn", async () => {
   const projectRoot = tempProjectRoot();
   const tools = createSubagentArtifactTools({ projectRoot });
 
@@ -423,7 +424,7 @@ test("sub-agent artifact tools write schema-validated artifacts in the project r
     artifact: "brief",
     path: "brief.json",
   });
-  expect(readFileSync(join(projectRoot, "brief.json"), "utf8")).toContain(
+  expect(readFileSync(CairnDir.briefPath(projectRoot), "utf8")).toContain(
     "Video Quiz Helper",
   );
 });

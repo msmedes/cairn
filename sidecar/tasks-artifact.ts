@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, join } from "node:path";
+import { basename, extname } from "node:path";
 import { z } from "zod";
+import { CairnDir } from "./cairn-dir";
 import { slugify } from "./slug";
 
 export const TASKS_ARTIFACT_PATH = "tasks.json";
@@ -223,8 +224,9 @@ function writeEnvelope(
   envelope: TasksArtifactEnvelope,
 ): CreateTasksArtifactResult {
   try {
+    CairnDir.ensure(projectRoot);
     writeFileSync(
-      join(projectRoot, TASKS_ARTIFACT_PATH),
+      CairnDir.tasksPath(projectRoot),
       `${JSON.stringify(normalizeEnvelope(envelope), null, 2)}\n`,
       "utf8",
     );
@@ -248,7 +250,7 @@ function writeEnvelope(
 export function createTasksArtifact(
   input: CreateTasksArtifactInput,
 ): CreateTasksArtifactResult {
-  if (existsSync(join(input.projectRoot, TASKS_ARTIFACT_PATH))) {
+  if (existsSync(CairnDir.tasksPath(input.projectRoot))) {
     return {
       ok: false,
       code: "tasks_already_exists",
@@ -281,7 +283,7 @@ export function createTasksArtifact(
 export function loadTasksArtifact(
   projectRoot: string,
 ): TasksArtifactEnvelope | null {
-  const path = join(projectRoot, TASKS_ARTIFACT_PATH);
+  const path = CairnDir.tasksPath(projectRoot);
   if (!existsSync(path)) return null;
 
   let parsed: unknown;
@@ -311,7 +313,7 @@ export function updateTaskStatus(
 
   const existing = loadTasksArtifact(input.projectRoot);
   if (!existing) {
-    if (existsSync(join(input.projectRoot, TASKS_ARTIFACT_PATH))) {
+    if (existsSync(CairnDir.tasksPath(input.projectRoot))) {
       return {
         ok: false,
         code: "invalid_existing_artifact",

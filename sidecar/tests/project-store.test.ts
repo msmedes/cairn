@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "../cairn-dir";
 import { ProjectStore } from "../project-store";
 
 function tempProjectsRoot() {
@@ -28,8 +29,8 @@ test("create and read round-trip project metadata", () => {
     lastOpenedAt: "2026-04-28T10:00:00.000Z",
     displayName: "Build me a tiny quiz app.",
   });
-  expect(existsSync(join(project.path, "project.json"))).toBe(true);
-  expect(existsSync(join(project.path, "sessions"))).toBe(true);
+  expect(existsSync(CairnDir.metadataPath(project.path))).toBe(true);
+  expect(existsSync(join(project.path, "project.json"))).toBe(false);
   expect(store.read(project.id)).toEqual(project);
 });
 
@@ -95,7 +96,7 @@ test("rename updates display name in metadata while keeping the on-disk folder s
   expect(existsSync(project.path)).toBe(true);
   expect(
     JSON.parse(
-      readFileSync(join(renamed.project.path, "project.json"), "utf8"),
+      readFileSync(CairnDir.metadataPath(renamed.project.path), "utf8"),
     ),
   ).toMatchObject({
     id: project.id,
@@ -157,8 +158,9 @@ test("read rejects metadata ids that mismatch the containing folder", () => {
   const store = new ProjectStore(root);
   const path = join(root, "2026-04-28-safe-project");
   mkdirSync(path);
+  CairnDir.ensure(path);
   writeFileSync(
-    join(path, "project.json"),
+    CairnDir.metadataPath(path),
     JSON.stringify({
       id: "../outside",
       name: "Unsafe",

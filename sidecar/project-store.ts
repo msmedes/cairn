@@ -8,6 +8,8 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { CairnDir } from "./cairn-dir";
+import { migrateLegacyProject } from "./legacy-migrator";
 import { disambiguate, slugify, withDatePrefix } from "./slug";
 
 export type ProjectJson = {
@@ -114,7 +116,6 @@ export class ProjectStore {
     };
 
     mkdirSync(path, { recursive: false });
-    mkdirSync(join(path, "sessions"), { recursive: true });
     this.writeProjectJson(path, metadata);
     return this.enrich(metadata);
   }
@@ -122,7 +123,8 @@ export class ProjectStore {
   read(id: string): Project | null {
     if (!isSafeProjectId(id)) return null;
     const path = join(this.projectsRoot, id);
-    const jsonPath = join(path, "project.json");
+    migrateLegacyProject(path, { projectsRoot: this.projectsRoot });
+    const jsonPath = CairnDir.metadataPath(path);
     if (!existsSync(jsonPath)) return null;
 
     const metadata = parseProjectJson(
@@ -232,8 +234,9 @@ export class ProjectStore {
   }
 
   private writeProjectJson(path: string, metadata: ProjectJson) {
+    CairnDir.ensure(path);
     writeFileSync(
-      join(path, "project.json"),
+      CairnDir.metadataPath(path),
       `${JSON.stringify(metadata, null, 2)}\n`,
       "utf8",
     );

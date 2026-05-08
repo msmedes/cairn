@@ -8,6 +8,7 @@ import {
   loadBriefArtifact,
   updateBriefArtifact,
 } from "../brief-artifact";
+import { CairnDir } from "../cairn-dir";
 
 function tempProject() {
   return mkdtempSync(join(tmpdir(), "cairn-brief-artifact-"));
@@ -47,10 +48,12 @@ test("createBriefArtifact persists canonical brief.json without writing brief.ht
     title: "Video Quiz Helper",
     sectionCount: 1,
   });
-  expect(existsSync(join(projectRoot, "brief.html"))).toBe(false);
+  expect(existsSync(join(CairnDir.root(projectRoot), "brief.html"))).toBe(
+    false,
+  );
 
   const parsed = JSON.parse(
-    readFileSync(join(projectRoot, "brief.json"), "utf8"),
+    readFileSync(CairnDir.briefPath(projectRoot), "utf8"),
   );
   expect(parsed).toEqual({
     artifact: "brief",
@@ -88,8 +91,9 @@ test("createBriefArtifact refuses to overwrite an existing brief.json", () => {
 
 test("loadBriefArtifact rejects malformed brief.json envelopes", () => {
   const projectRoot = tempProject();
+  CairnDir.ensure(projectRoot);
   writeFileSync(
-    join(projectRoot, "brief.json"),
+    CairnDir.briefPath(projectRoot),
     '{"artifact":"brief"}',
     "utf8",
   );
@@ -118,10 +122,12 @@ test("updateBriefArtifact preserves createdAt and records the update reason", ()
     path: "brief.json",
     title: "Updated Quiz Helper",
   });
-  expect(existsSync(join(projectRoot, "brief.html"))).toBe(false);
+  expect(existsSync(join(CairnDir.root(projectRoot), "brief.html"))).toBe(
+    false,
+  );
 
   const parsed = JSON.parse(
-    readFileSync(join(projectRoot, "brief.json"), "utf8"),
+    readFileSync(CairnDir.briefPath(projectRoot), "utf8"),
   );
   expect(parsed.createdAt).toBe("2026-05-01T12:00:00.000Z");
   expect(parsed.updatedAt).toBe("2026-05-01T13:00:00.000Z");
@@ -130,8 +136,9 @@ test("updateBriefArtifact preserves createdAt and records the update reason", ()
 
 test("updateBriefArtifact identifies an invalid existing brief.json", () => {
   const projectRoot = tempProject();
+  CairnDir.ensure(projectRoot);
   writeFileSync(
-    join(projectRoot, "brief.json"),
+    CairnDir.briefPath(projectRoot),
     '{"artifact":"brief"}',
     "utf8",
   );

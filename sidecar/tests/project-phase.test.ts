@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createBriefArtifact } from "../brief-artifact";
+import { CairnDir } from "../cairn-dir";
 import { getProjectState } from "../project-phase";
 import { createTasksArtifact, updateTaskStatus } from "../tasks-artifact";
 
@@ -11,13 +12,14 @@ function tempProject() {
 }
 
 function write(path: string, relativePath: string, content = "content") {
-  writeFileSync(join(path, relativePath), content, "utf8");
+  writeFileSync(join(CairnDir.root(path), relativePath), content, "utf8");
 }
 
 function makeSlicedProject() {
   const path = tempProject();
-  mkdirSync(join(path, "prds"));
-  mkdirSync(join(path, "issues"));
+  CairnDir.ensure(path);
+  mkdirSync(CairnDir.prdsDir(path));
+  mkdirSync(CairnDir.issuesDir(path));
   createBriefArtifact({
     projectRoot: path,
     data: {
@@ -68,6 +70,7 @@ test("project_state treats brief.json as the scoped Brief artifact", () => {
 
 test("project_state ignores malformed brief.json", () => {
   const path = tempProject();
+  CairnDir.ensure(path);
   write(path, "brief.json", '{"artifact":"brief"}');
 
   expect(getProjectState(path)).toMatchObject({

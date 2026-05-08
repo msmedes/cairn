@@ -16,7 +16,7 @@ args:
       description: The agreed smallest meaningful first slice, including any user clarifications.
     brief_path:
       type: string
-      description: Optional project-relative path to the saved Brief; defaults to brief.json.
+      description: Optional path to the saved Brief; defaults to .cairn/brief.json.
 ---
 
 Write a product requirements document for the user-approved slice. This is silent planning work for the Cairn: do not chat with the user, do not expose implementation paths to the user, and do not write anything unless the inputs support a useful PRD.
@@ -25,7 +25,7 @@ Write a product requirements document for the user-approved slice. This is silen
 
 Use both sources together:
 
-1. `<project>/brief.json`: the saved Brief artifact for the Project. Treat its `data` as the primary source of truth for what the user is trying to build, who it is for, and what should feel true when the Project is useful.
+1. `<project>/.cairn/brief.json`: the saved Brief artifact for the Project. Treat its `data` as the primary source of truth for what the user is trying to build, who it is for, and what should feel true when the Project is useful.
 2. The current Session context: the slice the Cairn proposed, the user's agreement or redirect, and any clarifications already given during Slicing.
 
 If the Brief and Session conflict, prefer the most recent explicit user direction in the Session, but keep the PRD consistent with the Brief's product intent.
@@ -48,9 +48,9 @@ If the missing information is not load-bearing, make a reasonable product judgme
 
 Write the PRD to:
 
-`<project>/prds/<NN>-<slug>.md`
+`<project>/.cairn/prds/<NN>-<slug>.md`
 
-Create `<project>/prds/` if it does not exist; the Write tool may create parent directories as needed.
+Create `<project>/.cairn/prds/` if it does not exist; the Write tool may create parent directories as needed.
 
 Use this naming convention:
 
@@ -129,4 +129,4 @@ After writing the file, return only one JSON object matching `artifact_write`:
 { "outcome": "complete", "message": "PRD written.", "path": "prds/01-slice-name.md" }
 ```
 
-Use the actual project-relative PRD path in `path`.
+Use the actual Cairn storage-relative PRD path in `path`, for example `prds/01-video-playback.md`. Do not include the `.cairn/` prefix in the returned path.
