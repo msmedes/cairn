@@ -6,6 +6,30 @@ The user talks to a single voice — the **Cairn** — that owns every technical
 
 For full domain language, see [`CONTEXT.md`](./CONTEXT.md). For the v0 scope, see [`_meta/project-brief.md`](./_meta/project-brief.md).
 
+## Quickstart
+
+Fastest path from a fresh Mac to a running app. **macOS only** for now.
+
+1. **Open Terminal.** Press `Cmd+Space`, type `Terminal`, press Enter.
+2. **Get the code.** Paste this and press Enter:
+   ```sh
+   git clone https://github.com/msmedes/cairn.git && cd cairn
+   ```
+   The first time you run `git`, macOS may prompt you to install the Xcode Command Line Tools — click **Install** and wait a few minutes, then re-run the command.
+3. **Run setup.** This checks for Bun, Rust, and Tauri's prerequisites and offers to install anything missing:
+   ```sh
+   ./scripts/setup.sh
+   ```
+   If the script installed Bun or Rust, **close this Terminal window and open a new one** so the new tools land on your `PATH`, then `cd cairn` again.
+4. **Get an Anthropic API key.** Sign in at [console.anthropic.com](https://console.anthropic.com/), go to **API Keys → Create Key**, and copy the value (it starts with `sk-ant-`).
+5. **Start the app:**
+   ```sh
+   bun tauri dev
+   ```
+   On first launch a settings dialog opens — paste your API key there. Cairn stores it locally and won't ask again.
+
+That's the whole loop. The sections below cover architecture, build output, and dev scripts in more detail.
+
 ## Status
 
 v0 — proves the **scoping** experience works for a non-technical user. Slicing and implementing land in v1. See `_meta/project-brief.md` for the full non-goals list.
