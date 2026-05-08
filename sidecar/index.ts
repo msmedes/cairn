@@ -7,8 +7,15 @@
  * a project from that message and persists the pi session inside it.
  */
 
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   type Context,
@@ -36,14 +43,19 @@ import {
   translateSessionEntriesToHydrateEvent,
 } from "./hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
+import { migrateLegacyProject } from "./legacy-migrator";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
+import { type RecentProjectEntry, RecentsRegistry } from "./recents-registry";
+import { disambiguate, slugify, withDatePrefix } from "./slug";
 import type { SpawnSubagentResult } from "./spawn-subagent";
 
 type InMsg =
   | { type: "init"; personaPath?: string; skillsPath?: string }
   | { type: "prompt"; text: string }
   | { type: "new_project" }
+  | { type: "open_project"; path: string }
+  | { type: "list_recents" }
   | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
 
 type OutMsg =
@@ -53,6 +65,7 @@ type OutMsg =
       project: Pick<Project, "id" | "name" | "path" | "displayName">;
     }
   | { type: "ready" }
+  | { type: "recents"; entries: RecentProjectEntry[] }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
   | {
@@ -61,7 +74,7 @@ type OutMsg =
       message: string;
     }
   | { type: "agent_end" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; recoverable?: boolean };
 
 type DevLogMsg =
   | {
@@ -107,6 +120,7 @@ let session: AgentSession | null = null;
 let sessionManager: SessionManager | null = null;
 let unsubscribeSession: (() => void) | null = null;
 let projectStore = new ProjectStore();
+let recentsRegistry = new RecentsRegistry();
 let activeProject: Project | null = null;
 let activePersonaPath: string | null = null;
 let activeSkillsPath: string | null = null;
@@ -289,6 +303,10 @@ function emitPersistedSessionDevLogs(
 
 function emit(msg: OutMsg) {
   process.stdout.write(`${JSON.stringify(msg)}\n`);
+}
+
+function emitRecents() {
+  emit({ type: "recents", entries: recentsRegistry.list() });
 }
 
 function emitDevLog(msg: DevLogMsg) {
@@ -656,6 +674,53 @@ function getFakeProtocolUpdateProjectContextModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolSetProjectNameModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.CAIRN_FAKE_PROTOCOL_SET_PROJECT_NAME !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "set_project_name",
+        { name: "Renamed Project" },
+        { id: "tool-set-project-name" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `set_project_name result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
+  return { model, authStorage };
+}
+
+function getFakeProtocolTextModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  const text = process.env.CAIRN_FAKE_PROTOCOL_TEXT_RESPONSE;
+  if (!text) return undefined;
+
+  const registration = registerFauxProvider({
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
+  });
+  registration.setResponses([fauxAssistantMessage(text)]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
@@ -667,7 +732,9 @@ function getFakeProtocolModel():
     getFakeProtocolUpdateBriefModel() ??
     getFakeProtocolCreatePlanModel() ??
     getFakeProtocolUpdatePlanModel() ??
-    getFakeProtocolUpdateProjectContextModel()
+    getFakeProtocolUpdateProjectContextModel() ??
+    getFakeProtocolSetProjectNameModel() ??
+    getFakeProtocolTextModel()
   );
 }
 
@@ -800,6 +867,61 @@ function emitActiveProject(project: Project) {
   });
 }
 
+function transientProjectForPath(projectPath: string): Project {
+  const displayName = basename(projectPath) || projectPath;
+  const now = new Date().toISOString();
+  return {
+    id: `path-${slugify(displayName)}`,
+    name: displayName,
+    displayName,
+    path: projectPath,
+    createdAt: now,
+    lastOpenedAt: now,
+  };
+}
+
+function defaultProjectsRoot() {
+  return join(homedir(), ".cairn", "projects");
+}
+
+function nextLegacyProjectPath(firstMessage: string, now: Date = new Date()) {
+  const projectsRoot = defaultProjectsRoot();
+  mkdirSync(projectsRoot, { recursive: true });
+  const baseSlug = withDatePrefix(slugify(firstMessage), now);
+  const existingProjectIds = readdirSync(projectsRoot).flatMap((name) => {
+    try {
+      return statSync(join(projectsRoot, name)).isDirectory() ? [name] : [];
+    } catch {
+      return [];
+    }
+  });
+  return join(projectsRoot, disambiguate(baseSlug, existingProjectIds));
+}
+
+function isOpenableRecent(entry: RecentProjectEntry) {
+  try {
+    if (!statSync(entry.path).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  return (
+    existsSync(CairnDir.root(entry.path)) ||
+    existsSync(join(entry.path, "project.json"))
+  );
+}
+
+function assertDirectoryPath(projectPath: string) {
+  let stat: ReturnType<typeof statSync>;
+  try {
+    stat = statSync(projectPath);
+  } catch {
+    throw new Error(`Project path does not exist: ${projectPath}`);
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Project path is not a directory: ${projectPath}`);
+  }
+}
+
 async function openProject(
   project: Project,
   personaPath: string,
@@ -849,6 +971,8 @@ async function openProject(
       renameProject: (id, displayName) => projectStore.rename(id, displayName),
       onRenameSuccess: (_previousProject, nextProject) => {
         activeProject = nextProject;
+        recentsRegistry.add(nextProject.path, nextProject.displayName);
+        emitRecents();
       },
       onProjectUpdate: emitActiveProject,
       onCreatingStart: (target, message) => {
@@ -896,16 +1020,47 @@ async function handleInit(msg: Extract<InMsg, { type: "init" }>) {
   activeSkillsPath = skillsPath ? resolve(startupCwd, skillsPath) : null;
 
   projectStore = new ProjectStore();
-  const recentProject = projectStore.findMostRecent();
-  if (recentProject) {
-    const touchedProject = projectStore.touch(recentProject.id);
-    await openProject(touchedProject, resolvedPersonaPath, {
-      emitHydrate: true,
-    });
-  } else {
-    emit({ type: "hydrate", messages: [] });
+  recentsRegistry = new RecentsRegistry();
+  recentsRegistry.bootstrapFromLegacyProjects();
+
+  let openedRecent = false;
+  for (const recent of recentsRegistry.list()) {
+    if (!isOpenableRecent(recent)) {
+      recentsRegistry.remove(recent.path);
+      continue;
+    }
+    await openProjectPath(recent.path, { emitHydrate: true });
+    openedRecent = true;
+    break;
   }
+  if (!openedRecent) emit({ type: "hydrate", messages: [] });
+  emitRecents();
   emit({ type: "ready" });
+}
+
+async function openProjectPath(
+  rawPath: string,
+  options: { emitHydrate: boolean },
+) {
+  if (!activePersonaPath) {
+    throw new Error("sidecar not initialized");
+  }
+  const projectPath = resolve(rawPath);
+  try {
+    assertDirectoryPath(projectPath);
+  } catch (err) {
+    recentsRegistry.remove(projectPath);
+    emitRecents();
+    throw err;
+  }
+
+  migrateLegacyProject(projectPath);
+  CairnDir.ensure(projectPath);
+  const project =
+    projectStore.read(projectPath) ?? transientProjectForPath(projectPath);
+  recentsRegistry.add(project.path, project.displayName);
+  emitRecents();
+  await openProject(project, activePersonaPath, options);
 }
 
 async function handlePrompt(text: string) {
@@ -913,10 +1068,17 @@ async function handlePrompt(text: string) {
     throw new Error("sidecar not initialized");
   }
   if (!activeProject) {
-    const project = projectStore.create(text);
+    const project = projectStore.create(nextLegacyProjectPath(text), text);
     await openProject(project, activePersonaPath, { emitHydrate: false });
+    recentsRegistry.add(project.path, project.displayName);
+    emitRecents();
   } else {
-    activeProject = projectStore.touch(activeProject.id);
+    activeProject =
+      projectStore.read(activeProject.path) === null
+        ? projectStore.create(activeProject.path, text)
+        : projectStore.touch(activeProject.path);
+    recentsRegistry.add(activeProject.path, activeProject.displayName);
+    emitRecents();
     emitActiveProject(activeProject);
   }
   if (!session) {
@@ -931,6 +1093,16 @@ async function handleNewProject() {
   process.chdir(startupCwd);
   emit({ type: "hydrate", messages: [] });
   emitProjectState();
+}
+
+async function handleOpenProject(
+  msg: Extract<InMsg, { type: "open_project" }>,
+) {
+  try {
+    await openProjectPath(msg.path, { emitHydrate: true });
+  } catch (err) {
+    emit({ type: "error", message: formatError(err), recoverable: true });
+  }
 }
 
 async function handleSetApiKey(msg: Extract<InMsg, { type: "set_api_key" }>) {
@@ -970,6 +1142,12 @@ async function handleLine(line: string) {
       break;
     case "new_project":
       await handleNewProject();
+      break;
+    case "open_project":
+      await handleOpenProject(msg);
+      break;
+    case "list_recents":
+      emitRecents();
       break;
     case "set_api_key":
       await handleSetApiKey(msg);

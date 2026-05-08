@@ -12,6 +12,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
@@ -102,6 +103,15 @@ function createStoredProject(homeDir: string, id = "2026-04-30-test-project") {
     "utf8",
   );
   return projectPath;
+}
+
+function kill(proc: SubprocessHandle) {
+  try {
+    proc.kill();
+  } catch {
+    // already dead
+  }
+  liveProcs.delete(proc);
 }
 
 function writeToSidecar(proc: SubprocessHandle, line: string) {
@@ -245,6 +255,183 @@ test("init on an empty cairn home reports ready without creating a project", asy
   });
   expect(existsSync(projectsRoot)).toBe(false);
 });
+
+test(
+  "open_project initializes a fresh directory, persists a prompt, and resumes through recents",
+  async () => {
+    const cairnHome = createCairnHome();
+    const projectPath = createTempDir("cairn-open-project-");
+    const personaPath = createPersonaFile("You are Cairn.");
+    const env = { CAIRN_FAKE_PROTOCOL_TEXT_RESPONSE: "I saved the session." };
+    const proc = spawnSidecar(cairnHome, env);
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, { type: "open_project", path: projectPath });
+    const openEvents = await collectEvents(
+      proc,
+      (event) => event.type === "active_project",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    expect(
+      readFileSync(join(projectPath, ".cairn", ".gitignore"), "utf8"),
+    ).toBe("*\n");
+    expect(openEvents.at(-1)?.project).toMatchObject({ path: projectPath });
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Start this project.",
+    });
+    await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+    expect(existsSync(CairnDir.metadataPath(projectPath))).toBe(true);
+    expect(
+      readdirSync(CairnDir.sessionsDir(projectPath)).some((name) =>
+        name.endsWith(".jsonl"),
+      ),
+    ).toBe(true);
+
+    kill(proc);
+    const restarted = spawnSidecar(cairnHome, env);
+    writeJsonToSidecar(restarted, { type: "init", personaPath });
+    const restartEvents = await collectEvents(
+      restarted,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    expect(
+      restartEvents.find((event) => event.type === "active_project")?.project,
+    ).toMatchObject({ path: projectPath });
+    const hydrateEvent = restartEvents.find(
+      (event): event is SidecarEvent & { messages: Array<{ text: string }> } =>
+        event.type === "hydrate" && Array.isArray(event.messages),
+    );
+    expect(
+      hydrateEvent?.messages.some((message) =>
+        message.text.includes("Start this project."),
+      ),
+    ).toBe(true);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test("open_project migrates a legacy-shaped project before opening it", async () => {
+  const cairnHome = createCairnHome();
+  const legacyPath = createStoredProject(cairnHome, "2026-05-01-legacy");
+  const proc = spawnSidecar(cairnHome);
+  const personaPath = createPersonaFile("You are Cairn.");
+
+  writeJsonToSidecar(proc, { type: "init", personaPath });
+  await collectEvents(
+    proc,
+    (event) => event.type === "ready",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  writeJsonToSidecar(proc, { type: "open_project", path: legacyPath });
+  await collectEvents(
+    proc,
+    (event) => event.type === "active_project",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  expect(existsSync(CairnDir.metadataPath(legacyPath))).toBe(true);
+  expect(existsSync(join(legacyPath, "project.json"))).toBe(false);
+});
+
+test("open_project failure prunes the stale recent and remains recoverable", async () => {
+  const cairnHome = createCairnHome();
+  const missingPath = join(createTempDir("cairn-missing-parent-"), "missing");
+  const proc = spawnSidecar(cairnHome);
+  const personaPath = createPersonaFile("You are Cairn.");
+
+  writeJsonToSidecar(proc, { type: "init", personaPath });
+  await collectEvents(
+    proc,
+    (event) => event.type === "ready",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  writeJsonToSidecar(proc, { type: "open_project", path: missingPath });
+  const failureEvents = await collectEvents(
+    proc,
+    (event) => event.type === "error",
+    DEFAULT_TIMEOUT_MS,
+  );
+
+  expect(failureEvents.at(-1)).toMatchObject({
+    type: "error",
+    recoverable: true,
+  });
+
+  writeJsonToSidecar(proc, { type: "list_recents" });
+  const recentsEvents = await collectEvents(
+    proc,
+    (event) => event.type === "recents",
+    DEFAULT_TIMEOUT_MS,
+  );
+  expect(recentsEvents.at(-1)).toMatchObject({
+    type: "recents",
+    entries: [],
+  });
+});
+
+test(
+  "set_project_name updates the recents display name",
+  async () => {
+    const cairnHome = createCairnHome();
+    const projectPath = createTempDir("cairn-rename-recent-");
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_SET_PROJECT_NAME: "1",
+    });
+    const personaPath = createPersonaFile("You are Cairn.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, { type: "open_project", path: projectPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "active_project",
+      DEFAULT_TIMEOUT_MS,
+    );
+    writeJsonToSidecar(proc, { type: "prompt", text: "Name this project." });
+
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const recentsEvent = events
+      .filter(
+        (
+          event,
+        ): event is SidecarEvent & { entries: Array<Record<string, string>> } =>
+          event.type === "recents" && Array.isArray(event.entries),
+      )
+      .at(-1);
+    expect(recentsEvent?.entries[0]).toMatchObject({
+      path: projectPath,
+      displayName: "Renamed Project",
+    });
+  },
+  DEFAULT_TIMEOUT_MS,
+);
 
 test("init emits an error event when personaPath does not exist", async () => {
   const cairnHome = createCairnHome();

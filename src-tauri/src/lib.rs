@@ -33,6 +33,9 @@ struct SidecarState {
     last_hydrate: StdMutex<Option<Vec<HydratedMessage>>>,
     // Empty on a fresh install until the first prompt creates a project.
     active_project: StdMutex<Option<ActiveProject>>,
+    // Latest recents payload so the frontend can recover if it subscribes
+    // after startup emits the list.
+    last_recents: StdMutex<Vec<RecentProjectEntry>>,
     // Recent raw sidecar dev events. The frontend pulls this after subscribing
     // so events emitted during startup/hydration are not lost.
     last_dev_logs: StdMutex<Vec<Value>>,
@@ -55,6 +58,7 @@ struct SidecarStatus {
     error: Option<String>,
     hydrate: Option<Vec<HydratedMessage>>,
     active_project: Option<ActiveProject>,
+    recents: Vec<RecentProjectEntry>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -69,6 +73,19 @@ struct ActiveProject {
 #[derive(Deserialize)]
 struct ActiveProjectEvent {
     project: ActiveProject,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecentProjectEntry {
+    path: String,
+    display_name: String,
+    last_opened_at: String,
+}
+
+#[derive(Deserialize)]
+struct RecentsEvent {
+    entries: Vec<RecentProjectEntry>,
 }
 
 #[derive(Default, Deserialize, Serialize)]
@@ -470,6 +487,45 @@ async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> 
 }
 
 #[tauri::command]
+async fn open_project(path: String, state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
+    let payload = serde_json::json!({ "type": "open_project", "path": path });
+    write_line(&state.stdin, &payload).await
+}
+
+#[tauri::command]
+fn open_project_dialog() -> Result<Option<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg("POSIX path of (choose folder with prompt \"Open a Cairn project folder\")")
+            .output()
+            .map_err(|err| format!("failed to open folder picker: {}", err))?;
+
+        if !output.status.success() {
+            return Ok(None);
+        }
+
+        let path = String::from_utf8(output.stdout)
+            .map_err(|err| format!("folder picker returned invalid text: {}", err))?
+            .trim()
+            .to_string();
+        return Ok((!path.is_empty()).then_some(path));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("open folder dialog is not supported on this platform yet".into())
+    }
+}
+
+#[tauri::command]
+async fn list_recents(state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
+    let payload = serde_json::json!({ "type": "list_recents" });
+    write_line(&state.stdin, &payload).await
+}
+
+#[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
     let hydrate = state
@@ -482,11 +538,17 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
         .lock()
         .ok()
         .and_then(|guard| guard.clone());
+    let recents = state
+        .last_recents
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_default();
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
         hydrate,
         active_project,
+        recents,
     }
 }
 
@@ -585,6 +647,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     if let Ok(mut slot) = state.active_project.lock() {
         *slot = None;
     }
+    if let Ok(mut slot) = state.last_recents.lock() {
+        slot.clear();
+    }
     if let Ok(mut slot) = state.last_dev_logs.lock() {
         slot.clear();
     }
@@ -665,12 +730,20 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                         }
                                     }
                                     Some("error") => {
-                                        state.ready.store(false, Ordering::Release);
+                                        let recoverable = value
+                                            .get("recoverable")
+                                            .and_then(|v| v.as_bool())
+                                            .unwrap_or(false);
+                                        if !recoverable {
+                                            state.ready.store(false, Ordering::Release);
+                                        }
                                         if let Some(message) =
                                             value.get("message").and_then(|v| v.as_str())
                                         {
-                                            if let Ok(mut slot) = state.last_error.lock() {
-                                                *slot = Some(message.to_string());
+                                            if !recoverable {
+                                                if let Ok(mut slot) = state.last_error.lock() {
+                                                    *slot = Some(message.to_string());
+                                                }
                                             }
                                         }
                                     }
@@ -695,6 +768,15 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                         {
                                             if let Ok(mut slot) = state.active_project.lock() {
                                                 *slot = Some(parsed.project);
+                                            }
+                                        }
+                                    }
+                                    Some("recents") => {
+                                        if let Ok(parsed) =
+                                            serde_json::from_value::<RecentsEvent>(value.clone())
+                                        {
+                                            if let Ok(mut slot) = state.last_recents.lock() {
+                                                *slot = parsed.entries;
                                             }
                                         }
                                     }
@@ -864,6 +946,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             send_prompt,
             new_project,
+            open_project,
+            open_project_dialog,
+            list_recents,
             get_active_project,
             get_cairn_settings,
             set_anthropic_api_key,

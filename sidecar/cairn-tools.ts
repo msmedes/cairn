@@ -323,7 +323,7 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
           };
         }
 
-        const result = options.renameProject(previousProject.id, params.name);
+        const result = options.renameProject(previousProject.path, params.name);
         if (result.ok) {
           options.onRenameSuccess(previousProject, result.project);
           options.onProjectUpdate(result.project);

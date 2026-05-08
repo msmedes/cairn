@@ -37,6 +37,13 @@ let mockMessages: Array<{
   text: string;
   done: boolean;
 }> = [];
+let mockRecents: Array<{
+  path: string;
+  displayName: string;
+  lastOpenedAt: string;
+}> = [];
+const openProjectMock = vi.hoisted(() => vi.fn());
+const openProjectDialogMock = vi.hoisted(() => vi.fn());
 
 vi.mock("./useSidecarSession", () => ({
   useSidecarSession: (handlers: SidecarSessionHandlers) => {
@@ -44,10 +51,14 @@ vi.mock("./useSidecarSession", () => ({
 
     return {
       messages: mockMessages,
+      recents: mockRecents,
+      projectOpenError: null,
       ready: true,
       error: null,
       sending: false,
       sendPrompt: vi.fn(),
+      openProject: openProjectMock,
+      openProjectDialog: openProjectDialogMock,
     };
   },
 }));
@@ -58,6 +69,9 @@ describe("App panel tabs", () => {
   beforeEach(() => {
     sidecarSessionHandlers = null;
     mockMessages = [];
+    mockRecents = [];
+    openProjectMock.mockReset();
+    openProjectDialogMock.mockReset();
     devLogMock.events = [];
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
@@ -426,6 +440,38 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Project Context")).not.toBeInTheDocument();
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
+  });
+
+  test("empty chat state shows recents and opens a selected project", () => {
+    mockUseProjectFile.mockImplementation(() => "");
+    mockRecents = [
+      {
+        path: "/Users/mike/code/quiz",
+        displayName: "Training Quiz",
+        lastOpenedAt: "2026-05-01T12:00:00.000Z",
+      },
+      {
+        path: "/Users/mike/code/forms",
+        displayName: "Forms Tool",
+        lastOpenedAt: "2026-05-01T11:00:00.000Z",
+      },
+    ];
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Training Quiz" }));
+
+    expect(screen.getByText("/Users/mike/code/quiz")).toBeInTheDocument();
+    expect(openProjectMock).toHaveBeenCalledWith("/Users/mike/code/quiz");
+  });
+
+  test("empty chat state exposes Open Folder action", () => {
+    mockUseProjectFile.mockImplementation(() => "");
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Folder..." }));
+
+    expect(openProjectDialogMock).toHaveBeenCalledTimes(1);
   });
 
   test("opens a dev mode layer with visible chat messages and event counts", () => {

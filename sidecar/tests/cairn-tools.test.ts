@@ -9,8 +9,8 @@ import type { Project } from "../project-store";
 import { ProjectStore } from "../project-store";
 import type { SpawnSubagentResult } from "../spawn-subagent";
 
-function tempProjectsRoot() {
-  return mkdtempSync(join(tmpdir(), "cairn-projects-"));
+function tempProjectPath() {
+  return mkdtempSync(join(tmpdir(), "cairn-project-"));
 }
 
 function toolText(result: { content: Array<{ type: string; text?: string }> }) {
@@ -20,8 +20,9 @@ function toolText(result: { content: Array<{ type: string; text?: string }> }) {
 }
 
 test("set_project_name tool renames the active project and reports the updated project", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   let activeProject: Project | null = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -66,7 +67,9 @@ test("set_project_name tool renames the active project and reports the updated p
   });
   expect(activeProject?.id).toBe(originalId);
   expect(activeProject?.path).toBe(renamedPairs[0]?.[0].path);
-  expect(store.read(originalId as string)?.displayName).toBe("Quiz Tool");
+  expect(store.read(renamedPairs[0]?.[0].path ?? "")?.displayName).toBe(
+    "Quiz Tool",
+  );
   expect(renamedPairs).toHaveLength(1);
   expect(emittedProjects).toHaveLength(1);
   expect(emittedProjects[0].id).toBe(originalId);
@@ -180,8 +183,9 @@ test("cairn tool registry does not surface retired task dispatcher tools", () =>
 });
 
 test("spawn_subagent tool routes bounded skill work to the active project", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -242,8 +246,9 @@ test("spawn_subagent tool routes bounded skill work to the active project", asyn
 });
 
 test("create_tasks_artifact tool writes tasks.json only", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -311,8 +316,9 @@ test("create_tasks_artifact tool writes tasks.json only", async () => {
 });
 
 test("update_task_status tool mutates a task by slug and reports unknown slugs", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -406,8 +412,9 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
 });
 
 test("create_brief_artifact tool writes brief.json only", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -478,8 +485,9 @@ test("create_brief_artifact tool writes brief.json only", async () => {
 });
 
 test("create_plan_artifact tool writes plan.json only", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
@@ -548,8 +556,9 @@ test("create_plan_artifact tool writes plan.json only", async () => {
 });
 
 test("update_project_context tool writes only hidden project context", async () => {
-  const store = new ProjectStore(tempProjectsRoot());
+  const store = new ProjectStore();
   const activeProject = store.create(
+    tempProjectPath(),
     "Temporary quiz idea",
     new Date("2026-04-28T10:00:00.000Z"),
   );
