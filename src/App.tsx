@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import {
   type CSSProperties,
@@ -8,10 +9,12 @@ import {
 } from "react";
 import "./App.css";
 import { BriefArtifactView } from "./BriefArtifactView";
+import { BugReportDialog } from "./BugReportDialog";
 import {
   type BriefArtifactEnvelope,
   parseBriefArtifact,
 } from "./briefArtifact";
+import type { ChatMessage } from "./chat-stream";
 import { DevModeLayer } from "./DevModeLayer";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { PlanArtifactView } from "./PlanArtifactView";
@@ -32,11 +35,17 @@ import {
   usePaneSplit,
 } from "./usePaneSplit";
 import { useProjectFile } from "./useProjectFile";
-import { useSidecarDevLog } from "./useSidecarDevLog";
-import { useSidecarSession } from "./useSidecarSession";
+import { type SidecarDevLogEntry, useSidecarDevLog } from "./useSidecarDevLog";
+import { type ActiveProject, useSidecarSession } from "./useSidecarSession";
 
 type CairnSettingsStatus = {
   hasAnthropicApiKey: boolean;
+};
+
+type BugReportSnapshot = {
+  messages: ChatMessage[];
+  devEvents: SidecarDevLogEntry[];
+  activeProject: ActiveProject | null;
 };
 
 function hasTauriRuntime() {
@@ -52,6 +61,9 @@ function App() {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
+  const [appVersion, setAppVersion] = useState("unknown");
+  const [bugReportSnapshot, setBugReportSnapshot] =
+    useState<BugReportSnapshot | null>(null);
   const projectBriefJson = useProjectFile("brief.json");
   const projectPlanJson = useProjectFile("plan.json");
   const projectTasksJson = useProjectFile("tasks.json");
@@ -106,6 +118,7 @@ function App() {
     messages,
     recents,
     projectOpenError,
+    activeProject,
     ready,
     error,
     sending,
@@ -141,6 +154,23 @@ function App() {
       })
       .catch((err) => {
         console.error("get_cairn_settings failed", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasTauriRuntime()) return;
+
+    let cancelled = false;
+    getVersion()
+      .then((version) => {
+        if (!cancelled) setAppVersion(version);
+      })
+      .catch((err) => {
+        console.error("getVersion failed", err);
       });
 
     return () => {
@@ -237,6 +267,19 @@ function App() {
               }}
             >
               API key
+            </button>
+            <button
+              type="button"
+              className="bug-report-button"
+              onClick={() =>
+                setBugReportSnapshot({
+                  messages,
+                  devEvents,
+                  activeProject,
+                })
+              }
+            >
+              Report a bug
             </button>
             <DevModeLayer
               messages={messages}
@@ -509,6 +552,22 @@ function App() {
           )}
         </div>
       </aside>
+      {bugReportSnapshot && (
+        <BugReportDialog
+          messages={bugReportSnapshot.messages}
+          devEvents={bugReportSnapshot.devEvents}
+          activeProject={
+            bugReportSnapshot.activeProject
+              ? {
+                  path: bugReportSnapshot.activeProject.path,
+                  displayName: bugReportSnapshot.activeProject.displayName,
+                }
+              : null
+          }
+          appVersion={appVersion}
+          onClosed={() => setBugReportSnapshot(null)}
+        />
+      )}
     </main>
   );
 }
