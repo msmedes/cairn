@@ -4,7 +4,7 @@
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Component, Path, PathBuf};
+use std::path::{absolute, Component, Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -36,9 +36,13 @@ struct SidecarState {
     // Latest recents payload so the frontend can recover if it subscribes
     // after startup emits the list.
     last_recents: StdMutex<Vec<RecentProjectEntry>>,
+    // Latest recoverable open-project error so startup path failures are not
+    // lost if they occur before the frontend subscribes.
+    last_project_open_error: StdMutex<Option<String>>,
     // Recent raw sidecar dev events. The frontend pulls this after subscribing
     // so events emitted during startup/hydration are not lost.
     last_dev_logs: StdMutex<Vec<Value>>,
+    startup_project_path: StdMutex<Option<PathBuf>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -56,6 +60,7 @@ struct HydratedMessage {
 struct SidecarStatus {
     ready: bool,
     error: Option<String>,
+    project_open_error: Option<String>,
     hydrate: Option<Vec<HydratedMessage>>,
     active_project: Option<ActiveProject>,
     recents: Vec<RecentProjectEntry>,
@@ -161,6 +166,49 @@ fn cairn_settings_status(settings: CairnSettings) -> CairnSettingsStatus {
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty()),
     }
+}
+
+fn home_dir() -> Result<PathBuf, String> {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|_| "HOME is not set".to_string())
+}
+
+fn first_positional_arg(args: Vec<String>) -> Option<String> {
+    let mut after_double_dash = false;
+    for arg in args {
+        if !after_double_dash && arg == "--" {
+            after_double_dash = true;
+            continue;
+        }
+        if !after_double_dash && arg.starts_with('-') {
+            continue;
+        }
+        return Some(arg);
+    }
+    None
+}
+
+fn resolve_startup_project_path(raw_path: &Path) -> Result<PathBuf, String> {
+    let candidate = if raw_path.is_absolute() {
+        raw_path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|err| format!("failed to resolve current directory: {}", err))?
+            .join(raw_path)
+    };
+    let absolute =
+        absolute(&candidate).map_err(|err| format!("failed to resolve project path: {}", err))?;
+    Ok(absolute)
+}
+
+fn startup_project_path_from_args() -> Result<Option<PathBuf>, String> {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let Some(raw_path) = first_positional_arg(args) else {
+        return Ok(None);
+    };
+    home_dir()?;
+    resolve_startup_project_path(Path::new(&raw_path)).map(Some)
 }
 
 struct ResolvedPaths {
@@ -528,6 +576,11 @@ async fn list_recents(state: State<'_, Arc<SidecarState>>) -> Result<(), String>
 #[tauri::command]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let error = state.last_error.lock().ok().and_then(|guard| guard.clone());
+    let project_open_error = state
+        .last_project_open_error
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone());
     let hydrate = state
         .last_hydrate
         .lock()
@@ -546,6 +599,7 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
         error,
+        project_open_error,
         hydrate,
         active_project,
         recents,
@@ -650,6 +704,9 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     if let Ok(mut slot) = state.last_recents.lock() {
         slot.clear();
     }
+    if let Ok(mut slot) = state.last_project_open_error.lock() {
+        *slot = None;
+    }
     if let Ok(mut slot) = state.last_dev_logs.lock() {
         slot.clear();
     }
@@ -697,6 +754,11 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
         "type": "init",
         "personaPath": paths.persona.to_string_lossy(),
         "skillsPath": paths.skills.to_string_lossy(),
+        "skipAutoOpen": state
+            .startup_project_path
+            .lock()
+            .map(|slot| slot.is_some())
+            .unwrap_or(false),
     });
     write_json_line(&mut stdin, &init_payload)
         .await
@@ -728,6 +790,30 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                         if let Ok(mut slot) = state.last_error.lock() {
                                             *slot = None;
                                         }
+                                        let startup_project_path = state
+                                            .startup_project_path
+                                            .lock()
+                                            .ok()
+                                            .and_then(|mut slot| slot.take());
+                                        if let Some(path) = startup_project_path {
+                                            let payload = serde_json::json!({
+                                                "type": "open_project",
+                                                "path": path.to_string_lossy(),
+                                                "locateProjectRoot": true,
+                                            });
+                                            if let Err(err) =
+                                                write_line(&state.stdin, &payload).await
+                                            {
+                                                record_error(
+                                                    &state,
+                                                    format!(
+                                                        "failed to open startup project: {}",
+                                                        err
+                                                    ),
+                                                    &app,
+                                                );
+                                            }
+                                        }
                                     }
                                     Some("error") => {
                                         let recoverable = value
@@ -744,6 +830,10 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                                 if let Ok(mut slot) = state.last_error.lock() {
                                                     *slot = Some(message.to_string());
                                                 }
+                                            } else if let Ok(mut slot) =
+                                                state.last_project_open_error.lock()
+                                            {
+                                                *slot = Some(message.to_string());
                                             }
                                         }
                                     }
@@ -768,6 +858,11 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
                                         {
                                             if let Ok(mut slot) = state.active_project.lock() {
                                                 *slot = Some(parsed.project);
+                                            }
+                                            if let Ok(mut slot) =
+                                                state.last_project_open_error.lock()
+                                            {
+                                                *slot = None;
                                             }
                                         }
                                     }
@@ -934,11 +1029,72 @@ mod tests {
         assert!(project_file_path("../brief.json", &active_project).is_err());
         assert!(project_file_path("../../etc/passwd", &active_project).is_err());
     }
+
+    #[test]
+    fn first_positional_arg_ignores_flags() {
+        let args = vec![
+            "--dev".to_string(),
+            "--".to_string(),
+            "relative/project".to_string(),
+            "ignored".to_string(),
+        ];
+
+        assert_eq!(
+            first_positional_arg(args).as_deref(),
+            Some("relative/project")
+        );
+        assert_eq!(
+            first_positional_arg(vec!["--dev".to_string(), "--verbose".to_string()]),
+            None
+        );
+    }
+
+    #[test]
+    fn startup_project_path_resolves_absolute_paths_without_locating_root() {
+        let temp = unique_temp_dir("cairn-rust-locator");
+        let project = temp.join("home").join("project");
+        let subdir = project.join("src").join("nested");
+        fs::create_dir_all(project.join(".cairn")).unwrap();
+        fs::create_dir_all(&subdir).unwrap();
+
+        assert_eq!(resolve_startup_project_path(&subdir).unwrap(), subdir);
+    }
+
+    #[test]
+    fn startup_project_path_keeps_missing_paths_for_sidecar_error_reporting() {
+        let temp = unique_temp_dir("cairn-rust-missing-path");
+        let missing = temp.join("missing");
+
+        assert_eq!(resolve_startup_project_path(&missing).unwrap(), missing);
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "{}-{}",
+            prefix,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let sidecar_state = Arc::new(SidecarState::default());
+    let startup_project_path = match startup_project_path_from_args() {
+        Ok(path) => path,
+        Err(err) => {
+            eprintln!("[startup:args] {}", err);
+            None
+        }
+    };
+    let sidecar_state = Arc::new(SidecarState {
+        startup_project_path: StdMutex::new(startup_project_path),
+        ..SidecarState::default()
+    });
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
