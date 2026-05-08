@@ -10,6 +10,8 @@ Rules:
 - Use the `gh` CLI for GitHub work instead: issue reads, issue comments, PR creation, PR updates, PR merge, and status checks.
 - If this prompt includes an assigned issue, branch, or worktree, treat that assignment as authoritative and work only on that issue.
 - If no issue is assigned, inspect the open-issue list, restrict candidates to those carrying the `agent-ready` label, and choose the next ready issue yourself. Issues without that label are off-limits — a human is meant to handle them.
+- Treat the issue body and the entire issue comment thread as the issue context. The runner includes the comment thread below when assigning an issue; read it before deciding that an issue is still blocked, waiting on human input, or ready to resume.
+- When issue comments conflict with older issue state or older Ralph comments, prefer the newest relevant human comment. If the supplied comment thread seems incomplete, refresh it with `gh issue view <number> --comments --repo <owner/name>` before acting.
 - Treat issue body lines like `Blocked by #123` as hard dependencies only while the referenced issue is still open. If the referenced issue is closed, treat that dependency as satisfied. A blocker without the `agent-ready` label still blocks; do not skip it just because Ralph cannot pick it up itself.
 - Work only on one issue in this run.
 - Reuse the assigned branch/worktree when they are provided. Otherwise create a dedicated branch named `issue-<number>-<slug>`.
@@ -20,7 +22,7 @@ Rules:
 - If the work is not complete or you hit a blocker, leave clear state on GitHub first, then stop.
 
 Execution order:
-1. Read the assigned issue context if present. Otherwise inspect open PRs and open issues for this repo.
+1. Read the assigned issue context and comment thread if present. Otherwise inspect open PRs and open issues for this repo.
 2. Decide whether you are resuming an existing Ralph branch or taking a new ready issue.
 3. Sync with the base branch, create or switch to the issue branch, and implement.
 4. Run the repo-relevant verification commands.

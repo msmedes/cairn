@@ -17,6 +17,7 @@ OPERATOR_PROMPT="${*:-}"
 ACTIVE_ISSUE_NUMBER=""
 ACTIVE_ISSUE_TITLE=""
 ACTIVE_ISSUE_BODY=""
+ACTIVE_ISSUE_COMMENTS=""
 ACTIVE_BRANCH=""
 ACTIVE_WORKTREE=""
 ACTIVE_MODE=""
@@ -67,6 +68,21 @@ json_field() {
   local encoded="$1"
   local query="$2"
   printf '%s' "$encoded" | jq -r "$query"
+}
+
+load_issue_comments() {
+  local issue_number="$1"
+
+  gh issue view "$issue_number" --repo "$REPO" --json comments \
+    | jq -r '
+        .comments
+        | sort_by(.createdAt)
+        | map(
+            "### @" + (.author.login // "unknown") + " commented at " + .createdAt
+            + "\n\n" + (.body // "")
+          )
+        | join("\n\n---\n\n")
+      '
 }
 
 sync_control_repo() {
@@ -127,6 +143,7 @@ load_issue_by_number() {
   ACTIVE_ISSUE_NUMBER="$issue_number"
   ACTIVE_ISSUE_TITLE="$(json_field "$encoded" '.title')"
   ACTIVE_ISSUE_BODY="$(json_field "$encoded" '(.body // "")')"
+  ACTIVE_ISSUE_COMMENTS="$(load_issue_comments "$issue_number")"
   return 0
 }
 
@@ -171,6 +188,7 @@ select_issue_context() {
     fi
 
     ACTIVE_ISSUE_NUMBER="$issue_number"
+    ACTIVE_ISSUE_COMMENTS="$(load_issue_comments "$issue_number")"
     ACTIVE_BRANCH="issue-${issue_number}-$(slugify "$ACTIVE_ISSUE_TITLE")"
     ACTIVE_MODE="new"
     ACTIVE_PR_NUMBER=""
@@ -289,6 +307,12 @@ build_prompt() {
     fi
     printf '\nIssue title: %s\n' "$ACTIVE_ISSUE_TITLE"
     printf '\nIssue body:\n\n```md\n%s\n```\n' "$ACTIVE_ISSUE_BODY"
+    printf '\nIssue comment thread (oldest first):\n\n'
+    if [[ -n "$ACTIVE_ISSUE_COMMENTS" ]]; then
+      printf '%s\n' "$ACTIVE_ISSUE_COMMENTS"
+    else
+      printf '(no comments)\n'
+    fi
     if [[ -n "$OPERATOR_PROMPT" ]]; then
       printf '\nOperator instructions: %s\n' "$OPERATOR_PROMPT"
     fi

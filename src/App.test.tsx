@@ -469,7 +469,7 @@ describe("App panel tabs", () => {
     mockUseProjectFile.mockImplementation(() => "");
 
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Open Folder..." }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Folder…" }));
 
     expect(openProjectDialogMock).toHaveBeenCalledTimes(1);
   });

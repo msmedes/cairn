@@ -336,45 +336,40 @@ function App() {
         >
           {messages.length === 0 && (
             <div className="empty">
-              <div className="empty-topline">
-                <p className="empty-kicker">Start with the rough version.</p>
-                <button
-                  type="button"
-                  className="open-folder-button"
-                  onClick={() => void openProjectDialog()}
-                  disabled={!ready}
-                >
-                  Open Folder...
-                </button>
-              </div>
-              <p>Tell me what you want this thing to do for people.</p>
+              <button
+                type="button"
+                className="open-folder-button"
+                onClick={() => void openProjectDialog()}
+                disabled={!ready}
+              >
+                Open Folder…
+              </button>
               {recents.length > 0 && (
-                <ul className="recents-list" aria-label="Recent projects">
-                  {recents.map((recent) => (
-                    <li key={recent.path}>
-                      <button
-                        type="button"
-                        className="recent-project"
-                        aria-label={recent.displayName}
-                        onClick={() => void openProject(recent.path)}
-                        disabled={!ready}
-                      >
-                        <span className="recent-name">
-                          {recent.displayName}
-                        </span>
-                        <span className="recent-path">{recent.path}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <p className="empty-recents-label">Recent</p>
+                  <ul className="recents-list" aria-label="Recent projects">
+                    {recents.map((recent) => (
+                      <li key={recent.path}>
+                        <button
+                          type="button"
+                          className="recent-project"
+                          aria-label={recent.displayName}
+                          onClick={() => void openProject(recent.path)}
+                          disabled={!ready}
+                        >
+                          <span className="recent-name">
+                            {recent.displayName}
+                          </span>
+                          <span className="recent-path">{recent.path}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
               {projectOpenError && (
                 <p className="open-project-error">{projectOpenError}</p>
               )}
-              <p className="hint">
-                A quiz for work. A helper for your group. A tiny tool that saves
-                time.
-              </p>
             </div>
           )}
           {messages.map((m) => {
