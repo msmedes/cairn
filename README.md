@@ -20,7 +20,7 @@ Fastest path from a fresh Mac to a running app. **macOS only** for now.
    ```sh
    ./scripts/setup.sh
    ```
-   If the script installed Bun or Rust, **close this Terminal window and open a new one** so the new tools land on your `PATH`, then `cd cairn` again.
+   If the script installed Bun or Rust, your current terminal can't see them yet. Either paste the `export` lines the script prints at the end, or close this window and open a new one (then `cd cairn` again).
 4. **Get an Anthropic API key.** Sign in at [console.anthropic.com](https://console.anthropic.com/), go to **API Keys → Create Key**, and copy the value (it starts with `sk-ant-`).
 5. **Start the app:**
    ```sh
