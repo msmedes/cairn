@@ -76,9 +76,21 @@ echo "Setup complete."
 echo
 
 if (( ${#INSTALLED_TOOLS[@]} > 0 )); then
-  echo "Heads up: this run installed ${INSTALLED_TOOLS[*]}, which updated your"
-  echo "shell config (e.g. ~/.zshrc). This terminal window won't see the new"
-  echo "tools yet. Open a new terminal, cd back into this directory, then run:"
+  echo "Heads up: this run installed ${INSTALLED_TOOLS[*]}. The installers updated"
+  echo "your shell config (e.g. ~/.zshrc), but your current terminal won't see the"
+  echo "new tools until that file gets re-sourced."
+  echo
+  echo "To keep using this terminal, paste:"
+  echo
+  if [[ " ${INSTALLED_TOOLS[*]} " == *" Bun "* ]]; then
+    echo "    export BUN_INSTALL=\"\$HOME/.bun\""
+    echo "    export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
+  fi
+  if [[ " ${INSTALLED_TOOLS[*]} " == *" Rust "* ]]; then
+    echo "    . \"\$HOME/.cargo/env\""
+  fi
+  echo
+  echo "Or open a new terminal and cd back into this directory. Then run:"
 else
   echo "Start the app in dev mode:"
 fi
