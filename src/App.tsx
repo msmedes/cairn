@@ -276,7 +276,7 @@ function App() {
     void sendPrompt(text, images);
   }
 
-  function addDroppedFiles(event: DragEvent<HTMLTextAreaElement>) {
+  function addDroppedFiles(event: DragEvent<HTMLFormElement>) {
     event.preventDefault();
     const files = Array.from(event.dataTransfer.files);
     if (files.length > 0) {
@@ -573,6 +573,8 @@ function App() {
             e.preventDefault();
             send();
           }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={addDroppedFiles}
         >
           {(composerAttachments.images.length > 0 ||
             composerAttachments.rejections.length > 0) && (
@@ -611,8 +613,6 @@ function App() {
             onFocus={() => setRecapInteracted(true)}
             onChange={(e) => setInput(e.currentTarget.value)}
             onPaste={addPastedImages}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={addDroppedFiles}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
