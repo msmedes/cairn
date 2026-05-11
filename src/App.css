@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans:
+    "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-serif:
+    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --color-kanagawa-bg: #16161d;
+  --color-kanagawa-bg-accent: #1f1f28;
+  --color-kanagawa-surface-strong: #223249;
+  --color-kanagawa-text: #dcd7ba;
+  --color-kanagawa-text-muted: #c8c093;
+  --color-kanagawa-text-soft: #938aa9;
+  --color-kanagawa-user-bg: #2d4f67;
+  --color-kanagawa-user-text: #f2ecbc;
+  --color-kanagawa-accent: #7e9cd8;
+  --color-kanagawa-warm: #ffa066;
+  --color-kanagawa-green: #98bb6c;
+  --color-kanagawa-yellow: #dca561;
+  --color-kanagawa-red: #c34043;
+  --color-kanagawa-magenta: #957fb8;
+  --shadow-kanagawa-sm:
+    0 1px 2px rgba(0, 0, 0, 0.16), 0 12px 30px rgba(0, 0, 0, 0.18);
+  --shadow-kanagawa-md:
+    0 2px 6px rgba(0, 0, 0, 0.2), 0 20px 48px rgba(0, 0, 0, 0.24);
+  --shadow-kanagawa-lg:
+    0 2px 8px rgba(0, 0, 0, 0.22), 0 28px 60px rgba(0, 0, 0, 0.28);
+  --radius-shell: 8px;
+  --radius-card: 4px;
+}
+
 :root {
   --bg: #16161d;
   --bg-accent: #1f1f28;
@@ -26,15 +56,13 @@
 }
 
 * {
-  box-sizing: border-box;
+  @apply box-border;
 }
 
 html,
 body,
 #root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+  @apply m-0 h-full p-0 font-sans text-base text-kanagawa-text antialiased;
   background:
     radial-gradient(
       circle at top left,
@@ -47,80 +75,55 @@ body,
       transparent 24%
     ),
     linear-gradient(180deg, #1f1f28 0%, var(--bg) 100%);
-  color: var(--text);
-  font-family:
-    "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 16px;
   line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
 body {
-  overflow: hidden;
+  @apply overflow-hidden;
 }
 
 #root {
-  padding: 18px;
+  @apply p-[18px];
 }
 
 .app {
-  display: grid;
+  @apply grid items-stretch gap-0;
   grid-template-columns:
     minmax(320px, var(--chat-pane, 41%))
     14px
     minmax(360px, calc(var(--project-pane, 59%) - 14px));
-  gap: 0;
   height: calc(100vh - 36px);
-  align-items: stretch;
 }
 
 .chat,
 .panel {
-  min-width: 0;
-  min-height: 0;
+  @apply min-h-0 min-w-0 overflow-hidden rounded-shell shadow-kanagawa-lg outline outline-1 outline-[var(--line)] backdrop-blur-[18px];
   background: var(--surface);
-  backdrop-filter: blur(18px);
-  border-radius: var(--radius-shell);
-  box-shadow: var(--shadow-lg);
-  outline: 1px solid var(--line);
 }
 
 .chat {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  @apply flex flex-col;
 }
 
 .panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  @apply flex flex-col;
 }
 
 .pane-divider {
-  position: relative;
-  width: 14px;
-  cursor: col-resize;
+  @apply relative w-[14px] cursor-col-resize outline-none;
   touch-action: none;
-  outline: none;
 }
 
 .pane-divider::before {
   content: "";
-  position: absolute;
-  inset: 0;
+  @apply absolute inset-0;
 }
 
 .pane-divider-grip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 3px;
-  height: 44px;
+  @apply absolute left-1/2 top-1/2 h-11 w-[3px] rounded-full opacity-45;
   transform: translate(-50%, -50%);
-  border-radius: 999px;
   background: linear-gradient(
     180deg,
     rgba(220, 215, 186, 0.1),
@@ -139,9 +142,7 @@ body {
 .pane-divider:hover .pane-divider-grip,
 .pane-divider:focus-visible .pane-divider-grip,
 .app-resizing .pane-divider-grip {
-  width: 8px;
-  height: 120px;
-  opacity: 1;
+  @apply h-[120px] w-2 opacity-100;
   background: linear-gradient(
     180deg,
     rgba(126, 156, 216, 0.2),
@@ -156,34 +157,21 @@ body {
 
 .chat-header,
 .panel-tabs {
-  padding: 26px 28px 22px;
+  @apply px-7 pb-[22px] pt-[26px];
 }
 
 .chat-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
+  @apply flex items-start justify-between gap-6;
 }
 
 .brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  max-width: 36rem;
+  @apply inline-flex max-w-xl items-center gap-3.5;
   animation: rise-in 520ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 .status-dot {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--text-soft);
+  @apply inline-block h-3 w-3 cursor-pointer rounded-full border-0 bg-kanagawa-text-soft p-0;
   box-shadow: 0 0 0 4px transparent;
-  cursor: pointer;
   transition:
     background-color 220ms ease,
     box-shadow 220ms ease,
@@ -192,7 +180,7 @@ body {
 
 .status-dot:hover,
 .status-dot:focus-visible {
-  outline: none;
+  @apply outline-none;
   box-shadow:
     0 0 0 4px rgba(126, 156, 216, 0.18),
     var(--status-dot-halo, 0 0 0 0 transparent);
@@ -204,19 +192,19 @@ body {
 
 .status-dot-ok {
   --status-dot-halo: 0 0 0 4px rgba(152, 187, 108, 0.18);
-  background: #98bb6c;
+  @apply bg-kanagawa-green;
   box-shadow: var(--status-dot-halo);
 }
 
 .status-dot-wait {
   --status-dot-halo: 0 0 0 4px rgba(220, 165, 97, 0.18);
-  background: #dca561;
+  @apply bg-kanagawa-yellow;
   box-shadow: var(--status-dot-halo);
 }
 
 .status-dot-attention {
   --status-dot-halo: 0 0 0 4px rgba(220, 165, 97, 0.22);
-  background: #dca561;
+  @apply bg-kanagawa-yellow;
   box-shadow: var(--status-dot-halo);
   animation: status-dot-pulse 2.4s ease-in-out infinite;
 }
@@ -245,37 +233,25 @@ body {
 }
 
 .panel-kicker {
-  margin: 0 0 8px;
-  color: var(--text-soft);
-  font-size: 0.78rem;
-  font-weight: 700;
+  @apply mb-2 mt-0 text-[0.78rem] font-bold uppercase text-kanagawa-text-soft;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
 }
 
 .chat-header h1,
 .panel-placeholder h2,
 .panel-creating-overlay h2 {
-  margin: 0;
-  font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  font-weight: 600;
+  @apply m-0 font-serif font-semibold;
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
 .chat-header h1 {
-  font-size: 1.9rem;
-  line-height: 1;
+  @apply text-[1.9rem] leading-none;
 }
 
 .dev-layer {
-  position: fixed;
-  z-index: 20;
-  inset: 0;
-  display: grid;
+  @apply fixed inset-0 z-20 grid min-h-0 text-kanagawa-text antialiased;
   grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
-  min-height: 0;
   background:
     radial-gradient(
       circle at 12% -10%,
@@ -288,18 +264,13 @@ body {
       transparent 32%
     ),
     linear-gradient(180deg, #181821 0%, #101016 100%);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   animation: dev-layer-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
   --dev-pad-x: clamp(20px, 4vw, 48px);
 }
 
 .settings-layer {
-  position: fixed;
-  z-index: 20;
-  inset: 0;
-  display: grid;
+  @apply fixed inset-0 z-20 grid text-kanagawa-text antialiased;
   grid-template-rows: auto minmax(0, 1fr);
   background:
     radial-gradient(
@@ -313,87 +284,49 @@ body {
       transparent 32%
     ),
     linear-gradient(180deg, #181821 0%, #101016 100%);
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   animation: dev-layer-in 220ms cubic-bezier(0.2, 0, 0, 1) both;
   --settings-pad-x: clamp(20px, 4vw, 48px);
 }
 
 .settings-layer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  @apply flex items-center justify-between gap-6;
   padding: 22px var(--settings-pad-x) 18px;
 }
 
 .settings-layer-header h2 {
-  margin: 0;
-  font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  font-size: 1.72rem;
-  font-weight: 600;
+  @apply m-0 font-serif text-[1.72rem] font-semibold leading-[1.05];
   letter-spacing: -0.025em;
-  line-height: 1.05;
 }
 
 .settings-layer-body {
-  min-height: 0;
-  overflow: auto;
+  @apply grid min-h-0 content-start overflow-auto;
   padding: 4px var(--settings-pad-x) 32px;
-  display: grid;
-  align-content: start;
 }
 
 .dev-layer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  @apply flex items-center justify-between gap-6;
   padding: 22px var(--dev-pad-x) 18px;
   animation: dev-section-rise 320ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 
 .dev-layer-kicker {
-  margin: 0 0 6px;
-  color: var(--accent);
-  font-size: 0.7rem;
-  font-weight: 700;
+  @apply mb-1.5 mt-0 text-[0.7rem] font-bold uppercase text-kanagawa-accent;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .dev-layer-header h2 {
-  margin: 0;
-  font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  color: var(--text);
-  font-size: 1.5rem;
-  font-weight: 600;
+  @apply m-0 font-serif text-2xl font-semibold leading-[1.05] text-kanagawa-text;
   letter-spacing: -0.025em;
-  line-height: 1.05;
   text-wrap: balance;
 }
 
 .dev-layer-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  @apply inline-flex items-center gap-2;
 }
 
 .dev-layer-actions button {
-  min-width: 72px;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: rgba(42, 42, 55, 0.7);
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
+  @apply min-h-9 min-w-[72px] cursor-pointer rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold text-kanagawa-text-muted;
   transition-property: background-color, color, transform, box-shadow;
   transition-duration: 180ms, 180ms, 120ms, 180ms;
   transition-timing-function: ease, ease, cubic-bezier(0.2, 0, 0, 1), ease;
@@ -401,108 +334,60 @@ body {
 
 .dev-layer-actions button:hover,
 .dev-layer-actions button:focus-visible {
-  background: rgba(50, 50, 66, 0.96);
-  color: var(--text);
+  @apply bg-[rgba(50,50,66,0.96)] text-kanagawa-text;
 }
 
 .dev-layer-actions button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(126, 156, 216, 0.22);
+  @apply outline-none shadow-[0_0_0_3px_rgba(126,156,216,0.22)];
 }
 
 .dev-metrics {
-  display: grid;
+  @apply m-0 grid gap-2.5;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
-  gap: 10px;
-  margin: 0;
   padding: 6px var(--dev-pad-x) 14px;
   animation: dev-section-rise 360ms cubic-bezier(0.2, 0, 0, 1) 60ms both;
 }
 
 .dev-metrics div {
-  min-width: 0;
-  padding: 12px 14px;
-  border-radius: 6px;
-  background: rgba(31, 31, 40, 0.62);
-  outline: 1px solid var(--line);
+  @apply min-w-0 rounded-md bg-[rgba(31,31,40,0.62)] px-3.5 py-3 outline outline-1 outline-[var(--line)];
 }
 
 .dev-metrics dt,
 .dev-message span,
 .dev-field span {
-  color: var(--text-soft);
-  font-size: 0.66rem;
-  font-weight: 600;
+  @apply text-[0.66rem] font-semibold uppercase text-kanagawa-text-soft;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .dev-metrics dd {
-  margin: 4px 0 0;
-  color: var(--text);
-  font-family:
-    "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-  font-size: 1.45rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  @apply mt-1 mb-0 overflow-hidden text-ellipsis whitespace-nowrap font-serif text-[1.45rem] font-semibold leading-none text-kanagawa-text tabular-nums;
   letter-spacing: -0.02em;
-  line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .dev-session-location {
-  display: grid;
+  @apply grid items-end gap-2.5;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: end;
   padding: 0 var(--dev-pad-x) 14px;
   animation: dev-section-rise 370ms cubic-bezier(0.2, 0, 0, 1) 90ms both;
 }
 
 .dev-session-location div {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
+  @apply grid min-w-0 gap-1.5;
 }
 
 .dev-session-location span {
-  color: var(--text-soft);
-  font-size: 0.66rem;
-  font-weight: 600;
+  @apply text-[0.66rem] font-semibold uppercase text-kanagawa-text-soft;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .dev-session-location code {
-  display: block;
-  min-width: 0;
-  min-height: 38px;
-  padding: 10px 12px;
-  overflow-x: auto;
-  border-radius: 6px;
-  background: rgba(22, 22, 29, 0.72);
-  outline: 1px solid var(--line);
-  color: var(--text);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  font-size: 0.78rem;
+  @apply block min-h-[38px] min-w-0 overflow-x-auto rounded-md bg-[rgba(22,22,29,0.72)] px-3 py-2.5 font-mono text-[0.78rem] text-kanagawa-text outline outline-1 outline-[var(--line)];
   line-height: 1.35;
-  white-space: nowrap;
+  @apply whitespace-nowrap;
 }
 
 .dev-session-location button {
-  min-height: 38px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: rgba(31, 31, 40, 0.78);
-  outline: 1px solid var(--line);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
+  @apply min-h-[38px] cursor-pointer rounded-md border-0 bg-[rgba(31,31,40,0.78)] px-3.5 py-0 font-[inherit] text-[0.82rem] font-bold text-kanagawa-text outline outline-1 outline-[var(--line)];
   transition-property: background-color, outline-color, transform;
   transition-duration: 160ms;
   transition-timing-function: ease;
@@ -510,7 +395,7 @@ body {
 
 .dev-session-location button:hover,
 .dev-session-location button:focus-visible {
-  background: rgba(42, 42, 54, 0.92);
+  @apply bg-[rgba(42,42,54,0.92)];
 }
 
 .dev-session-location button:active {
@@ -518,53 +403,37 @@ body {
 }
 
 .dev-controls {
-  display: grid;
+  @apply grid gap-3;
   grid-template-columns: minmax(220px, 1fr) minmax(280px, 1fr);
-  gap: 12px;
   padding: 4px var(--dev-pad-x) 14px;
   animation: dev-section-rise 380ms cubic-bezier(0.2, 0, 0, 1) 120ms both;
 }
 
 .dev-field {
-  display: grid;
+  @apply grid min-w-0 gap-1.5;
   grid-template-rows: auto auto;
-  gap: 6px;
-  min-width: 0;
 }
 
 .dev-field input,
 .dev-field select {
-  width: 100%;
-  min-width: 0;
-  min-height: 38px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 6px;
-  background: rgba(22, 22, 29, 0.72);
-  outline: 1px solid var(--line);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
+  @apply min-h-[38px] w-full min-w-0 cursor-pointer rounded-md border-0 bg-[rgba(22,22,29,0.72)] px-3 py-0 font-[inherit] text-sm font-medium text-kanagawa-text outline outline-1 outline-[var(--line)];
   transition-property: background-color, outline-color, box-shadow;
   transition-duration: 180ms;
   transition-timing-function: ease;
 }
 
 .dev-field input::placeholder {
-  color: var(--text-soft);
+  @apply text-kanagawa-text-soft;
 }
 
 .dev-field input:hover,
 .dev-field select:hover {
-  background: rgba(31, 31, 40, 0.85);
+  @apply bg-[rgba(31,31,40,0.85)];
 }
 
 .dev-field input:focus,
 .dev-field select:focus {
-  outline: none;
-  background: rgba(31, 31, 40, 0.95);
+  @apply bg-[rgba(31,31,40,0.95)] outline-none;
   box-shadow:
     inset 0 0 0 1px rgba(126, 156, 216, 0.46),
     0 0 0 3px rgba(126, 156, 216, 0.18);
@@ -576,31 +445,18 @@ body {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 4.5 6 7.5l3-3' fill='none' stroke='%23938aa9' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   background-repeat: no-repeat;
   background-position: right 12px center;
-  padding-right: 32px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply truncate pr-8;
 }
 
 .dev-tabs {
-  display: flex;
-  gap: 4px;
+  @apply flex gap-1;
   padding: 0 var(--dev-pad-x) 14px;
   animation: dev-section-rise 400ms cubic-bezier(0.2, 0, 0, 1) 180ms both;
 }
 
 .dev-tab {
-  position: relative;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-soft);
-  font: inherit;
-  font-size: 0.86rem;
-  font-weight: 600;
+  @apply relative min-h-9 cursor-pointer rounded-md border-0 bg-transparent px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold text-kanagawa-text-soft;
   letter-spacing: -0.005em;
-  cursor: pointer;
   transition-property: background-color, color, transform, box-shadow;
   transition-duration: 180ms, 180ms, 120ms, 180ms;
   transition-timing-function: ease, ease, cubic-bezier(0.2, 0, 0, 1), ease;
@@ -608,27 +464,23 @@ body {
 
 .dev-tab:hover,
 .dev-tab:focus-visible {
-  background: rgba(42, 42, 55, 0.6);
-  color: var(--text);
+  @apply bg-[rgba(42,42,55,0.6)] text-kanagawa-text;
 }
 
 .dev-tab:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(126, 156, 216, 0.22);
+  @apply outline-none shadow-[0_0_0_3px_rgba(126,156,216,0.22)];
 }
 
 .dev-tab-active,
 .dev-tab-active:hover {
-  background: rgba(126, 156, 216, 0.18);
-  color: var(--text);
+  @apply bg-[rgba(126,156,216,0.18)] text-kanagawa-text;
   box-shadow:
     inset 0 0 0 1px rgba(126, 156, 216, 0.32),
     0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .dev-layer-body {
-  min-height: 0;
-  overflow: auto;
+  @apply min-h-0 overflow-auto;
   padding: 4px var(--dev-pad-x) 32px;
   animation: dev-section-rise 460ms cubic-bezier(0.2, 0, 0, 1) 240ms both;
 }
