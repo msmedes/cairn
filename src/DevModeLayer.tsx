@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ChatMessage } from "./chat-stream";
+import { useModalOverlay } from "./useModalOverlay";
 import type { JsonValue, SidecarDevLogEntry } from "./useSidecarDevLog";
 
 type DevModeLayerProps = {
@@ -772,6 +773,7 @@ export function DevModeLayer({
   const [selectedAgentId, setSelectedAgentId] = useState<AgentFilterId>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [copiedSessionFile, setCopiedSessionFile] = useState(false);
+  const overlayRef = useModalOverlay<HTMLElement>(isOpen, onClose);
   const agentThreads = extractAgentThreads(events);
   const sessionLocation = extractSessionLocation(events);
   const filteredEvents = events.filter((event) =>
@@ -801,11 +803,18 @@ export function DevModeLayer({
   if (!isOpen) return null;
 
   return (
-    <section className="dev-layer" aria-label="Developer mode">
+    <section
+      ref={overlayRef}
+      className="dev-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dev-layer-heading"
+      tabIndex={-1}
+    >
       <header className="dev-layer-header">
         <div>
           <p className="dev-layer-kicker">Under the hood</p>
-          <h2>Session Debug</h2>
+          <h2 id="dev-layer-heading">Session Debug</h2>
         </div>
         <div className="dev-layer-actions">
           <button type="button" onClick={onEventsCleared}>

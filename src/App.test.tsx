@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import type { CreatingTarget } from "./useCreatingIndicator";
@@ -516,7 +523,7 @@ describe("App panel tabs", () => {
     });
 
     expect(
-      screen.getByRole("heading", { name: "Settings" }),
+      screen.getByRole("dialog", { name: "Settings" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Anthropic" }),
@@ -527,6 +534,36 @@ describe("App panel tabs", () => {
     expect(
       screen.queryByRole("button", { name: "API key" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("Settings overlay behaves like a modal dialog", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+    await act(async () => {});
+
+    const statusButton = screen.getByRole("button", { name: /Status:/ });
+    statusButton.focus();
+    expect(statusButton).toHaveFocus();
+
+    act(() => {
+      fireMenuEvent("settings");
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Close" })).toHaveFocus(),
+    );
+    expect(screen.getByText("Cairn").closest("section")).toHaveAttribute(
+      "inert",
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(statusButton).toHaveFocus();
   });
 
   test("Settings tab saves API keys and toggles built-in MCP servers", async () => {
@@ -593,6 +630,34 @@ describe("App panel tabs", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Authenticate" })[0]);
     expect(authenticateMcpServerMock).toHaveBeenCalledWith("notion");
     expect(sendPromptMock).not.toHaveBeenCalledWith("/mcp-auth notion");
+  });
+
+  test("clearing a replacement API key draft keeps the replace form open", async () => {
+    bootstrapTauriRuntime();
+    invokeMock.mockImplementation((command: string) => {
+      switch (command) {
+        case "get_cairn_settings":
+          return Promise.resolve({ hasAnthropicApiKey: true });
+        case "get_mcp_settings":
+          return Promise.resolve(null);
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    render(<App />);
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Replace" }));
+    const input = screen.getByLabelText("API key");
+    fireEvent.change(input, { target: { value: "sk-ant-draft" } });
+    fireEvent.change(input, { target: { value: "" } });
+
+    expect(screen.getByLabelText("API key")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
   test("Settings tab does not let Cairn remove externally configured MCP servers", async () => {
@@ -698,8 +763,9 @@ describe("App panel tabs", () => {
     render(<App />);
     await openDevPanelViaMenu();
 
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
     expect(devLayer).toBeInTheDocument();
+    expect(devLayer).toHaveAttribute("aria-modal", "true");
     expect(screen.getByText("Session Debug")).toBeInTheDocument();
     expect(screen.getByText("Chat JSONL")).toBeInTheDocument();
     expect(
@@ -716,6 +782,10 @@ describe("App panel tabs", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
     expect(within(devLayer).getByText("session_location")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Session Debug" }),
+    ).not.toBeInTheDocument();
   });
 
   test("does not render completed assistant turns with no text", () => {
@@ -832,7 +902,7 @@ describe("App panel tabs", () => {
     bootstrapTauriRuntime();
     render(<App />);
     await openDevPanelViaMenu();
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
 
     expect(
       within(devLayer).getByRole("combobox", { name: "Agent" }),
@@ -934,7 +1004,7 @@ describe("App panel tabs", () => {
     bootstrapTauriRuntime();
     render(<App />);
     await openDevPanelViaMenu();
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
 
     fireEvent.change(
@@ -1028,7 +1098,7 @@ describe("App panel tabs", () => {
     bootstrapTauriRuntime();
     render(<App />);
     await openDevPanelViaMenu();
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
 
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
 

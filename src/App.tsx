@@ -303,14 +303,18 @@ function App() {
     listen<string>("menu-event", (event) => {
       switch (event.payload) {
         case "settings":
+          setDevPanelOpen(false);
           setSettingsPanelOpen(true);
           setSettingsMessage(null);
           setMcpMessage(null);
           break;
         case "report-bug":
+          setDevPanelOpen(false);
+          setSettingsPanelOpen(false);
           setBugReportSnapshot({ ...bugReportInputsRef.current });
           break;
         case "dev-panel":
+          setSettingsPanelOpen(false);
           setDevPanelOpen(true);
           break;
       }
@@ -385,6 +389,7 @@ function App() {
               title={statusDot.tooltip}
               aria-label={`Status: ${statusDot.tooltip}`}
               onClick={() => {
+                setDevPanelOpen(false);
                 setSettingsPanelOpen(true);
                 setSettingsMessage(null);
                 setMcpMessage(null);

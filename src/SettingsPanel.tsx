@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useModalOverlay } from "./useModalOverlay";
 
 export type CairnSettingsStatus = {
   hasAnthropicApiKey: boolean;
@@ -90,24 +91,44 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const hasKey = settingsStatus?.hasAnthropicApiKey ?? false;
   const [replacingKey, setReplacingKey] = useState(false);
+  const previousSavingApiKeyRef = useRef(savingApiKey);
+  const overlayRef = useModalOverlay<HTMLElement>(isOpen, closePanel);
   const showKeyForm = !hasKey || replacingKey;
 
+  function closePanel() {
+    setReplacingKey(false);
+    if (hasKey) {
+      onApiKeyInputChanged("");
+    }
+    onClose();
+  }
+
   useEffect(() => {
-    if (hasKey && apiKeyInput === "") {
+    const wasSaving = previousSavingApiKeyRef.current;
+    previousSavingApiKeyRef.current = savingApiKey;
+
+    if (wasSaving && !savingApiKey && hasKey && apiKeyInput === "") {
       setReplacingKey(false);
     }
-  }, [hasKey, apiKeyInput]);
+  }, [savingApiKey, hasKey, apiKeyInput]);
 
   if (!isOpen) return null;
 
   return (
-    <section className="settings-layer" aria-label="Settings">
+    <section
+      ref={overlayRef}
+      className="settings-layer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-heading"
+      tabIndex={-1}
+    >
       <header className="settings-layer-header">
         <h2 id="settings-heading">Settings</h2>
         <button
           type="button"
           className="secondary-settings-button"
-          onClick={onClose}
+          onClick={closePanel}
         >
           Close
         </button>
