@@ -20,6 +20,12 @@ export type RecentProject = {
   lastOpenedAt: string;
 };
 
+export type PromptImage = {
+  data: string;
+  mimeType: string;
+  dataUrl: string;
+};
+
 type SidecarEvent =
   | { type: "hydrate"; messages: ChatMessage[] }
   | { type: "active_project"; project: ActiveProject }
@@ -247,14 +253,28 @@ export function useSidecarSession({
     };
   }, [onAgentEnd, onCreatingStarted, onError, onHydrate, onMcpAuthStatus]);
 
-  async function sendPrompt(text: string) {
-    if (!text || sendingRef.current || status.type !== "ready") return;
+  async function sendPrompt(text: string, images: PromptImage[] = []) {
+    if (
+      (!text && images.length === 0) ||
+      sendingRef.current ||
+      status.type !== "ready"
+    ) {
+      return;
+    }
 
     const userMsg: ChatMessage = {
       id: newId(),
       role: "user",
       text,
       done: true,
+      ...(images.length > 0
+        ? {
+            images: images.map(({ dataUrl, mimeType }) => ({
+              dataUrl,
+              mimeType,
+            })),
+          }
+        : {}),
     };
     const assistantMsg: ChatMessage = {
       id: newId(),
@@ -268,10 +288,22 @@ export function useSidecarSession({
     setSending(true);
 
     try {
-      await invoke("send_prompt", { text });
+      await invoke("send_prompt", {
+        text,
+        ...(images.length > 0
+          ? {
+              images: images.map(({ data, mimeType }) => ({
+                data,
+                mimeType,
+              })),
+            }
+          : {}),
+      });
     } catch (err) {
       console.error("send_prompt failed", err);
-      setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
+      setMessages((prev) =>
+        prev.filter((m) => m.id !== userMsg.id && m.id !== assistantMsg.id),
+      );
       activeAssistantId.current = null;
       sendingRef.current = false;
       setSending(false);

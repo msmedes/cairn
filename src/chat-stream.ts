@@ -4,6 +4,12 @@ export type ChatMessage = {
   text: string;
   done: boolean;
   kind?: "recap";
+  images?: ChatMessageImage[];
+};
+
+export type ChatMessageImage = {
+  dataUrl: string;
+  mimeType: string;
 };
 
 export type AssistantDeltaResult = {

@@ -1,11 +1,19 @@
 import type { SessionEntry } from "@mariozechner/pi-coding-agent";
 
+const IMAGE_ONLY_PROMPT_TEXT = "Please look at the attached image.";
+
 export type HydrateMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   done: true;
   kind?: "recap";
+  images?: HydrateMessageImage[];
+};
+
+export type HydrateMessageImage = {
+  dataUrl: string;
+  mimeType: string;
 };
 
 export type HydrateEvent = {
@@ -54,6 +62,33 @@ function extractText(content: unknown): string {
     .join("");
 }
 
+function extractImages(content: unknown): HydrateMessageImage[] {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.flatMap((part) => {
+    if (
+      part &&
+      typeof part === "object" &&
+      "type" in part &&
+      part.type === "image" &&
+      "data" in part &&
+      typeof part.data === "string" &&
+      "mimeType" in part &&
+      typeof part.mimeType === "string"
+    ) {
+      return [
+        {
+          dataUrl: `data:${part.mimeType};base64,${part.data}`,
+          mimeType: part.mimeType,
+        },
+      ];
+    }
+    return [];
+  });
+}
+
 function toHydrateMessage(entry: SessionEntry): HydrateMessage | null {
   if (entry.type !== "message") {
     return null;
@@ -64,8 +99,12 @@ function toHydrateMessage(entry: SessionEntry): HydrateMessage | null {
     return null;
   }
 
-  const text = extractText(message.content);
-  if (!text) {
+  const images = message.role === "user" ? extractImages(message.content) : [];
+  const text =
+    images.length > 0 && extractText(message.content) === IMAGE_ONLY_PROMPT_TEXT
+      ? ""
+      : extractText(message.content);
+  if (!text && images.length === 0) {
     return null;
   }
 
@@ -74,6 +113,7 @@ function toHydrateMessage(entry: SessionEntry): HydrateMessage | null {
     role: message.role,
     text,
     done: true,
+    ...(images.length > 0 ? { images } : {}),
   };
 }
 
