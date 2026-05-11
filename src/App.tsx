@@ -94,6 +94,166 @@ function chatMessageImagesWithKeys(message: ChatMessage) {
   });
 }
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+const appClass =
+  "app grid h-[calc(100vh-36px)] items-stretch gap-0 [grid-template-columns:minmax(320px,var(--chat-pane,41%))_14px_minmax(360px,calc(var(--project-pane,59%)-14px))] max-[980px]:h-auto max-[980px]:min-h-[calc(100vh-24px)] max-[980px]:grid-cols-1 max-[980px]:gap-3";
+
+const surfaceClass =
+  "min-h-0 min-w-0 overflow-hidden rounded-shell bg-[var(--surface)] shadow-kanagawa-lg outline outline-1 outline-[var(--line)] backdrop-blur-[18px]";
+
+const chatClass = `chat ${surfaceClass} flex flex-col max-[980px]:min-h-[62vh]`;
+
+const panelClass = `panel ${surfaceClass} flex flex-col max-[980px]:min-h-[280px]`;
+
+const chatHeaderClass =
+  "chat-header flex items-start justify-between gap-6 px-7 pb-[22px] pt-[26px] max-[980px]:flex-col max-[980px]:items-start max-[640px]:px-5 max-[640px]:pb-[18px] max-[640px]:pt-[22px]";
+
+const brandClass =
+  "brand inline-flex max-w-xl items-center gap-3.5 animate-[rise-in_520ms_cubic-bezier(0.2,0,0,1)]";
+
+const brandTitleClass =
+  "m-0 font-serif text-[1.9rem] font-semibold leading-none tracking-[-0.03em] text-balance";
+
+const statusDotClass =
+  "status-dot inline-block h-3 w-3 cursor-pointer rounded-full border-0 bg-kanagawa-text-soft p-0 shadow-[0_0_0_4px_transparent] transition-[background-color,box-shadow,transform] duration-[220ms,220ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] hover:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:outline-none active:scale-[0.92]";
+
+const statusDotToneClass = {
+  ok: "status-dot-ok bg-kanagawa-green [--status-dot-halo:0_0_0_4px_rgba(152,187,108,0.18)] shadow-[var(--status-dot-halo)]",
+  wait: "status-dot-wait bg-kanagawa-yellow [--status-dot-halo:0_0_0_4px_rgba(220,165,97,0.18)] shadow-[var(--status-dot-halo)]",
+  attention:
+    "status-dot-attention bg-kanagawa-yellow [--status-dot-halo:0_0_0_4px_rgba(220,165,97,0.22)] shadow-[var(--status-dot-halo)] animate-[status-dot-pulse_2.4s_ease-in-out_infinite] motion-reduce:animate-none",
+  err: "status-dot-err bg-kanagawa-red [--status-dot-halo:0_0_0_4px_rgba(195,64,67,0.22)] shadow-[var(--status-dot-halo)]",
+} as const;
+
+const messagesClass =
+  "messages min-h-0 flex flex-1 flex-col gap-[18px] overflow-y-auto px-7 pb-7 pt-1 max-[640px]:px-5 max-[640px]:pb-5 max-[640px]:pt-0";
+
+const emptyClass =
+  "empty m-auto flex w-[min(28rem,100%)] flex-col gap-3.5 p-[22px]";
+
+const openFolderButtonClass =
+  "open-folder-button min-h-11 cursor-pointer self-stretch rounded-md border-0 bg-[rgba(126,156,216,0.14)] px-4 py-0 font-[inherit] text-[0.92rem] font-semibold tracking-[-0.005em] text-kanagawa-text transition-[background-color,transform,box-shadow] duration-[180ms,120ms,180ms] ease-[ease,cubic-bezier(0.2,0,0,1),ease] hover:not-disabled:bg-[rgba(126,156,216,0.22)] focus-visible:not-disabled:bg-[rgba(126,156,216,0.22)] focus-visible:not-disabled:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:not-disabled:outline-none active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50";
+
+const recentsLabelClass =
+  "empty-recents-label mt-[18px] pl-3.5 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-kanagawa-text-soft";
+
+const recentsListClass = "recents-list mt-2 grid list-none gap-1 p-0";
+
+const recentProjectClass =
+  "recent-project grid min-h-12 w-full min-w-0 cursor-pointer gap-[3px] rounded-md border-0 bg-[rgba(22,22,29,0.32)] px-3.5 py-2.5 text-left font-[inherit] text-kanagawa-text transition-[background-color,transform,box-shadow] duration-[180ms,120ms,180ms] ease-[ease,cubic-bezier(0.2,0,0,1),ease] hover:not-disabled:bg-[rgba(126,156,216,0.1)] focus-visible:not-disabled:bg-[rgba(126,156,216,0.1)] focus-visible:not-disabled:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:not-disabled:outline-none active:not-disabled:scale-[0.98]";
+
+const recentNameClass =
+  "recent-name block min-w-0 truncate text-[0.92rem] font-semibold tracking-[-0.005em]";
+
+const recentPathClass =
+  "recent-path block min-w-0 truncate font-mono text-[0.76rem] text-kanagawa-text-soft tabular-nums";
+
+const openProjectErrorClass =
+  "open-project-error mt-3.5 text-sm leading-[1.4] text-[#e46876]";
+
+const messageRowClass = {
+  user: "msg-row msg-row-user flex justify-end",
+  assistant: "msg-row msg-row-assistant flex justify-start",
+} as const;
+
+const messageBaseClass =
+  "msg whitespace-pre-wrap break-words [text-wrap:pretty]";
+
+const messageRoleClass = {
+  user: "msg-user max-w-[min(54rem,80%)] rounded-[6px_6px_2px_6px] bg-[linear-gradient(180deg,var(--user-bg-soft),var(--user-bg))] px-[18px] py-4 text-kanagawa-user-text shadow-[0_1px_1px_rgba(255,255,255,0.04)_inset,0_20px_34px_rgba(18,13,11,0.2)] max-[980px]:max-w-[92%]",
+  assistant:
+    "msg-assistant max-w-[min(52rem,88%)] rounded-[2px_6px_6px_6px] bg-[var(--assistant-wash)] px-5 py-[18px] text-[1.02rem] leading-[1.6] shadow-kanagawa-sm max-[980px]:max-w-[92%]",
+} as const;
+
+const pendingMessageClass =
+  "msg-pending inline-flex min-h-11 min-w-16 items-center";
+
+const messageImageStripClass = "msg-image-strip mb-2.5 flex flex-wrap gap-2";
+
+const messageImageClass =
+  "max-h-20 max-w-[min(180px,100%)] rounded-card bg-[rgba(22,22,29,0.4)] object-contain shadow-[inset_0_0_0_1px_rgba(220,215,186,0.1)]";
+
+const typingDotsClass = "typing-dots inline-flex items-center gap-[5px]";
+
+const typingDotClass = "h-1.5 w-1.5 rounded-full bg-current opacity-[0.38]";
+
+const composerClass =
+  "composer grid items-end gap-3 px-7 pb-[22px] pt-3.5 [grid-template-columns:minmax(0,1fr)_auto] max-[640px]:mx-3 max-[640px]:mb-3 max-[640px]:mt-0 max-[640px]:grid-cols-1 max-[640px]:p-3";
+
+const attachmentPanelClass =
+  "composer-attachment-panel col-span-full grid min-w-0 gap-2";
+
+const attachmentListClass =
+  "composer-attachment-list m-0 flex min-w-0 list-none flex-wrap gap-2 p-0";
+
+const attachmentChipClass =
+  "composer-attachment-chip relative grid h-[54px] w-[70px] place-items-center overflow-hidden rounded-md bg-kanagawa-surface-strong shadow-[inset_0_0_0_1px_rgba(220,215,186,0.1),0_8px_18px_rgba(0,0,0,0.16)]";
+
+const attachmentImageClass = "h-full w-full object-cover";
+
+const attachmentRemoveButtonClass =
+  "absolute right-1 top-1 grid h-5 min-h-5 w-5 min-w-5 place-items-center rounded-full bg-[rgba(22,22,29,0.78)] p-0 text-[0.86rem] leading-none text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.18)] hover:not-disabled:bg-[rgba(195,64,67,0.9)] hover:not-disabled:text-white focus-visible:not-disabled:bg-[rgba(195,64,67,0.9)] focus-visible:not-disabled:text-white";
+
+const attachmentRejectionClass =
+  "composer-attachment-rejection m-0 text-[0.82rem] leading-[1.35] text-[#e46876]";
+
+const composerTextareaClass =
+  "min-h-11 w-full rounded-md border-0 bg-kanagawa-surface-strong px-3.5 py-[11px] font-[inherit] leading-[1.45] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.08),0_1px_1px_rgba(0,0,0,0.28)] outline-none transition-[box-shadow,background-color] duration-180 ease-in placeholder:text-kanagawa-text-soft focus:bg-[rgb(42,42,55)] focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.46),0_0_0_4px_rgba(126,156,216,0.12)] disabled:opacity-65 block resize-none overflow-y-auto";
+
+const composerButtonClass =
+  "min-h-11 cursor-pointer rounded-md border-0 bg-[linear-gradient(180deg,#7e9cd8,#658594)] px-[18px] py-0 font-[inherit] font-semibold tracking-[-0.01em] text-kanagawa-bg shadow-[0_1px_1px_rgba(255,255,255,0.12)_inset,0_10px_20px_rgba(101,133,148,0.22)] transition-[transform,box-shadow,opacity,background] duration-[120ms,180ms,180ms,180ms] ease-[cubic-bezier(0.2,0,0,1),ease,ease,ease] hover:not-disabled:shadow-[0_1px_1px_rgba(255,255,255,0.16)_inset,0_14px_26px_rgba(101,133,148,0.28)] focus-visible:not-disabled:shadow-[0_1px_1px_rgba(255,255,255,0.16)_inset,0_0_0_3px_rgba(126,156,216,0.32),0_10px_20px_rgba(101,133,148,0.22)] focus-visible:not-disabled:outline-none active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:bg-[rgba(42,42,55,0.7)] disabled:text-kanagawa-text-soft disabled:shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)]";
+
+const paneDividerClass =
+  "pane-divider relative w-[14px] cursor-col-resize outline-none max-[980px]:hidden";
+
+const paneDividerGripClass =
+  "pane-divider-grip absolute left-1/2 top-1/2 h-11 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-45";
+
+const paneDividerGripActiveClass = "h-[120px] w-2 opacity-100";
+
+const panelBodyClass =
+  "panel-body flex min-h-0 flex-1 flex-col px-[18px] pb-[18px] pt-0 max-[640px]:px-4 max-[640px]:pb-4 max-[640px]:pt-0";
+
+const artifactShellClass =
+  "relative min-h-0 flex-1 overflow-auto rounded-none bg-transparent";
+
+const panelCreatingOverlayClass =
+  "panel-creating-overlay absolute bottom-6 left-6 right-6 max-w-lg rounded-card bg-[rgba(31,31,40,0.92)] px-6 py-[22px] shadow-kanagawa-md outline outline-1 outline-[var(--line)] animate-[panel-creating-text-in_320ms_cubic-bezier(0.2,0,0,1)_both]";
+
+const panelKickerClass =
+  "panel-kicker mb-2 mt-0 text-[0.78rem] font-bold uppercase tracking-[0.16em] text-kanagawa-text-soft";
+
+const panelOverlayTitleClass =
+  "m-0 max-w-[24ch] text-balance font-serif text-[clamp(1.25rem,1.06rem+0.58vw,1.58rem)] font-semibold leading-[1.12] tracking-[-0.03em]";
+
+const panelPlaceholderClass =
+  "panel-placeholder flex h-full flex-1 flex-col justify-center px-2.5 py-7 animate-[rise-in_580ms_cubic-bezier(0.2,0,0,1)_90ms_both] max-[640px]:px-5 max-[640px]:py-[22px]";
+
+const panelPlaceholderTitleClass =
+  "max-w-[16ch] text-balance font-serif text-[clamp(1.5rem,1.28rem+0.7vw,1.9rem)] font-semibold leading-[1.08] tracking-[-0.03em]";
+
+const panelPlaceholderCreatingTitleClass =
+  "animate-[panel-creating-text-in_320ms_cubic-bezier(0.2,0,0,1)_both]";
+
+const panelEmptyClass =
+  "panel-empty mt-3.5 mb-0 max-w-[34ch] text-base leading-[1.6] text-kanagawa-text-muted [text-wrap:pretty]";
+
+const panelGhostClass =
+  "panel-ghost mt-7 grid gap-3 rounded-card bg-[rgba(45,79,103,0.18)] p-[22px] shadow-[inset_0_0_0_1px_rgba(220,215,186,0.05)]";
+
+const panelGhostCreatingClass =
+  "animate-[panel-creating-pulse_2.4s_ease-in-out_infinite]";
+
+const ghostLineClass =
+  "ghost-line h-[11px] rounded-card bg-[linear-gradient(90deg,rgba(126,156,216,0.12),rgba(220,215,186,0.34),rgba(126,156,216,0.12))] bg-[length:220%_100%] animate-[shimmer_2.8s_linear_infinite]";
+
+const ghostLineCreatingClass = "animate-[shimmer_1.6s_linear_infinite]";
+
+const ghostLineTitleClass = "h-3.5 w-[42%] rounded-[5px]";
+
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
@@ -449,16 +609,16 @@ function App() {
   return (
     <main
       ref={appRef}
-      className={`app${isResizing ? " app-resizing" : ""}`}
+      className={cx(appClass, isResizing && "app-resizing")}
       style={appStyle}
     >
-      <section className="chat">
-        <header className="chat-header">
-          <div className="brand">
-            <h1>Cairn</h1>
+      <section className={chatClass}>
+        <header className={chatHeaderClass}>
+          <div className={brandClass}>
+            <h1 className={brandTitleClass}>Cairn</h1>
             <button
               type="button"
-              className={`status-dot status-dot-${statusDot.tone}`}
+              className={cx(statusDotClass, statusDotToneClass[statusDot.tone])}
               title={statusDot.tooltip}
               aria-label={`Status: ${statusDot.tooltip}`}
               onClick={() => {
@@ -472,17 +632,17 @@ function App() {
         </header>
 
         <div
-          className="messages"
+          className={messagesClass}
           ref={listRef}
           role="log"
           aria-live="polite"
           aria-label="Conversation"
         >
           {messages.length === 0 && (
-            <div className="empty">
+            <div className={emptyClass}>
               <button
                 type="button"
-                className="open-folder-button"
+                className={openFolderButtonClass}
                 onClick={() => void openProjectDialog()}
                 disabled={!ready}
               >
@@ -490,21 +650,21 @@ function App() {
               </button>
               {recents.length > 0 && (
                 <>
-                  <p className="empty-recents-label">Recent</p>
-                  <ul className="recents-list" aria-label="Recent projects">
+                  <p className={recentsLabelClass}>Recent</p>
+                  <ul className={recentsListClass} aria-label="Recent projects">
                     {recents.map((recent) => (
                       <li key={recent.path}>
                         <button
                           type="button"
-                          className="recent-project"
+                          className={recentProjectClass}
                           aria-label={recent.displayName}
                           onClick={() => void openProject(recent.path)}
                           disabled={!ready}
                         >
-                          <span className="recent-name">
+                          <span className={recentNameClass}>
                             {recent.displayName}
                           </span>
-                          <span className="recent-path">{recent.path}</span>
+                          <span className={recentPathClass}>{recent.path}</span>
                         </button>
                       </li>
                     ))}
@@ -512,7 +672,7 @@ function App() {
                 </>
               )}
               {projectOpenError && (
-                <p className="open-project-error">{projectOpenError}</p>
+                <p className={openProjectErrorClass}>{projectOpenError}</p>
               )}
             </div>
           )}
@@ -526,29 +686,33 @@ function App() {
                   : " msg-recap"
                 : "";
             return (
-              <div key={m.id} className={`msg-row msg-row-${m.role}`}>
+              <div key={m.id} className={messageRowClass[m.role]}>
                 <div
-                  className={`msg msg-${m.role}${recapClass}${
-                    isPendingAssistant ? " msg-pending" : ""
-                  }`}
+                  className={cx(
+                    messageBaseClass,
+                    messageRoleClass[m.role],
+                    recapClass,
+                    isPendingAssistant && pendingMessageClass,
+                  )}
                 >
                   {isPendingAssistant ? (
                     <span
-                      className="typing-dots"
+                      className={typingDotsClass}
                       role="status"
                       aria-label="Cairn is working"
                     >
-                      <span />
-                      <span />
-                      <span />
+                      <span className={typingDotClass} />
+                      <span className={typingDotClass} />
+                      <span className={typingDotClass} />
                     </span>
                   ) : (
                     <>
                       {(m.images?.length ?? 0) > 0 && (
-                        <div className="msg-image-strip">
+                        <div className={messageImageStripClass}>
                           {chatMessageImagesWithKeys(m).map(
                             ({ image, key }) => (
                               <img
+                                className={messageImageClass}
                                 key={key}
                                 src={image.dataUrl}
                                 alt={image.mimeType}
@@ -568,7 +732,7 @@ function App() {
 
         <form
           ref={composerRef}
-          className="composer"
+          className={composerClass}
           onSubmit={(e) => {
             e.preventDefault();
             send();
@@ -578,17 +742,22 @@ function App() {
         >
           {(composerAttachments.images.length > 0 ||
             composerAttachments.rejections.length > 0) && (
-            <div className="composer-attachment-panel">
+            <div className={attachmentPanelClass}>
               {composerAttachments.images.length > 0 && (
                 <ul
-                  className="composer-attachment-list"
+                  className={attachmentListClass}
                   aria-label="Attached images"
                 >
                   {composerAttachments.images.map((image) => (
-                    <li className="composer-attachment-chip" key={image.id}>
-                      <img src={image.dataUrl} alt={image.mimeType} />
+                    <li className={attachmentChipClass} key={image.id}>
+                      <img
+                        className={attachmentImageClass}
+                        src={image.dataUrl}
+                        alt={image.mimeType}
+                      />
                       <button
                         type="button"
+                        className={attachmentRemoveButtonClass}
                         aria-label={`Remove ${image.mimeType} attachment`}
                         onClick={() => composerAttachments.remove(image.id)}
                       >
@@ -599,7 +768,7 @@ function App() {
                 </ul>
               )}
               {composerAttachments.rejections.map((rejection) => (
-                <p className="composer-attachment-rejection" key={rejection.id}>
+                <p className={attachmentRejectionClass} key={rejection.id}>
                   {rejection.fileName}:{" "}
                   {attachmentRejectionLabel(rejection.reason)}
                 </p>
@@ -608,6 +777,7 @@ function App() {
           )}
           <textarea
             ref={inputRef}
+            className={composerTextareaClass}
             placeholder={ready ? "Type a message…" : "Waking up…"}
             value={input}
             onFocus={() => setRecapInteracted(true)}
@@ -623,7 +793,11 @@ function App() {
             aria-label="Message"
             rows={1}
           />
-          <button type="submit" disabled={!canSend}>
+          <button
+            type="submit"
+            className={composerButtonClass}
+            disabled={!canSend}
+          >
             Send
           </button>
         </form>
@@ -631,7 +805,7 @@ function App() {
 
       {/* biome-ignore lint/a11y/useSemanticElements: The splitter is keyboard-focusable and owns a visual grip child. */}
       <div
-        className="pane-divider"
+        className={paneDividerClass}
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize chat and project panels"
@@ -660,10 +834,16 @@ function App() {
           }
         }}
       >
-        <span className="pane-divider-grip" aria-hidden="true" />
+        <span
+          className={cx(
+            paneDividerGripClass,
+            isResizing && paneDividerGripActiveClass,
+          )}
+          aria-hidden="true"
+        />
       </div>
 
-      <aside className="panel">
+      <aside className={panelClass}>
         <PanelTabs
           tabs={panelTabs}
           activeKey={activeTab}
@@ -673,85 +853,192 @@ function App() {
             )
           }
         />
-        <div className="panel-body">
+        <div className={panelBodyClass}>
           {showBriefArtifact ? (
             <div
-              className={`brief-artifact-shell${creating ? " brief-artifact-shell-creating" : ""}`}
+              className={cx(
+                "brief-artifact-shell",
+                artifactShellClass,
+                creating && "brief-artifact-shell-creating",
+              )}
             >
               <BriefArtifactView data={projectBriefArtifact.data} />
               {creating && (
-                <section className="panel-creating-overlay" aria-live="polite">
-                  <p className="panel-kicker">Working draft</p>
-                  <h2>{creating.message}</h2>
+                <section
+                  className={panelCreatingOverlayClass}
+                  aria-live="polite"
+                >
+                  <p className={panelKickerClass}>Working draft</p>
+                  <h2 className={panelOverlayTitleClass}>{creating.message}</h2>
                 </section>
               )}
             </div>
           ) : showPlanArtifact ? (
             <div
-              className={`plan-artifact-shell${creating ? " plan-artifact-shell-creating" : ""}`}
+              className={cx(
+                "plan-artifact-shell",
+                artifactShellClass,
+                creating && "plan-artifact-shell-creating",
+              )}
             >
               <PlanArtifactView data={projectPlanArtifact.data} />
               {creating && (
-                <section className="panel-creating-overlay" aria-live="polite">
-                  <p className="panel-kicker">Working draft</p>
-                  <h2>{creating.message}</h2>
+                <section
+                  className={panelCreatingOverlayClass}
+                  aria-live="polite"
+                >
+                  <p className={panelKickerClass}>Working draft</p>
+                  <h2 className={panelOverlayTitleClass}>{creating.message}</h2>
                 </section>
               )}
             </div>
           ) : showTasksArtifact ? (
             <div
-              className={`tasks-artifact-shell${creating ? " tasks-artifact-shell-creating" : ""}`}
+              className={cx(
+                "tasks-artifact-shell",
+                artifactShellClass,
+                creating && "tasks-artifact-shell-creating",
+              )}
             >
               <TasksArtifactView data={projectTasksArtifact.data} />
               {creating && (
-                <section className="panel-creating-overlay" aria-live="polite">
-                  <p className="panel-kicker">Working draft</p>
-                  <h2>{creating.message}</h2>
+                <section
+                  className={panelCreatingOverlayClass}
+                  aria-live="polite"
+                >
+                  <p className={panelKickerClass}>Working draft</p>
+                  <h2 className={panelOverlayTitleClass}>{creating.message}</h2>
                 </section>
               )}
             </div>
           ) : showPlanEmptyState ? (
             <section
-              className={`panel-placeholder${placeholderCreating ? " panel-placeholder-creating" : ""}`}
+              className={cx(
+                panelPlaceholderClass,
+                placeholderCreating && "panel-placeholder-creating",
+              )}
             >
-              <p className="panel-kicker">
+              <p className={panelKickerClass}>
                 {placeholderCreating ? "Working draft" : "Plan"}
               </p>
-              <h2>
+              <h2
+                className={cx(
+                  panelPlaceholderTitleClass,
+                  placeholderCreating && panelPlaceholderCreatingTitleClass,
+                )}
+              >
                 {placeholderCreating
                   ? placeholderCreating.message
                   : "Once we agree on what to build first, the plan will show up here."}
               </h2>
-              <div className="panel-ghost">
-                <div className="ghost-line ghost-line-title" />
-                <div className="ghost-line ghost-line-wide" />
-                <div className="ghost-line ghost-line-mid" />
-                <div className="ghost-line ghost-line-wide" />
-                <div className="ghost-line ghost-line-short" />
+              <div
+                className={cx(
+                  panelGhostClass,
+                  placeholderCreating && panelGhostCreatingClass,
+                )}
+              >
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    ghostLineTitleClass,
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-full",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-[76%]",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-full",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-[58%]",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
               </div>
             </section>
           ) : (
             <section
-              className={`panel-placeholder${placeholderCreating ? " panel-placeholder-creating" : ""}`}
+              className={cx(
+                panelPlaceholderClass,
+                placeholderCreating && "panel-placeholder-creating",
+              )}
             >
-              <p className="panel-kicker">Working draft</p>
-              <h2>
+              <p className={panelKickerClass}>Working draft</p>
+              <h2
+                className={cx(
+                  panelPlaceholderTitleClass,
+                  placeholderCreating && panelPlaceholderCreatingTitleClass,
+                )}
+              >
                 {placeholderCreating
                   ? placeholderCreating.message
                   : "Your project will show up here as we talk."}
               </h2>
               {!placeholderCreating && (
-                <p className="panel-empty">
+                <p className={panelEmptyClass}>
                   As the conversation sharpens, this panel will turn your
                   answers into a short readable plan.
                 </p>
               )}
-              <div className="panel-ghost">
-                <div className="ghost-line ghost-line-title" />
-                <div className="ghost-line ghost-line-wide" />
-                <div className="ghost-line ghost-line-mid" />
-                <div className="ghost-line ghost-line-wide" />
-                <div className="ghost-line ghost-line-short" />
+              <div
+                className={cx(
+                  panelGhostClass,
+                  placeholderCreating && panelGhostCreatingClass,
+                )}
+              >
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    ghostLineTitleClass,
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-full",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-[76%]",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-full",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
+                <div
+                  className={cx(
+                    ghostLineClass,
+                    "w-[58%]",
+                    placeholderCreating && ghostLineCreatingClass,
+                  )}
+                />
               </div>
             </section>
           )}
