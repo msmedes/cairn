@@ -9,6 +9,7 @@ import {
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { CairnDir } from "./cairn-dir";
+import { CAIRN_EXTENSION_FACTORIES } from "./pi-extensions";
 
 export type StartTaskOutcome = "complete" | "failure" | "blocked";
 
@@ -202,6 +203,7 @@ export async function runPiSubAgent({
   const resourceLoader = new DefaultResourceLoader({
     cwd,
     agentDir: getAgentDir(),
+    extensionFactories: CAIRN_EXTENSION_FACTORIES,
     systemPromptOverride: () =>
       "You are a headless Cairn Sub-agent. Do the assigned coding work silently and return the requested structured JSON only.",
     appendSystemPromptOverride: () => [],
@@ -213,6 +215,11 @@ export async function runPiSubAgent({
     agentDir: getAgentDir(),
     resourceLoader,
     sessionManager: SessionManager.inMemory(cwd),
+  });
+  await session.bindExtensions({
+    onError: (err) => {
+      console.error(`Extension error (${err.extensionPath}): ${err.error}`);
+    },
   });
 
   let terminal: PiSubAgentResult = {};

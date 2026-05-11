@@ -24,6 +24,11 @@ type AgentThread = {
   kind: "cairn" | "subagent";
   sessionFile?: string;
 };
+type SessionLocation = {
+  sessionFile: string;
+  sessionDir?: string;
+  projectPath?: string;
+};
 type TokenUsage = {
   input: number;
   output: number;
@@ -455,6 +460,35 @@ function extractAgentThreads(events: SidecarDevLogEntry[]): AgentThread[] {
   return [{ id: "cairn", parentId: null, label: "Cairn", kind: "cairn" }];
 }
 
+function extractSessionLocation(
+  events: SidecarDevLogEntry[],
+): SessionLocation | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const payload = events[index].payload;
+    if (!isObject(payload)) continue;
+    if (payload.type === "session_location") {
+      const sessionFile = stringValue(payload.sessionFile);
+      if (!sessionFile) continue;
+      return {
+        sessionFile,
+        sessionDir: stringValue(payload.sessionDir) ?? undefined,
+        projectPath: stringValue(payload.projectPath) ?? undefined,
+      };
+    }
+    if (payload.type === "agent_threads") {
+      const rawThreads = arrayValue(payload.threads);
+      const rawParent = rawThreads?.find(
+        (thread) => isObject(thread) && stringValue(thread.id) === "cairn",
+      );
+      if (!isObject(rawParent)) continue;
+      const sessionFile = stringValue(rawParent.sessionFile);
+      if (sessionFile) return { sessionFile };
+    }
+  }
+
+  return null;
+}
+
 function eventMatchesAgentFilter(
   event: SidecarDevLogEntry,
   selectedAgentId: AgentFilterId,
@@ -734,7 +768,9 @@ export function DevModeLayer({
   const [activePanel, setActivePanel] = useState<DevPanel>("timeline");
   const [selectedAgentId, setSelectedAgentId] = useState<AgentFilterId>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [copiedSessionFile, setCopiedSessionFile] = useState(false);
   const agentThreads = extractAgentThreads(events);
+  const sessionLocation = extractSessionLocation(events);
   const filteredEvents = events.filter((event) =>
     eventMatchesAgentFilter(event, selectedAgentId),
   );
@@ -752,6 +788,12 @@ export function DevModeLayer({
   );
   const sessionTokenTotals = sumTokenUsage(events);
   const hasSearch = searchQuery.trim().length > 0;
+  const copySessionFile = async () => {
+    if (!sessionLocation) return;
+    await navigator.clipboard?.writeText(sessionLocation.sessionFile);
+    setCopiedSessionFile(true);
+    window.setTimeout(() => setCopiedSessionFile(false), 1200);
+  };
 
   return (
     <>
@@ -806,6 +848,23 @@ export function DevModeLayer({
               </dd>
             </div>
           </dl>
+
+          {sessionLocation && (
+            <section
+              className="dev-session-location"
+              aria-label="Chat location"
+            >
+              <div>
+                <span>Chat JSONL</span>
+                <code title={sessionLocation.sessionFile}>
+                  {sessionLocation.sessionFile}
+                </code>
+              </div>
+              <button type="button" onClick={() => void copySessionFile()}>
+                {copiedSessionFile ? "Copied" : "Copy"}
+              </button>
+            </section>
+          )}
 
           <div className="dev-controls">
             <AgentSelect

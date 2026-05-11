@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export type PanelTabKey = "project" | "plan" | "tasks";
+export type PanelTabKey = "project" | "plan" | "tasks" | "settings";
 
 export function useActivePanelTab(planExists: boolean, tasksExists = false) {
   const [activeTab, setActiveTab] = useState<PanelTabKey>("project");
