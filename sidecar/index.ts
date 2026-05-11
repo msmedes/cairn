@@ -44,6 +44,8 @@ import {
 } from "./hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
 import { migrateLegacyProject } from "./legacy-migrator";
+import { authenticateConfiguredMcpServer } from "./mcp-auth";
+import { CAIRN_EXTENSION_FACTORIES } from "./pi-extensions";
 import { findProjectRoot } from "./project-locator";
 import { getProjectState, type ProjectPhase } from "./project-phase";
 import { type Project, ProjectStore } from "./project-store";
@@ -62,6 +64,8 @@ type InMsg =
   | { type: "new_project" }
   | { type: "open_project"; path: string; locateProjectRoot?: boolean }
   | { type: "list_recents" }
+  | { type: "reload_mcp_config" }
+  | { type: "authenticate_mcp_server"; server: string }
   | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
 
 type OutMsg =
@@ -79,6 +83,12 @@ type OutMsg =
       target: "brief" | "prd" | "issues" | "plan" | "tasks";
       message: string;
     }
+  | {
+      type: "mcp_auth_status";
+      server: string;
+      status: "started" | "authenticated" | "failed";
+      message: string;
+    }
   | { type: "agent_end" }
   | { type: "error"; message: string; recoverable?: boolean };
 
@@ -86,6 +96,12 @@ type DevLogMsg =
   | {
       type: "agent_threads";
       threads: AgentThread[];
+    }
+  | {
+      type: "session_location";
+      sessionFile: string;
+      sessionDir: string;
+      projectPath: string;
     }
   | { type: "tool_start"; name: string }
   | { type: "tool_end"; name: string; ok: boolean }
@@ -232,6 +248,7 @@ function agentIdForSessionFile(sessionFile: string) {
 function buildAgentThreads(
   parentEntries: SessionEntryLike[],
   subagentSessions: Array<{ sessionFile: string; entries: SessionEntryLike[] }>,
+  parentSessionFile?: string,
 ) {
   const spawnCalls = [
     ...collectSpawnCalls("cairn", parentEntries),
@@ -249,6 +266,7 @@ function buildAgentThreads(
       parentId: null,
       label: "Cairn",
       kind: "cairn",
+      sessionFile: parentSessionFile,
     },
   ];
 
@@ -270,7 +288,7 @@ function buildAgentThreads(
 }
 
 function emitPersistedSessionDevLogs(
-  manager: Pick<SessionManager, "getEntries">,
+  manager: Pick<SessionManager, "getEntries" | "getSessionFile">,
   project: Project,
 ) {
   const parentEntries = manager.getEntries() as SessionEntryLike[];
@@ -280,7 +298,11 @@ function emitPersistedSessionDevLogs(
       entries: readSessionEntriesFromFile(sessionFile) as SessionEntryLike[],
     }),
   );
-  const threads = buildAgentThreads(parentEntries, subagentSessions);
+  const threads = buildAgentThreads(
+    parentEntries,
+    subagentSessions,
+    manager.getSessionFile(),
+  );
   const parentByAgentId = new Map(
     threads.map((thread) => [thread.id, thread.parentId]),
   );
@@ -305,6 +327,17 @@ function emitPersistedSessionDevLogs(
       emitDevLog(message);
     }
   }
+}
+
+function emitSessionLocation(manager: SessionManager, project: Project) {
+  const sessionFile = manager.getSessionFile();
+  if (!sessionFile) return;
+  emitDevLog({
+    type: "session_location",
+    sessionFile,
+    sessionDir: getSessionDir(project),
+    projectPath: project.path,
+  });
 }
 
 function emit(msg: OutMsg) {
@@ -832,14 +865,18 @@ function wireSessionEvents(nextSession: AgentSession) {
             break;
           }
 
+          let emittedAssistantText = streamedAssistantText;
           if (!streamedAssistantText) {
             const fullText = extractAssistantText(event.message.content);
             if (fullText) {
               emit({ type: "text_delta", delta: fullText });
+              emittedAssistantText = true;
             }
           }
           streamedAssistantText = false;
-          emit({ type: "text_done" });
+          if (emittedAssistantText) {
+            emit({ type: "text_done" });
+          }
         }
         break;
       case "tool_execution_start":
@@ -950,6 +987,7 @@ async function openProject(
     cwd,
     agentDir: getAgentDir(),
     additionalSkillPaths: [skillsPath],
+    extensionFactories: CAIRN_EXTENSION_FACTORIES,
     systemPromptOverride: () => personaContent,
     appendSystemPromptOverride: () => [],
   });
@@ -988,10 +1026,16 @@ async function openProject(
       spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
     }),
   });
+  await nextSession.bindExtensions({
+    onError: (err) => {
+      console.error(`Extension error (${err.extensionPath}): ${err.error}`);
+    },
+  });
 
   session = nextSession;
   sessionManager = nextSessionManager;
   wireSessionEvents(nextSession);
+  emitSessionLocation(nextSessionManager, project);
 
   if (options.emitHydrate) {
     emitPersistedSessionDevLogs(nextSessionManager, project);
@@ -1135,6 +1179,61 @@ async function handleSetApiKey(msg: Extract<InMsg, { type: "set_api_key" }>) {
   emit({ type: "ready" });
 }
 
+async function handleReloadMcpConfig() {
+  if (activeProject && activePersonaPath) {
+    const project = activeProject;
+    await openProject(project, activePersonaPath, { emitHydrate: true });
+  }
+
+  emit({ type: "ready" });
+}
+
+async function handleAuthenticateMcpServer(
+  msg: Extract<InMsg, { type: "authenticate_mcp_server" }>,
+) {
+  emit({
+    type: "mcp_auth_status",
+    server: msg.server,
+    status: "started",
+    message: `Opening ${msg.server} OAuth in your browser...`,
+  });
+
+  try {
+    const status = await authenticateConfiguredMcpServer(msg.server);
+    if (status !== "authenticated") {
+      emit({
+        type: "mcp_auth_status",
+        server: msg.server,
+        status: "failed",
+        message: `OAuth did not complete for ${msg.server}.`,
+      });
+      emit({ type: "ready" });
+      return;
+    }
+
+    emit({
+      type: "mcp_auth_status",
+      server: msg.server,
+      status: "authenticated",
+      message: `${msg.server} is authenticated.`,
+    });
+    if (activeProject && activePersonaPath) {
+      const project = activeProject;
+      await openProject(project, activePersonaPath, { emitHydrate: true });
+    } else {
+      emit({ type: "ready" });
+    }
+  } catch (err) {
+    emit({
+      type: "mcp_auth_status",
+      server: msg.server,
+      status: "failed",
+      message: formatError(err),
+    });
+    emit({ type: "ready" });
+  }
+}
+
 async function handleLine(line: string) {
   const trimmed = line.trim();
   if (!trimmed) return;
@@ -1162,6 +1261,12 @@ async function handleLine(line: string) {
       break;
     case "list_recents":
       emitRecents();
+      break;
+    case "reload_mcp_config":
+      await handleReloadMcpConfig();
+      break;
+    case "authenticate_mcp_server":
+      await handleAuthenticateMcpServer(msg);
       break;
     case "set_api_key":
       await handleSetApiKey(msg);

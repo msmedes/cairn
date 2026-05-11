@@ -32,8 +32,19 @@ type SidecarEvent =
       target: "brief" | "prd" | "issues" | "plan" | "tasks";
       message: string;
     }
+  | {
+      type: "mcp_auth_status";
+      server: string;
+      status: "started" | "authenticated" | "failed";
+      message: string;
+    }
   | { type: "agent_end" }
   | { type: "error"; message: string; recoverable?: boolean };
+
+export type McpAuthStatusEvent = Extract<
+  SidecarEvent,
+  { type: "mcp_auth_status" }
+>;
 
 type SidecarStatusSnapshot = {
   ready: boolean;
@@ -57,6 +68,7 @@ type SidecarSessionHandlers = {
   onAgentEnd: () => void;
   onHydrate: () => void;
   onError: () => void;
+  onMcpAuthStatus?: (event: McpAuthStatusEvent) => void;
 };
 
 function hasTauriRuntime() {
@@ -72,6 +84,7 @@ export function useSidecarSession({
   onAgentEnd,
   onHydrate,
   onError,
+  onMcpAuthStatus,
 }: SidecarSessionHandlers) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [recents, setRecents] = useState<RecentProject[]>([]);
@@ -159,6 +172,9 @@ export function useSidecarSession({
         case "creating_started":
           onCreatingStarted(payload.target, payload.message);
           break;
+        case "mcp_auth_status":
+          onMcpAuthStatus?.(payload);
+          break;
         case "agent_end":
           onAgentEnd();
           finalizeActive();
@@ -229,7 +245,7 @@ export function useSidecarSession({
       cancelled = true;
       unlisten?.();
     };
-  }, [onAgentEnd, onCreatingStarted, onError, onHydrate]);
+  }, [onAgentEnd, onCreatingStarted, onError, onHydrate, onMcpAuthStatus]);
 
   async function sendPrompt(text: string) {
     if (!text || sendingRef.current || status.type !== "ready") return;
@@ -262,6 +278,14 @@ export function useSidecarSession({
     }
   }
 
+  async function authenticateMcpServer(server: string) {
+    if (!server) throw new Error("MCP server is required.");
+    if (status.type !== "ready") {
+      throw new Error("Sidecar is not ready.");
+    }
+    await invoke("authenticate_mcp_server", { server });
+  }
+
   async function openProject(path: string) {
     if (!path || status.type !== "ready") return;
     setProjectOpenError(null);
@@ -292,6 +316,7 @@ export function useSidecarSession({
     error: status.type === "error" ? status.message : null,
     sending,
     sendPrompt,
+    authenticateMcpServer,
     openProject,
     openProjectDialog,
   };

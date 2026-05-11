@@ -27,6 +27,7 @@ import {
   updateBriefArtifact,
 } from "./brief-artifact";
 import { CairnDir } from "./cairn-dir";
+import { CAIRN_EXTENSION_FACTORIES } from "./pi-extensions";
 import { createPlanArtifact, updatePlanArtifact } from "./plan-artifact";
 import {
   ProjectContextUpdateToolParamsSchema,
@@ -394,6 +395,7 @@ export async function runPiSubAgent({
       cwd,
       agentDir: getAgentDir(),
       additionalSkillPaths: skillPaths,
+      extensionFactories: CAIRN_EXTENSION_FACTORIES,
       systemPromptOverride: () => systemPrompt,
       appendSystemPromptOverride: () => [],
     });
@@ -426,6 +428,11 @@ export async function runPiSubAgent({
         ...createSubagentArtifactTools({ projectRoot: cwd }),
         createSubagentUpdateProjectContextTool({ projectRoot: cwd }),
       ],
+    });
+    await session.bindExtensions({
+      onError: (err) => {
+        console.error(`Extension error (${err.extensionPath}): ${err.error}`);
+      },
     });
 
     let terminal: PiSubAgentResult = {

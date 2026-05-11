@@ -19,6 +19,12 @@ import { DevModeLayer } from "./DevModeLayer";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { PlanArtifactView } from "./PlanArtifactView";
 import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
+import {
+  type CairnSettingsStatus,
+  type McpServerKey,
+  type McpSettingsStatus,
+  SettingsPanel,
+} from "./SettingsPanel";
 import { TasksArtifactView } from "./TasksArtifactView";
 import {
   parseTasksArtifact,
@@ -36,11 +42,11 @@ import {
 } from "./usePaneSplit";
 import { useProjectFile } from "./useProjectFile";
 import { type SidecarDevLogEntry, useSidecarDevLog } from "./useSidecarDevLog";
-import { type ActiveProject, useSidecarSession } from "./useSidecarSession";
-
-type CairnSettingsStatus = {
-  hasAnthropicApiKey: boolean;
-};
+import {
+  type ActiveProject,
+  type McpAuthStatusEvent,
+  useSidecarSession,
+} from "./useSidecarSession";
 
 type BugReportSnapshot = {
   messages: ChatMessage[];
@@ -55,12 +61,15 @@ function hasTauriRuntime() {
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsStatus, setSettingsStatus] =
     useState<CairnSettingsStatus | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
+  const [mcpStatus, setMcpStatus] = useState<McpSettingsStatus | null>(null);
+  const [mcpMessage, setMcpMessage] = useState<string | null>(null);
+  const [updatingMcpServer, setUpdatingMcpServer] =
+    useState<McpServerKey | null>(null);
   const [appVersion, setAppVersion] = useState("unknown");
   const [bugReportSnapshot, setBugReportSnapshot] =
     useState<BugReportSnapshot | null>(null);
@@ -114,6 +123,9 @@ function App() {
     clearCreatingOnHydrate();
     setRecapInteracted(false);
   }, [clearCreatingOnHydrate]);
+  const handleMcpAuthStatus = useCallback((event: McpAuthStatusEvent) => {
+    setMcpMessage(event.message);
+  }, []);
   const {
     messages,
     recents,
@@ -123,6 +135,7 @@ function App() {
     error,
     sending,
     sendPrompt,
+    authenticateMcpServer,
     openProject,
     openProjectDialog,
   } = useSidecarSession({
@@ -130,6 +143,7 @@ function App() {
     onAgentEnd: clearCreatingOnAgentEnd,
     onHydrate: handleHydrate,
     onError: clearCreatingOnError,
+    onMcpAuthStatus: handleMcpAuthStatus,
   });
   const { events: devEvents, clearEvents: clearDevEvents } = useSidecarDevLog();
   const listRef = useAutoScroll();
@@ -150,7 +164,9 @@ function App() {
       .then((status) => {
         if (cancelled) return;
         setSettingsStatus(status);
-        setSettingsOpen(!status.hasAnthropicApiKey);
+        if (!status.hasAnthropicApiKey) {
+          setActiveTab("settings");
+        }
       })
       .catch((err) => {
         console.error("get_cairn_settings failed", err);
@@ -159,7 +175,29 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setActiveTab]);
+
+  const activeProjectPath = activeProject?.path ?? null;
+
+  useEffect(() => {
+    if (!hasTauriRuntime()) return;
+
+    let cancelled = false;
+    invoke<McpSettingsStatus>("get_mcp_settings", {
+      projectPath: activeProjectPath,
+    })
+      .then((status) => {
+        if (!cancelled) setMcpStatus(status);
+      })
+      .catch((err) => {
+        console.error("get_mcp_settings failed", err);
+        if (!cancelled) setMcpMessage("Could not load MCP settings.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectPath]);
 
   useEffect(() => {
     if (!hasTauriRuntime()) return;
@@ -197,13 +235,42 @@ function App() {
       });
       setSettingsStatus(next);
       setApiKeyInput("");
-      setSettingsOpen(false);
       setSettingsMessage("API key saved.");
     } catch (err) {
       console.error("set_anthropic_api_key failed", err);
       setSettingsMessage("Could not save API key.");
     } finally {
       setSavingApiKey(false);
+    }
+  }
+
+  async function setMcpServerEnabled(server: McpServerKey, enabled: boolean) {
+    if (updatingMcpServer) return;
+
+    setUpdatingMcpServer(server);
+    setMcpMessage(null);
+    try {
+      const next = await invoke<McpSettingsStatus>("set_mcp_server_enabled", {
+        server,
+        enabled,
+      });
+      setMcpStatus(next);
+      setMcpMessage(enabled ? "MCP server added." : "MCP server removed.");
+    } catch (err) {
+      console.error("set_mcp_server_enabled failed", err);
+      setMcpMessage("Could not update MCP settings.");
+    } finally {
+      setUpdatingMcpServer(null);
+    }
+  }
+
+  async function requestMcpAuth(server: McpServerKey) {
+    setMcpMessage(`Opening ${server} OAuth in your browser...`);
+    try {
+      await authenticateMcpServer(server);
+    } catch (err) {
+      console.error("authenticate_mcp_server failed", err);
+      setMcpMessage(`Could not start ${server} OAuth.`);
     }
   }
 
@@ -229,10 +296,12 @@ function App() {
     ...(hasTasksArtifact
       ? [{ key: "tasks", label: "Tasks", available: true }]
       : []),
+    { key: "settings", label: "Settings", available: true },
   ];
   const showBriefArtifact = activeTab === "project" && projectBriefArtifact;
   const showPlanArtifact = activeTab === "plan" && projectPlanArtifact;
   const showTasksArtifact = activeTab === "tasks" && projectTasksArtifact;
+  const showSettings = activeTab === "settings";
   const showPlanEmptyState = activeTab === "plan" && !projectPlanArtifact;
   const placeholderCreating =
     showBriefArtifact || showPlanArtifact || showTasksArtifact
@@ -242,6 +311,9 @@ function App() {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
   };
+  const visibleMessages = messages.filter(
+    (message) => message.text.trim() !== "" || !message.done,
+  );
 
   return (
     <main
@@ -262,11 +334,12 @@ function App() {
               type="button"
               className="settings-button"
               onClick={() => {
-                setSettingsOpen((open) => !open);
+                setActiveTab("settings");
                 setSettingsMessage(null);
+                setMcpMessage(null);
               }}
             >
-              API key
+              Settings
             </button>
             <button
               type="button"
@@ -294,38 +367,6 @@ function App() {
             </span>
           </div>
         </header>
-        {settingsOpen && (
-          <form
-            className="api-key-settings"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void saveApiKey();
-            }}
-          >
-            <label htmlFor="anthropic-api-key">Anthropic API key</label>
-            <input
-              id="anthropic-api-key"
-              type="password"
-              value={apiKeyInput}
-              onChange={(event) => setApiKeyInput(event.currentTarget.value)}
-              placeholder={
-                settingsStatus?.hasAnthropicApiKey
-                  ? "Key is already saved"
-                  : "sk-ant-..."
-              }
-              autoComplete="off"
-            />
-            <button
-              type="submit"
-              disabled={!apiKeyInput.trim() || savingApiKey}
-            >
-              {savingApiKey ? "Saving…" : "Save"}
-            </button>
-            {settingsMessage && (
-              <p className="api-key-settings-message">{settingsMessage}</p>
-            )}
-          </form>
-        )}
 
         <div
           className="messages"
@@ -372,7 +413,9 @@ function App() {
               )}
             </div>
           )}
-          {messages.map((m) => {
+          {visibleMessages.map((m) => {
+            const isPendingAssistant =
+              m.role === "assistant" && m.text.trim() === "" && !m.done;
             const recapClass =
               m.kind === "recap"
                 ? recapInteracted
@@ -381,8 +424,24 @@ function App() {
                 : "";
             return (
               <div key={m.id} className={`msg-row msg-row-${m.role}`}>
-                <div className={`msg msg-${m.role}${recapClass}`}>
-                  {m.text || (m.role === "assistant" && !m.done ? "…" : "")}
+                <div
+                  className={`msg msg-${m.role}${recapClass}${
+                    isPendingAssistant ? " msg-pending" : ""
+                  }`}
+                >
+                  {isPendingAssistant ? (
+                    <span
+                      className="typing-dots"
+                      role="status"
+                      aria-label="Cairn is working"
+                    >
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  ) : (
+                    m.text
+                  )}
                 </div>
               </div>
             );
@@ -459,12 +518,34 @@ function App() {
           activeKey={activeTab}
           onSelect={(key) =>
             setActiveTab(
-              key === "tasks" ? "tasks" : key === "plan" ? "plan" : "project",
+              key === "settings"
+                ? "settings"
+                : key === "tasks"
+                  ? "tasks"
+                  : key === "plan"
+                    ? "plan"
+                    : "project",
             )
           }
         />
         <div className="panel-body">
-          {showBriefArtifact ? (
+          {showSettings ? (
+            <SettingsPanel
+              settingsStatus={settingsStatus}
+              apiKeyInput={apiKeyInput}
+              settingsMessage={settingsMessage}
+              savingApiKey={savingApiKey}
+              mcpStatus={mcpStatus}
+              mcpMessage={mcpMessage}
+              updatingMcpServer={updatingMcpServer}
+              onApiKeyInputChanged={setApiKeyInput}
+              onApiKeySaved={() => void saveApiKey()}
+              onMcpServerToggled={(server, enabled) =>
+                void setMcpServerEnabled(server, enabled)
+              }
+              onMcpAuthRequested={(server) => void requestMcpAuth(server)}
+            />
+          ) : showBriefArtifact ? (
             <div
               className={`brief-artifact-shell${creating ? " brief-artifact-shell-creating" : ""}`}
             >

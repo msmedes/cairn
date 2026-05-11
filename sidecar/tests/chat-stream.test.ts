@@ -51,3 +51,15 @@ test("markAssistantDone finalizes the active assistant turn", () => {
     ),
   ).toEqual([{ id: "assistant-1", role: "assistant", text: "hi", done: true }]);
 });
+
+test("markAssistantDone removes an empty assistant placeholder", () => {
+  expect(
+    markAssistantDone(
+      [
+        { id: "user-1", role: "user", text: "now?", done: true },
+        { id: "assistant-1", role: "assistant", text: "", done: false },
+      ],
+      "assistant-1",
+    ),
+  ).toEqual([{ id: "user-1", role: "user", text: "now?", done: true }]);
+});

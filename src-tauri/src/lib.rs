@@ -2,6 +2,7 @@
 // Rust-to-frontend event fan-out. Frontend talks to us via Tauri commands;
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{absolute, Component, Path, PathBuf};
@@ -107,11 +108,25 @@ struct CairnSettingsStatus {
     has_anthropic_api_key: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct McpSettingsStatus {
+    config_path: String,
+    notion_enabled: bool,
+    notion_managed: bool,
+    notion_source: Option<String>,
+    slack_enabled: bool,
+    slack_managed: bool,
+    slack_source: Option<String>,
+}
+
 const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
 const SIDECAR_BIN_NAME: &str = "cairn-sidecar";
 const MAX_DEV_LOG_TEXT_CHARS: usize = 240;
 const MAX_DEV_LOG_EVENTS: usize = 1000;
+const CAIRN_MCP_META_KEY: &str = "_cairn";
+const SLACK_MCP_CLIENT_ID: &str = "3660753192626.8903469228982";
 
 fn cairn_store_dir() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
@@ -167,6 +182,307 @@ fn cairn_settings_status(settings: CairnSettings) -> CairnSettingsStatus {
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty()),
     }
+}
+
+fn pi_agent_dir() -> Result<PathBuf, String> {
+    if let Ok(configured) = std::env::var("PI_CODING_AGENT_DIR") {
+        let trimmed = configured.trim();
+        if trimmed.is_empty() {
+            return Ok(home_dir()?.join(".pi").join("agent"));
+        }
+        if trimmed == "~" {
+            return home_dir();
+        }
+        if let Some(rest) = trimmed.strip_prefix("~/") {
+            return Ok(home_dir()?.join(rest));
+        }
+        return Ok(PathBuf::from(trimmed));
+    }
+
+    Ok(home_dir()?.join(".pi").join("agent"))
+}
+
+fn mcp_config_path() -> Result<PathBuf, String> {
+    Ok(pi_agent_dir()?.join("mcp.json"))
+}
+
+fn standard_mcp_config_path() -> Result<PathBuf, String> {
+    Ok(home_dir()?.join(".config").join("mcp").join("mcp.json"))
+}
+
+fn project_standard_mcp_config_path(project_path: &Path) -> PathBuf {
+    project_path.join(".mcp.json")
+}
+
+fn project_pi_mcp_config_path(project_path: &Path) -> PathBuf {
+    project_path.join(".pi").join("mcp.json")
+}
+
+fn read_mcp_config() -> Result<serde_json::Value, String> {
+    let path = mcp_config_path()?;
+    match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents)
+            .map_err(|err| format!("failed to parse MCP settings: {}", err)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            Ok(serde_json::json!({ "mcpServers": {} }))
+        }
+        Err(err) => Err(format!("failed to read MCP settings: {}", err)),
+    }
+}
+
+fn read_optional_json_config(path: &Path) -> Option<serde_json::Value> {
+    let contents = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+fn write_mcp_config(config: &serde_json::Value) -> Result<(), String> {
+    let path = mcp_config_path()?;
+    let Some(parent) = path.parent() else {
+        return Err("MCP settings path has no parent".into());
+    };
+    fs::create_dir_all(parent).map_err(|err| format!("failed to create Pi agent dir: {}", err))?;
+    let contents = serde_json::to_vec_pretty(config)
+        .map_err(|err| format!("failed to serialize MCP settings: {}", err))?;
+    fs::write(&path, [contents, b"\n".to_vec()].concat())
+        .map_err(|err| format!("failed to write MCP settings: {}", err))
+}
+
+fn server_map(config: &serde_json::Value) -> serde_json::Map<String, serde_json::Value> {
+    config
+        .get("mcpServers")
+        .or_else(|| config.get("mcp-servers"))
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn imports(config: &serde_json::Value) -> Vec<String> {
+    config
+        .get("imports")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn import_config_candidates(kind: &str, cwd: &Path) -> Result<Vec<PathBuf>, String> {
+    let home = home_dir()?;
+    Ok(match kind {
+        "cursor" => vec![home.join(".cursor").join("mcp.json")],
+        "claude-code" => vec![
+            home.join(".claude").join("mcp.json"),
+            home.join(".claude.json"),
+            home.join(".claude").join("claude_desktop_config.json"),
+        ],
+        "claude-desktop" => vec![home
+            .join("Library")
+            .join("Application Support")
+            .join("Claude")
+            .join("claude_desktop_config.json")],
+        "codex" => vec![home.join(".codex").join("config.json")],
+        "windsurf" => vec![home.join(".windsurf").join("mcp.json")],
+        "vscode" => vec![cwd.join(".vscode").join("mcp.json")],
+        _ => vec![],
+    })
+}
+
+fn imported_servers(
+    config: &serde_json::Value,
+    cwd: &Path,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut servers = serde_json::Map::new();
+    for kind in imports(config) {
+        let Ok(candidates) = import_config_candidates(&kind, cwd) else {
+            continue;
+        };
+        let Some(import_path) = candidates.into_iter().find(|path| path.exists()) else {
+            continue;
+        };
+        let Some(imported_config) = read_optional_json_config(&import_path) else {
+            continue;
+        };
+        for (name, definition) in server_map(&imported_config) {
+            servers.entry(name).or_insert(definition);
+        }
+    }
+    servers
+}
+
+fn config_servers_with_imports(
+    config: &serde_json::Value,
+    cwd: &Path,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut servers = imported_servers(config, cwd);
+    for (name, definition) in server_map(config) {
+        servers.insert(name, definition);
+    }
+    servers
+}
+
+fn is_cairn_managed_server(definition: &serde_json::Value) -> bool {
+    definition
+        .get(CAIRN_MCP_META_KEY)
+        .and_then(|value| value.as_object())
+        .and_then(|meta| meta.get("managed"))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+struct EffectiveMcpServer {
+    definition: serde_json::Value,
+    source: String,
+}
+
+fn effective_mcp_server_entries(
+    project_path: Option<&Path>,
+) -> Result<BTreeMap<String, EffectiveMcpServer>, String> {
+    let cwd = project_path.unwrap_or_else(|| Path::new("."));
+    let pi_path = mcp_config_path()?;
+    let mut sources = Vec::new();
+    let standard_path = standard_mcp_config_path()?;
+    if standard_path != pi_path {
+        sources.push(("standard MCP".to_string(), standard_path));
+    }
+    sources.push(("Pi global".to_string(), pi_path));
+    if let Some(project_path) = project_path {
+        let project_standard_path = project_standard_mcp_config_path(project_path);
+        if !sources
+            .iter()
+            .any(|(_, path)| path == &project_standard_path)
+        {
+            sources.push(("project MCP".to_string(), project_standard_path));
+        }
+        let project_pi_path = project_pi_mcp_config_path(project_path);
+        if !sources.iter().any(|(_, path)| path == &project_pi_path) {
+            sources.push(("project Pi".to_string(), project_pi_path));
+        }
+    }
+
+    let mut effective = BTreeMap::new();
+    for (source, path) in sources {
+        let Some(config) = read_optional_json_config(&path) else {
+            continue;
+        };
+        for (name, definition) in config_servers_with_imports(&config, cwd) {
+            effective.insert(
+                name,
+                EffectiveMcpServer {
+                    definition,
+                    source: source.clone(),
+                },
+            );
+        }
+    }
+    Ok(effective)
+}
+
+fn builtin_server_status(
+    entries: &BTreeMap<String, EffectiveMcpServer>,
+    server: &str,
+) -> (bool, bool, Option<String>) {
+    match entries.get(server) {
+        Some(entry) => (
+            true,
+            is_cairn_managed_server(&entry.definition),
+            Some(entry.source.clone()),
+        ),
+        None => (false, false, None),
+    }
+}
+
+fn mcp_settings_status(project_path: Option<&Path>) -> Result<McpSettingsStatus, String> {
+    let entries = effective_mcp_server_entries(project_path)?;
+    let (notion_enabled, notion_managed, notion_source) = builtin_server_status(&entries, "notion");
+    let (slack_enabled, slack_managed, slack_source) = builtin_server_status(&entries, "slack");
+
+    Ok(McpSettingsStatus {
+        config_path: mcp_config_path()?.display().to_string(),
+        notion_enabled,
+        notion_managed,
+        notion_source,
+        slack_enabled,
+        slack_managed,
+        slack_source,
+    })
+}
+
+fn mcp_server_config(server: &str) -> Result<serde_json::Value, String> {
+    match server {
+        "notion" => Ok(serde_json::json!({
+            "url": "https://mcp.notion.com/mcp",
+            "auth": "oauth",
+            "lifecycle": "lazy",
+            CAIRN_MCP_META_KEY: {
+                "managed": true,
+                "server": "notion"
+            }
+        })),
+        "slack" => Ok(serde_json::json!({
+            "url": "https://mcp.slack.com/mcp",
+            "auth": "oauth",
+            "oauth": {
+                "clientId": SLACK_MCP_CLIENT_ID
+            },
+            "lifecycle": "lazy",
+            CAIRN_MCP_META_KEY: {
+                "managed": true,
+                "server": "slack"
+            }
+        })),
+        _ => Err(format!("unsupported MCP server: {}", server)),
+    }
+}
+
+fn update_builtin_mcp_server(
+    mut writable_config: serde_json::Value,
+    server: &str,
+    enabled: bool,
+) -> Result<serde_json::Value, String> {
+    if !writable_config.is_object() {
+        writable_config = serde_json::json!({});
+    }
+
+    let config_object = writable_config
+        .as_object_mut()
+        .ok_or_else(|| "MCP settings root must be an object".to_string())?;
+    let servers_value = config_object
+        .entry("mcpServers".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+    if !servers_value.is_object() {
+        *servers_value = serde_json::json!({});
+    }
+    let servers = servers_value
+        .as_object_mut()
+        .ok_or_else(|| "MCP servers must be an object".to_string())?;
+
+    if enabled {
+        if let Some(existing) = servers.get(server) {
+            if !is_cairn_managed_server(existing) {
+                return Err(format!(
+                    "MCP server \"{}\" already has custom Pi config. Cairn will not overwrite it.",
+                    server
+                ));
+            }
+        }
+        servers.insert(server.to_string(), mcp_server_config(server)?);
+    } else {
+        let Some(existing) = servers.get(server) else {
+            return Ok(writable_config);
+        };
+        if !is_cairn_managed_server(existing) {
+            return Err(format!(
+                "MCP server \"{}\" has custom Pi config. Cairn will not remove it.",
+                server
+            ));
+        }
+        servers.remove(server);
+    }
+
+    Ok(writable_config)
 }
 
 fn home_dir() -> Result<PathBuf, String> {
@@ -628,6 +944,58 @@ fn get_sidecar_dev_logs(state: State<'_, Arc<SidecarState>>) -> Vec<Value> {
 #[tauri::command]
 fn get_cairn_settings() -> Result<CairnSettingsStatus, String> {
     read_cairn_settings().map(cairn_settings_status)
+}
+
+#[tauri::command]
+fn get_mcp_settings(
+    project_path: Option<String>,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<McpSettingsStatus, String> {
+    let project_path = project_path
+        .filter(|path| !path.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            state
+                .active_project
+                .lock()
+                .ok()
+                .and_then(|guard| guard.clone())
+                .map(|project| PathBuf::from(project.path))
+        });
+    mcp_settings_status(project_path.as_deref())
+}
+
+#[tauri::command]
+async fn set_mcp_server_enabled(
+    server: String,
+    enabled: bool,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<McpSettingsStatus, String> {
+    mcp_server_config(&server)?;
+    let project_path = state
+        .active_project
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .map(|project| PathBuf::from(project.path));
+    let config = update_builtin_mcp_server(read_mcp_config()?, &server, enabled)?;
+
+    write_mcp_config(&config)?;
+    let payload = serde_json::json!({ "type": "reload_mcp_config" });
+    write_line(&state.stdin, &payload).await?;
+    mcp_settings_status(project_path.as_deref())
+}
+
+#[tauri::command]
+async fn authenticate_mcp_server(
+    server: String,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<(), String> {
+    mcp_server_config(&server)?;
+    let config = update_builtin_mcp_server(read_mcp_config()?, &server, true)?;
+    write_mcp_config(&config)?;
+    let payload = serde_json::json!({ "type": "authenticate_mcp_server", "server": server });
+    write_line(&state.stdin, &payload).await
 }
 
 #[tauri::command]
@@ -1177,6 +1545,95 @@ mod tests {
     }
 
     #[test]
+    fn mcp_builtin_enable_writes_managed_config() {
+        let writable = json!({ "mcpServers": {} });
+
+        let next = update_builtin_mcp_server(writable, "notion", true).unwrap();
+
+        assert_eq!(
+            next["mcpServers"]["notion"],
+            mcp_server_config("notion").unwrap()
+        );
+    }
+
+    #[test]
+    fn mcp_builtin_slack_uses_static_oauth_client_id() {
+        let config = mcp_server_config("slack").unwrap();
+
+        assert_eq!(config["url"], json!("https://mcp.slack.com/mcp"));
+        assert_eq!(config["auth"], json!("oauth"));
+        assert_eq!(
+            config["oauth"]["clientId"],
+            json!("3660753192626.8903469228982")
+        );
+    }
+
+    #[test]
+    fn mcp_builtin_enable_repairs_old_managed_slack_config() {
+        let writable = json!({
+            "mcpServers": {
+                "slack": {
+                    "url": "https://mcp.slack.com/mcp",
+                    "auth": "oauth",
+                    "_cairn": {
+                        "managed": true,
+                        "server": "slack"
+                    }
+                }
+            }
+        });
+
+        let next = update_builtin_mcp_server(writable, "slack", true).unwrap();
+
+        assert_eq!(
+            next["mcpServers"]["slack"]["oauth"]["clientId"],
+            json!("3660753192626.8903469228982")
+        );
+    }
+
+    #[test]
+    fn mcp_builtin_disable_refuses_custom_pi_config() {
+        let writable = json!({
+            "mcpServers": {
+                "notion": {
+                    "url": "https://custom.example/mcp",
+                    "auth": "oauth",
+                    "excludeTools": ["search"]
+                }
+            }
+        });
+
+        let err = update_builtin_mcp_server(writable, "notion", false).unwrap_err();
+
+        assert!(err.contains("custom Pi config"));
+    }
+
+    #[test]
+    fn mcp_builtin_disable_removes_only_cairn_managed_config() {
+        let writable = json!({
+            "mcpServers": {
+                "notion": mcp_server_config("notion").unwrap(),
+                "custom": {
+                    "url": "https://custom.example/mcp"
+                }
+            }
+        });
+
+        let next = update_builtin_mcp_server(writable, "notion", false).unwrap();
+
+        assert_eq!(
+            next,
+            json!({
+                "mcpServers": {
+                    "custom": {
+                        "url": "https://custom.example/mcp"
+                    }
+                }
+            })
+        );
+    }
+
+    #[test]
     fn first_positional_arg_ignores_flags() {
         let args = vec![
             "--dev".to_string(),
@@ -1351,6 +1808,9 @@ pub fn run() {
             list_recents,
             get_active_project,
             get_cairn_settings,
+            get_mcp_settings,
+            set_mcp_server_enabled,
+            authenticate_mcp_server,
             set_anthropic_api_key,
             get_sidecar_status,
             get_sidecar_dev_logs,

@@ -11,6 +11,18 @@ const devLogMock = vi.hoisted(() => ({
     payload: unknown;
   }>,
 }));
+const invokeMock = vi.hoisted(() => vi.fn());
+const getVersionMock = vi.hoisted(() => vi.fn());
+const sendPromptMock = vi.hoisted(() => vi.fn());
+const authenticateMcpServerMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: invokeMock,
+}));
+
+vi.mock("@tauri-apps/api/app", () => ({
+  getVersion: getVersionMock,
+}));
 
 vi.mock("./useProjectFile", () => ({
   useProjectFile: vi.fn(),
@@ -28,6 +40,12 @@ type SidecarSessionHandlers = {
   onAgentEnd: () => void;
   onHydrate: () => void;
   onError: () => void;
+  onMcpAuthStatus?: (event: {
+    type: "mcp_auth_status";
+    server: string;
+    status: "started" | "authenticated" | "failed";
+    message: string;
+  }) => void;
 };
 
 let sidecarSessionHandlers: SidecarSessionHandlers | null = null;
@@ -56,7 +74,8 @@ vi.mock("./useSidecarSession", () => ({
       ready: true,
       error: null,
       sending: false,
-      sendPrompt: vi.fn(),
+      sendPrompt: sendPromptMock,
+      authenticateMcpServer: authenticateMcpServerMock,
       openProject: openProjectMock,
       openProjectDialog: openProjectDialogMock,
     };
@@ -72,6 +91,12 @@ describe("App panel tabs", () => {
     mockRecents = [];
     openProjectMock.mockReset();
     openProjectDialogMock.mockReset();
+    sendPromptMock.mockReset();
+    authenticateMcpServerMock.mockReset();
+    invokeMock.mockReset();
+    getVersionMock.mockReset();
+    delete (window as typeof window & { __TAURI_INTERNALS__?: unknown })
+      .__TAURI_INTERNALS__;
     devLogMock.events = [];
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
@@ -442,6 +467,124 @@ describe("App panel tabs", () => {
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
   });
 
+  test("Settings tab moves API key and MCP controls into the project panel", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Connections" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Anthropic" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MCP" })).toBeInTheDocument();
+    expect(screen.getByText("Notion")).toBeInTheDocument();
+    expect(screen.getByText("Slack")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "API key" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("Settings tab saves API keys and toggles built-in MCP servers", async () => {
+    (
+      window as typeof window & { __TAURI_INTERNALS__?: unknown }
+    ).__TAURI_INTERNALS__ = {};
+    invokeMock.mockImplementation((command: string, args?: unknown) => {
+      switch (command) {
+        case "get_cairn_settings":
+          return Promise.resolve({ hasAnthropicApiKey: false });
+        case "get_mcp_settings":
+          return Promise.resolve({
+            configPath: "/Users/mike/.pi/agent/mcp.json",
+            notionEnabled: false,
+            notionManaged: false,
+            notionSource: null,
+            slackEnabled: false,
+            slackManaged: false,
+            slackSource: null,
+          });
+        case "set_anthropic_api_key":
+          return Promise.resolve({ hasAnthropicApiKey: true });
+        case "set_mcp_server_enabled":
+          expect(args).toEqual({ server: "notion", enabled: true });
+          return Promise.resolve({
+            configPath: "/Users/mike/.pi/agent/mcp.json",
+            notionEnabled: true,
+            notionManaged: true,
+            notionSource: "Pi global",
+            slackEnabled: false,
+            slackManaged: false,
+            slackSource: null,
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+    getVersionMock.mockResolvedValue("0.1.0");
+
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Connections" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-ant-test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(invokeMock).toHaveBeenCalledWith("set_anthropic_api_key", {
+      apiKey: "sk-ant-test",
+    });
+    expect(await screen.findAllByText("API key saved.")).toHaveLength(2);
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(invokeMock).toHaveBeenCalledWith("set_mcp_server_enabled", {
+      server: "notion",
+      enabled: true,
+    });
+    expect(await screen.findByText("MCP server added.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Authenticate" })[0]);
+    expect(authenticateMcpServerMock).toHaveBeenCalledWith("notion");
+    expect(sendPromptMock).not.toHaveBeenCalledWith("/mcp-auth notion");
+  });
+
+  test("Settings tab does not let Cairn remove externally configured MCP servers", async () => {
+    (
+      window as typeof window & { __TAURI_INTERNALS__?: unknown }
+    ).__TAURI_INTERNALS__ = {};
+    invokeMock.mockImplementation((command: string) => {
+      switch (command) {
+        case "get_cairn_settings":
+          return Promise.resolve({ hasAnthropicApiKey: true });
+        case "get_mcp_settings":
+          return Promise.resolve({
+            configPath: "/Users/mike/.pi/agent/mcp.json",
+            notionEnabled: true,
+            notionManaged: false,
+            notionSource: "project MCP",
+            slackEnabled: false,
+            slackManaged: false,
+            slackSource: null,
+          });
+        default:
+          return Promise.resolve(null);
+      }
+    });
+    getVersionMock.mockResolvedValue("0.1.0");
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(await screen.findByText("External")).toBeInTheDocument();
+    expect(screen.getByText(/configured in project MCP/)).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Authenticate" })[0]);
+    expect(authenticateMcpServerMock).toHaveBeenCalledWith("notion");
+  });
+
   test("empty chat state shows recents and opens a selected project", () => {
     mockUseProjectFile.mockImplementation(() => "");
     mockRecents = [
@@ -475,6 +618,19 @@ describe("App panel tabs", () => {
   });
 
   test("opens a dev mode layer with visible chat messages and event counts", () => {
+    devLogMock.events = [
+      {
+        id: "session-location",
+        receivedAt: "2026-05-02T12:00:00.000Z",
+        payload: {
+          type: "session_location",
+          sessionFile:
+            "/Users/mike/draupnir/.cairn/sessions/2026-05-02_chat.jsonl",
+          sessionDir: "/Users/mike/draupnir/.cairn/sessions",
+          projectPath: "/Users/mike/draupnir",
+        },
+      },
+    ];
     mockMessages = [
       {
         id: "user-1",
@@ -497,6 +653,12 @@ describe("App panel tabs", () => {
     const devLayer = screen.getByRole("region", { name: "Developer mode" });
     expect(devLayer).toBeInTheDocument();
     expect(screen.getByText("Session Debug")).toBeInTheDocument();
+    expect(screen.getByText("Chat JSONL")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "/Users/mike/draupnir/.cairn/sessions/2026-05-02_chat.jsonl",
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Messages" }));
     expect(
       within(devLayer).getByText("Build a small quiz helper."),
@@ -505,9 +667,43 @@ describe("App panel tabs", () => {
       within(devLayer).getByText("I'll ask one scoping question."),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
-    expect(
-      within(devLayer).getByText("No dev events yet."),
-    ).toBeInTheDocument();
+    expect(within(devLayer).getByText("session_location")).toBeInTheDocument();
+  });
+
+  test("does not render completed assistant turns with no text", () => {
+    mockMessages = [
+      {
+        id: "user-1",
+        role: "user",
+        text: "now?",
+        done: true,
+      },
+      {
+        id: "tool-only-assistant",
+        role: "assistant",
+        text: "",
+        done: true,
+      },
+      {
+        id: "pending-assistant",
+        role: "assistant",
+        text: "",
+        done: false,
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        text: "Got it — I'm in.",
+        done: true,
+      },
+    ];
+
+    const { container } = render(<App />);
+
+    expect(screen.getByText("now?")).toBeInTheDocument();
+    expect(screen.getByText("Got it — I'm in.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Cairn is working")).toBeInTheDocument();
+    expect(container.querySelectorAll(".msg-assistant")).toHaveLength(2);
   });
 
   test("filters dev events by agent thread", () => {

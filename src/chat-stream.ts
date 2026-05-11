@@ -51,7 +51,9 @@ export function markAssistantDone(
     return messages;
   }
 
-  return messages.map((message) =>
-    message.id === activeAssistantId ? { ...message, done: true } : message,
-  );
+  return messages.flatMap((message) => {
+    if (message.id !== activeAssistantId) return [message];
+    if (message.role === "assistant" && message.text.trim() === "") return [];
+    return [{ ...message, done: true }];
+  });
 }
