@@ -166,10 +166,11 @@ test("translateSessionEntriesToHydrateEvent hydrates text and image content", ()
   });
 });
 
-test("translateSessionEntriesToHydrateEvent preserves image-only user messages", () => {
+test("translateSessionEntriesToHydrateEvent preserves user text that matches the old image-only fallback", () => {
   const entries: SessionEntry[] = [
     messageEntry("user-1", "user", [
-      { type: "image", data: "b25seS1pbWFnZQ==", mimeType: "image/jpeg" },
+      { type: "text", text: "Please look at the attached image." },
+      { type: "image", data: "aW1hZ2U=", mimeType: "image/png" },
     ]),
   ];
 
@@ -179,12 +180,12 @@ test("translateSessionEntriesToHydrateEvent preserves image-only user messages",
       {
         id: "user-1",
         role: "user",
-        text: "",
+        text: "Please look at the attached image.",
         done: true,
         images: [
           {
-            dataUrl: "data:image/jpeg;base64,b25seS1pbWFnZQ==",
-            mimeType: "image/jpeg",
+            dataUrl: "data:image/png;base64,aW1hZ2U=",
+            mimeType: "image/png",
           },
         ],
       },
@@ -192,10 +193,9 @@ test("translateSessionEntriesToHydrateEvent preserves image-only user messages",
   });
 });
 
-test("translateSessionEntriesToHydrateEvent hides the image-only transport prompt", () => {
+test("translateSessionEntriesToHydrateEvent preserves image-only user messages", () => {
   const entries: SessionEntry[] = [
     messageEntry("user-1", "user", [
-      { type: "text", text: "Please look at the attached image." },
       { type: "image", data: "b25seS1pbWFnZQ==", mimeType: "image/jpeg" },
     ]),
   ];

@@ -158,7 +158,6 @@ let streamedAssistantText = false;
 let suppressAssistantError = false;
 const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const IMAGE_ONLY_PROMPT_TEXT = "Please look at the attached image.";
 
 loadRepoLocalEnv();
 loadCairnSettingsEnv();
@@ -1126,16 +1125,11 @@ async function openProjectPath(
 }
 
 async function handlePrompt(text: string, images: WirePromptImage[] = []) {
-  const sessionText =
-    text.trim() === "" && images.length > 0 ? IMAGE_ONLY_PROMPT_TEXT : text;
   if (!activePersonaPath) {
     throw new Error("sidecar not initialized");
   }
   if (!activeProject) {
-    const project = projectStore.create(
-      nextLegacyProjectPath(sessionText),
-      sessionText,
-    );
+    const project = projectStore.create(nextLegacyProjectPath(text), text);
     await openProject(project, activePersonaPath, { emitHydrate: false });
     recentsRegistry.add(project.path, project.displayName);
     emitRecents();
@@ -1152,7 +1146,7 @@ async function handlePrompt(text: string, images: WirePromptImage[] = []) {
     throw new Error("session not initialized");
   }
   if (images.length === 0) {
-    await session.prompt(sessionText);
+    await session.prompt(text);
     return;
   }
 
@@ -1161,7 +1155,7 @@ async function handlePrompt(text: string, images: WirePromptImage[] = []) {
     data: image.data,
     mimeType: image.mimeType,
   }));
-  await session.prompt(sessionText, { images: promptImages });
+  await session.prompt(text, { images: promptImages });
 }
 
 async function handleNewProject() {
