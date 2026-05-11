@@ -155,8 +155,7 @@ body {
     0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
-.chat-header,
-.panel-tabs {
+.chat-header {
   @apply px-7 pb-[22px] pt-[26px];
 }
 
@@ -1224,42 +1223,6 @@ body {
   @apply cursor-not-allowed bg-[rgba(42,42,55,0.7)] text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)];
 }
 
-.panel-tabs {
-  @apply flex items-center gap-3;
-}
-
-.tab {
-  @apply inline-flex min-h-10 min-w-10 cursor-pointer items-center rounded-full border-0 bg-transparent px-3.5 py-0 font-[inherit] text-[0.95rem] font-semibold text-kanagawa-text-soft;
-  letter-spacing: -0.01em;
-  transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    color 180ms ease,
-    opacity 180ms ease,
-    transform 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.tab:hover:not(:disabled),
-.tab:focus-visible {
-  @apply bg-[rgba(42,42,55,0.56)] text-kanagawa-text;
-}
-
-.tab:focus-visible {
-  @apply outline-none shadow-[0_0_0_4px_rgba(126,156,216,0.2)];
-}
-
-.tab:active:not(:disabled) {
-  transform: scale(0.96);
-}
-
-.tab:disabled {
-  @apply cursor-not-allowed opacity-[0.38];
-}
-
-.tab-active {
-  @apply bg-[rgba(42,42,55,0.92)] text-kanagawa-text shadow-kanagawa-sm;
-}
-
 .panel-body {
   @apply flex min-h-0 flex-col px-[18px] pb-[18px] pt-0;
 }
@@ -1419,179 +1382,15 @@ body {
     0 0 0 4px rgba(126, 156, 216, 0.16);
 }
 
-.project-slides-shell {
-  @apply relative h-full min-h-0 flex-1 overflow-hidden rounded-none bg-transparent shadow-none outline-none;
-}
-
 .brief-artifact-shell,
 .plan-artifact-shell,
 .tasks-artifact-shell {
   @apply relative min-h-0 flex-1 overflow-auto rounded-none bg-transparent;
 }
 
-.brief-artifact,
-.plan-artifact,
-.tasks-artifact {
-  @apply min-h-full p-[30px] text-kanagawa-text;
-  background:
-    linear-gradient(135deg, rgba(126, 156, 216, 0.1), transparent 34%),
-    linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
-}
-
-.plan-artifact {
-  background:
-    linear-gradient(135deg, rgba(152, 187, 108, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
-}
-
-.tasks-artifact {
-  background:
-    linear-gradient(135deg, rgba(255, 160, 102, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(31, 31, 40, 0.98), rgba(22, 22, 29, 0.98));
-}
-
-.brief-artifact-header,
-.plan-artifact-header,
-.tasks-artifact-header {
-  @apply max-w-[46rem] border-b border-[var(--line)] pb-6;
-}
-
-.brief-artifact-header h2,
-.plan-artifact-header h2,
-.tasks-artifact-header h2 {
-  @apply mt-2 mb-0 text-kanagawa-text;
-  font-size: clamp(2rem, 1.6rem + 1.1vw, 3rem);
-  line-height: 1.02;
-}
-
-.brief-artifact-header p:last-child,
-.plan-artifact-header p:last-child,
-.tasks-artifact-header p:last-child {
-  @apply mt-3.5 mb-0 max-w-[58ch] text-[1.05rem] text-kanagawa-text-soft;
-  line-height: 1.6;
-}
-
-.brief-artifact-facts {
-  @apply mt-[22px] mb-0 grid gap-3.5;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.brief-artifact-facts div,
-.brief-artifact-section,
-.plan-artifact-section {
-  @apply rounded-card border border-[var(--line)] bg-[rgba(42,42,55,0.7)];
-}
-
-.brief-artifact-facts div {
-  @apply p-4;
-}
-
-.brief-artifact-facts dt {
-  @apply mb-2 mt-0 text-[0.74rem] font-extrabold uppercase text-kanagawa-text-muted;
-  letter-spacing: 0;
-}
-
-.brief-artifact-facts dd {
-  @apply m-0 text-kanagawa-text;
-  line-height: 1.5;
-}
-
-.brief-artifact-sections,
-.plan-artifact,
-.tasks-artifact-list {
-  @apply grid gap-3.5;
-}
-
-.brief-artifact-sections {
-  @apply mt-[18px];
-}
-
-.plan-artifact-section {
-  @apply max-w-[58rem];
-}
-
-.brief-artifact-section,
-.plan-artifact-section {
-  @apply p-[18px];
-}
-
-.brief-artifact-section h3,
-.plan-artifact-section h3 {
-  @apply m-0 text-base leading-tight;
-}
-
-.brief-artifact-section p,
-.plan-artifact-section p {
-  @apply mt-2.5 mb-0 text-kanagawa-text-soft;
-  line-height: 1.6;
-}
-
-.plan-artifact-section ul,
-.plan-artifact-section ol {
-  @apply mt-3 mb-0 pl-[1.35rem] text-kanagawa-text-soft;
-}
-
-.plan-artifact-section li + li {
-  @apply mt-2;
-}
-
-.tasks-artifact-list {
-  @apply mt-6 mb-0 list-none p-0;
-}
-
-.tasks-artifact-item {
-  @apply grid max-w-[58rem] items-center gap-3.5 rounded-card border border-[var(--line)] bg-[rgba(42,42,55,0.72)] p-4;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-}
-
-.tasks-artifact-marker {
-  @apply h-3.5 w-3.5 rounded-full bg-kanagawa-text-soft;
-  box-shadow: 0 0 0 4px rgba(147, 138, 169, 0.12);
-}
-
-.tasks-artifact-item-in_progress .tasks-artifact-marker {
-  @apply bg-kanagawa-accent;
-  box-shadow: 0 0 0 4px rgba(126, 156, 216, 0.18);
-}
-
-.tasks-artifact-item-done .tasks-artifact-marker {
-  @apply bg-kanagawa-green;
-  box-shadow: 0 0 0 4px rgba(152, 187, 108, 0.18);
-}
-
-.tasks-artifact-item-blocked .tasks-artifact-marker {
-  @apply bg-kanagawa-warm;
-  box-shadow: 0 0 0 4px rgba(255, 160, 102, 0.18);
-}
-
-.tasks-artifact-copy {
-  @apply min-w-0;
-}
-
-.tasks-artifact-copy p {
-  @apply m-0 text-kanagawa-text;
-  line-height: 1.4;
-}
-
-.tasks-artifact-slug {
-  @apply mt-1 block text-[0.82rem] text-kanagawa-text-soft;
-}
-
-.tasks-artifact-status {
-  @apply justify-self-end whitespace-nowrap rounded-full border border-[var(--line)] bg-[rgba(31,31,40,0.76)] px-2.5 py-[5px] text-[0.82rem] font-bold text-kanagawa-text-muted;
-}
-
 .brief-artifact-shell-creating .brief-artifact,
 .plan-artifact-shell-creating .plan-artifact,
 .tasks-artifact-shell-creating .tasks-artifact {
-  filter: saturate(0.82) brightness(0.72);
-}
-
-.project-slides-frame {
-  @apply block h-full min-h-0 w-full border-0 bg-transparent;
-}
-
-.project-slides-shell-creating .project-slides-frame {
   filter: saturate(0.82) brightness(0.72);
 }
 
@@ -1811,8 +1610,7 @@ body {
     min-height: calc(100vh - 20px);
   }
 
-  .chat-header,
-  .panel-tabs {
+  .chat-header {
     @apply px-5 pb-[18px] pt-[22px];
   }
 
@@ -1843,29 +1641,6 @@ body {
 
   .mcp-server-actions {
     @apply justify-between;
-  }
-
-  .brief-artifact,
-  .plan-artifact,
-  .tasks-artifact {
-    @apply p-[22px];
-  }
-
-  .brief-artifact-facts {
-    grid-template-columns: 1fr;
-  }
-
-  .project-slides-shell {
-    @apply min-h-[420px];
-  }
-
-  .tasks-artifact-item {
-    grid-template-columns: 18px minmax(0, 1fr);
-  }
-
-  .tasks-artifact-status {
-    grid-column: 2;
-    @apply justify-self-start;
   }
 
   .dev-layer {
