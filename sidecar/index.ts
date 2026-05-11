@@ -21,6 +21,7 @@ import {
   type Context,
   fauxAssistantMessage,
   fauxToolCall,
+  type ImageContent,
   type Model,
   registerFauxProvider,
 } from "@mariozechner/pi-ai";
@@ -60,7 +61,7 @@ type InMsg =
       skillsPath?: string;
       skipAutoOpen?: boolean;
     }
-  | { type: "prompt"; text: string }
+  | { type: "prompt"; text: string; images?: WirePromptImage[] }
   | { type: "new_project" }
   | { type: "open_project"; path: string; locateProjectRoot?: boolean }
   | { type: "list_recents" }
@@ -91,6 +92,11 @@ type OutMsg =
     }
   | { type: "agent_end" }
   | { type: "error"; message: string; recoverable?: boolean };
+
+type WirePromptImage = {
+  data: string;
+  mimeType: string;
+};
 
 type DevLogMsg =
   | {
@@ -152,6 +158,7 @@ let streamedAssistantText = false;
 let suppressAssistantError = false;
 const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const IMAGE_ONLY_PROMPT_TEXT = "Please look at the attached image.";
 
 loadRepoLocalEnv();
 loadCairnSettingsEnv();
@@ -1118,12 +1125,17 @@ async function openProjectPath(
   await openProject(project, activePersonaPath, options);
 }
 
-async function handlePrompt(text: string) {
+async function handlePrompt(text: string, images: WirePromptImage[] = []) {
+  const sessionText =
+    text.trim() === "" && images.length > 0 ? IMAGE_ONLY_PROMPT_TEXT : text;
   if (!activePersonaPath) {
     throw new Error("sidecar not initialized");
   }
   if (!activeProject) {
-    const project = projectStore.create(nextLegacyProjectPath(text), text);
+    const project = projectStore.create(
+      nextLegacyProjectPath(sessionText),
+      sessionText,
+    );
     await openProject(project, activePersonaPath, { emitHydrate: false });
     recentsRegistry.add(project.path, project.displayName);
     emitRecents();
@@ -1139,7 +1151,17 @@ async function handlePrompt(text: string) {
   if (!session) {
     throw new Error("session not initialized");
   }
-  await session.prompt(text);
+  if (images.length === 0) {
+    await session.prompt(sessionText);
+    return;
+  }
+
+  const promptImages: ImageContent[] = images.map((image) => ({
+    type: "image",
+    data: image.data,
+    mimeType: image.mimeType,
+  }));
+  await session.prompt(sessionText, { images: promptImages });
 }
 
 async function handleNewProject() {
@@ -1251,7 +1273,7 @@ async function handleLine(line: string) {
       await handleInit(msg);
       break;
     case "prompt":
-      await handlePrompt(msg.text);
+      await handlePrompt(msg.text, msg.images);
       break;
     case "new_project":
       await handleNewProject();

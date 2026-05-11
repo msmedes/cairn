@@ -37,6 +37,13 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 type SidecarEvent = { type: string } & Record<string, JsonValue>;
+type SessionEntryJson = {
+  type?: string;
+  message?: {
+    role?: string;
+    content?: JsonValue;
+  };
+};
 type SubprocessHandle = ReturnType<typeof Bun.spawn>;
 
 const liveProcs = new Set<SubprocessHandle>();
@@ -337,6 +344,84 @@ test(
         message.text.includes("Start this project."),
       ),
     ).toBe(true);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
+  "prompt with images persists pi image content and rehydrates image-only messages",
+  async () => {
+    const cairnHome = createCairnHome();
+    const projectPath = createTempDir("cairn-image-prompt-");
+    const personaPath = createPersonaFile("You are Cairn.");
+    const env = { CAIRN_FAKE_PROTOCOL_TEXT_RESPONSE: "I can see it." };
+    const proc = spawnSidecar(cairnHome, env);
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+    writeJsonToSidecar(proc, { type: "open_project", path: projectPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "active_project",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "",
+      images: [{ data: "AQID", mimeType: "image/png" }],
+    });
+    await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const sessionFile = readdirSync(CairnDir.sessionsDir(projectPath))
+      .filter((name) => name.endsWith(".jsonl"))
+      .map((name) => join(CairnDir.sessionsDir(projectPath), name))
+      .at(0);
+    expect(sessionFile).toBeDefined();
+    const sessionEntries = readFileSync(sessionFile ?? "", "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as SessionEntryJson);
+    const userEntry = sessionEntries.find(
+      (entry) => entry.type === "message" && entry.message?.role === "user",
+    );
+    expect(userEntry?.message?.content).toEqual([
+      { type: "text", text: "Please look at the attached image." },
+      { type: "image", data: "AQID", mimeType: "image/png" },
+    ]);
+
+    kill(proc);
+    const restarted = spawnSidecar(cairnHome, env);
+    writeJsonToSidecar(restarted, { type: "init", personaPath });
+    const restartEvents = await collectEvents(
+      restarted,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+    const hydrateEvent = restartEvents.find(
+      (
+        event,
+      ): event is SidecarEvent & {
+        messages: Array<{
+          text: string;
+          images?: Array<{ dataUrl: string; mimeType: string }>;
+        }>;
+      } => event.type === "hydrate" && Array.isArray(event.messages),
+    );
+    expect(hydrateEvent?.messages[0]).toMatchObject({
+      text: "",
+      images: [
+        { dataUrl: "data:image/png;base64,AQID", mimeType: "image/png" },
+      ],
+    });
   },
   DEFAULT_TIMEOUT_MS,
 );

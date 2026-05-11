@@ -100,6 +100,7 @@ let mockMessages: Array<{
   role: "user" | "assistant";
   text: string;
   done: boolean;
+  images?: Array<{ dataUrl: string; mimeType: string }>;
 }> = [];
 let mockRecents: Array<{
   path: string;
@@ -295,6 +296,66 @@ describe("App panel tabs", () => {
     expect(screen.getByText("Create the first quiz draft")).toBeInTheDocument();
     expect(mockUseProjectFile).toHaveBeenCalledWith("plan.json");
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("plan.html");
+  });
+
+  test("queues a dropped image and sends it without text", async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText("Message");
+    const image = new File([new Uint8Array([1, 2, 3])], "screen.png", {
+      type: "image/png",
+    });
+
+    fireEvent.drop(textarea, {
+      dataTransfer: {
+        files: [image],
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove image/png attachment" }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => {
+      expect(sendPromptMock).toHaveBeenCalledWith("", [
+        expect.objectContaining({
+          data: "AQID",
+          mimeType: "image/png",
+          dataUrl: "data:image/png;base64,AQID",
+        }),
+      ]);
+    });
+    expect(
+      screen.queryByRole("button", { name: "Remove image/png attachment" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("rejects dropped non-image files without queueing them", async () => {
+    render(<App />);
+
+    const textarea = screen.getByLabelText("Message");
+    const pdf = new File([new Uint8Array([1])], "brief.pdf", {
+      type: "application/pdf",
+    });
+
+    fireEvent.drop(textarea, {
+      dataTransfer: {
+        files: [pdf],
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "brief.pdf: Only PNG, JPEG, WebP, and GIF images can be attached.",
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 
   test("Plan creating indicator clears when plan.json changes", async () => {

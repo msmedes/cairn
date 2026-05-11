@@ -139,6 +139,86 @@ test("translateSessionEntriesToHydrateEvent preserves multi-block text exactly",
   });
 });
 
+test("translateSessionEntriesToHydrateEvent hydrates text and image content", () => {
+  const entries: SessionEntry[] = [
+    messageEntry("user-1", "user", [
+      { type: "text", text: "What is wrong here?" },
+      { type: "image", data: "aW1hZ2U=", mimeType: "image/png" },
+    ]),
+  ];
+
+  expect(translateSessionEntriesToHydrateEvent(entries)).toEqual({
+    type: "hydrate",
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        text: "What is wrong here?",
+        done: true,
+        images: [
+          {
+            dataUrl: "data:image/png;base64,aW1hZ2U=",
+            mimeType: "image/png",
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test("translateSessionEntriesToHydrateEvent preserves image-only user messages", () => {
+  const entries: SessionEntry[] = [
+    messageEntry("user-1", "user", [
+      { type: "image", data: "b25seS1pbWFnZQ==", mimeType: "image/jpeg" },
+    ]),
+  ];
+
+  expect(translateSessionEntriesToHydrateEvent(entries)).toEqual({
+    type: "hydrate",
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        text: "",
+        done: true,
+        images: [
+          {
+            dataUrl: "data:image/jpeg;base64,b25seS1pbWFnZQ==",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test("translateSessionEntriesToHydrateEvent hides the image-only transport prompt", () => {
+  const entries: SessionEntry[] = [
+    messageEntry("user-1", "user", [
+      { type: "text", text: "Please look at the attached image." },
+      { type: "image", data: "b25seS1pbWFnZQ==", mimeType: "image/jpeg" },
+    ]),
+  ];
+
+  expect(translateSessionEntriesToHydrateEvent(entries)).toEqual({
+    type: "hydrate",
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        text: "",
+        done: true,
+        images: [
+          {
+            dataUrl: "data:image/jpeg;base64,b25seS1pbWFnZQ==",
+            mimeType: "image/jpeg",
+          },
+        ],
+      },
+    ],
+  });
+});
+
 test("translateSessionEntriesToDevLogMessages includes tool calls and results", () => {
   const assistantEntry = messageEntry("assistant-1", "assistant", [
     {

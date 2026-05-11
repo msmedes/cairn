@@ -1267,6 +1267,22 @@ body {
   text-wrap: pretty;
 }
 
+.msg-image-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.msg-image-strip img {
+  max-width: min(180px, 100%);
+  max-height: 80px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: rgba(22, 22, 29, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(220, 215, 186, 0.1);
+}
+
 .msg-user {
   max-width: min(54rem, 80%);
   padding: 16px 18px;
@@ -1418,6 +1434,75 @@ body {
   align-items: end;
   gap: 12px;
   padding: 14px 28px 22px;
+}
+
+.composer-attachment-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.composer-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composer-attachment-chip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 70px;
+  height: 54px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-strong);
+  box-shadow:
+    inset 0 0 0 1px rgba(220, 215, 186, 0.1),
+    0 8px 18px rgba(0, 0, 0, 0.16);
+}
+
+.composer-attachment-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.composer-attachment-chip button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(22, 22, 29, 0.78);
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(220, 215, 186, 0.18);
+}
+
+.composer-attachment-chip button:hover:not(:disabled),
+.composer-attachment-chip button:focus-visible:not(:disabled) {
+  background: rgba(195, 64, 67, 0.9);
+  color: #fff;
+}
+
+.composer-attachment-rejection {
+  margin: 0;
+  color: #e46876;
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .composer input,

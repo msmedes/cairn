@@ -66,6 +66,15 @@ struct HydratedMessage {
     done: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<HydratedMessageImage>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HydratedMessageImage {
+    data_url: String,
+    mime_type: String,
 }
 
 #[derive(Serialize)]
@@ -99,6 +108,13 @@ struct RecentProjectEntry {
     path: String,
     display_name: String,
     last_opened_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImagePayload {
+    data: String,
+    mime_type: String,
 }
 
 #[derive(Deserialize)]
@@ -725,8 +741,15 @@ async fn write_line(
 }
 
 #[tauri::command]
-async fn send_prompt(text: String, state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
-    let payload = serde_json::json!({ "type": "prompt", "text": text });
+async fn send_prompt(
+    text: String,
+    images: Option<Vec<ImagePayload>>,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<(), String> {
+    let payload = match images.filter(|images| !images.is_empty()) {
+        Some(images) => serde_json::json!({ "type": "prompt", "text": text, "images": images }),
+        None => serde_json::json!({ "type": "prompt", "text": text }),
+    };
     write_line(&state.stdin, &payload).await
 }
 

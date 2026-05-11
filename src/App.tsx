@@ -2,7 +2,9 @@ import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  type ClipboardEvent,
   type CSSProperties,
+  type DragEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -18,6 +20,7 @@ import {
 } from "./briefArtifact";
 import type { ChatMessage } from "./chat-stream";
 import { DevModeLayer } from "./DevModeLayer";
+import type { ImageAttachmentRejectionReason } from "./imageAttachment";
 import { type PanelTab, PanelTabs } from "./PanelTabs";
 import { PlanArtifactView } from "./PlanArtifactView";
 import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
@@ -35,6 +38,7 @@ import {
 import { useActivePanelTab } from "./useActivePanelTab";
 import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
 import { useAutoScroll } from "./useAutoScroll";
+import { useComposerAttachments } from "./useComposerAttachments";
 import { useCreatingIndicator } from "./useCreatingIndicator";
 import {
   DEFAULT_CHAT_PANE_PERCENT,
@@ -58,6 +62,21 @@ type BugReportSnapshot = {
 
 function hasTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function attachmentRejectionLabel(reason: ImageAttachmentRejectionReason) {
+  switch (reason) {
+    case "unsupported-type":
+      return "Only PNG, JPEG, WebP, and GIF images can be attached.";
+    case "too-large":
+      return "Images must be 5 MB or smaller.";
+    case "unreadable":
+      return "This image could not be read.";
+    default: {
+      const _exhaustive: never = reason;
+      return _exhaustive;
+    }
+  }
 }
 
 function App() {
@@ -149,6 +168,7 @@ function App() {
     onError: clearCreatingOnError,
     onMcpAuthStatus: handleMcpAuthStatus,
   });
+  const composerAttachments = useComposerAttachments();
   const { events: devEvents, clearEvents: clearDevEvents } = useSidecarDevLog();
   const listRef = useAutoScroll();
   const { composerRef, inputRef } = useAutoResizingTextarea();
@@ -222,9 +242,42 @@ function App() {
 
   function send() {
     const text = input.trim();
-    if (!text || sending || !ready) return;
+    if (
+      (!text && composerAttachments.images.length === 0) ||
+      sending ||
+      !ready
+    ) {
+      return;
+    }
+    const images = composerAttachments.images.map(
+      ({ data, mimeType, dataUrl }) => ({
+        data,
+        mimeType,
+        dataUrl,
+      }),
+    );
     setInput("");
-    void sendPrompt(text);
+    composerAttachments.clear();
+    void sendPrompt(text, images);
+  }
+
+  function addDroppedFiles(event: DragEvent<HTMLTextAreaElement>) {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length > 0) {
+      void composerAttachments.addFiles(files);
+    }
+  }
+
+  function addPastedImages(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.items).flatMap((item) => {
+      if (item.kind !== "file" || !item.type.startsWith("image/")) return [];
+      const file = item.getAsFile();
+      return file ? [file] : [];
+    });
+    if (files.length === 0) return;
+    event.preventDefault();
+    void composerAttachments.addFiles(files);
   }
 
   async function saveApiKey() {
@@ -369,9 +422,14 @@ function App() {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
   };
-  const visibleMessages = messages.filter(
-    (message) => message.text.trim() !== "" || !message.done,
-  );
+  const visibleMessages = messages.filter((message) => {
+    const hasImages = (message.images?.length ?? 0) > 0;
+    return message.text.trim() !== "" || hasImages || !message.done;
+  });
+  const canSend =
+    ready &&
+    !sending &&
+    (input.trim() !== "" || composerAttachments.images.length > 0);
 
   return (
     <main
@@ -470,7 +528,20 @@ function App() {
                       <span />
                     </span>
                   ) : (
-                    m.text
+                    <>
+                      {(m.images?.length ?? 0) > 0 && (
+                        <div className="msg-image-strip">
+                          {m.images?.map((image) => (
+                            <img
+                              key={`${image.mimeType}:${image.dataUrl}`}
+                              src={image.dataUrl}
+                              alt={image.mimeType}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      {m.text && <span>{m.text}</span>}
+                    </>
                   )}
                 </div>
               </div>
@@ -486,12 +557,45 @@ function App() {
             send();
           }}
         >
+          {(composerAttachments.images.length > 0 ||
+            composerAttachments.rejections.length > 0) && (
+            <div className="composer-attachment-panel">
+              {composerAttachments.images.length > 0 && (
+                <ul
+                  className="composer-attachment-list"
+                  aria-label="Attached images"
+                >
+                  {composerAttachments.images.map((image) => (
+                    <li className="composer-attachment-chip" key={image.id}>
+                      <img src={image.dataUrl} alt={image.mimeType} />
+                      <button
+                        type="button"
+                        aria-label={`Remove ${image.mimeType} attachment`}
+                        onClick={() => composerAttachments.remove(image.id)}
+                      >
+                        x
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {composerAttachments.rejections.map((rejection) => (
+                <p className="composer-attachment-rejection" key={rejection.id}>
+                  {rejection.fileName}:{" "}
+                  {attachmentRejectionLabel(rejection.reason)}
+                </p>
+              ))}
+            </div>
+          )}
           <textarea
             ref={inputRef}
             placeholder={ready ? "Type a message…" : "Waking up…"}
             value={input}
             onFocus={() => setRecapInteracted(true)}
             onChange={(e) => setInput(e.currentTarget.value)}
+            onPaste={addPastedImages}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={addDroppedFiles}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -502,7 +606,7 @@ function App() {
             aria-label="Message"
             rows={1}
           />
-          <button type="submit" disabled={!ready || sending || !input.trim()}>
+          <button type="submit" disabled={!canSend}>
             Send
           </button>
         </form>
