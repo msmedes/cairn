@@ -79,6 +79,21 @@ function attachmentRejectionLabel(reason: ImageAttachmentRejectionReason) {
   }
 }
 
+function chatMessageImagesWithKeys(message: ChatMessage) {
+  const imageCounts = new Map<string, number>();
+
+  return (message.images ?? []).map((image) => {
+    const imageKey = `${image.mimeType}:${image.dataUrl}`;
+    const occurrence = imageCounts.get(imageKey) ?? 0;
+    imageCounts.set(imageKey, occurrence + 1);
+
+    return {
+      image,
+      key: `${message.id}:image:${imageKey}:${occurrence}`,
+    };
+  });
+}
+
 function App() {
   const [input, setInput] = useState("");
   const [recapInteracted, setRecapInteracted] = useState(false);
@@ -531,13 +546,15 @@ function App() {
                     <>
                       {(m.images?.length ?? 0) > 0 && (
                         <div className="msg-image-strip">
-                          {m.images?.map((image) => (
-                            <img
-                              key={`${image.mimeType}:${image.dataUrl}`}
-                              src={image.dataUrl}
-                              alt={image.mimeType}
-                            />
-                          ))}
+                          {chatMessageImagesWithKeys(m).map(
+                            ({ image, key }) => (
+                              <img
+                                key={key}
+                                src={image.dataUrl}
+                                alt={image.mimeType}
+                              />
+                            ),
+                          )}
                         </div>
                       )}
                       {m.text && <span>{m.text}</span>}

@@ -1,7 +1,5 @@
 import type { SessionEntry } from "@mariozechner/pi-coding-agent";
 
-const IMAGE_ONLY_PROMPT_TEXT = "Please look at the attached image.";
-
 export type HydrateMessage = {
   id: string;
   role: "user" | "assistant";
@@ -100,10 +98,7 @@ function toHydrateMessage(entry: SessionEntry): HydrateMessage | null {
   }
 
   const images = message.role === "user" ? extractImages(message.content) : [];
-  const text =
-    images.length > 0 && extractText(message.content) === IMAGE_ONLY_PROMPT_TEXT
-      ? ""
-      : extractText(message.content);
+  const text = extractText(message.content);
   if (!text && images.length === 0) {
     return null;
   }

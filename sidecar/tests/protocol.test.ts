@@ -394,7 +394,7 @@ test(
       (entry) => entry.type === "message" && entry.message?.role === "user",
     );
     expect(userEntry?.message?.content).toEqual([
-      { type: "text", text: "Please look at the attached image." },
+      { type: "text", text: "" },
       { type: "image", data: "AQID", mimeType: "image/png" },
     ]);
 
