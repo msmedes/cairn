@@ -15,6 +15,9 @@ const invokeMock = vi.hoisted(() => vi.fn());
 const getVersionMock = vi.hoisted(() => vi.fn());
 const sendPromptMock = vi.hoisted(() => vi.fn());
 const authenticateMcpServerMock = vi.hoisted(() => vi.fn());
+const menuEventHandlers = vi.hoisted(
+  () => [] as Array<(event: { payload: string }) => void>,
+);
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
@@ -23,6 +26,42 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: getVersionMock,
 }));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (
+    eventName: string,
+    handler: (event: { payload: string }) => void,
+  ) => {
+    if (eventName === "menu-event") {
+      menuEventHandlers.push(handler);
+    }
+    return () => {
+      const idx = menuEventHandlers.indexOf(handler);
+      if (idx >= 0) menuEventHandlers.splice(idx, 1);
+    };
+  },
+}));
+
+function fireMenuEvent(payload: string) {
+  for (const handler of menuEventHandlers.slice()) {
+    handler({ payload });
+  }
+}
+
+function bootstrapTauriRuntime() {
+  (
+    window as typeof window & { __TAURI_INTERNALS__?: unknown }
+  ).__TAURI_INTERNALS__ = {};
+  invokeMock.mockImplementation(() => Promise.resolve(null));
+  getVersionMock.mockResolvedValue("test");
+}
+
+async function openDevPanelViaMenu() {
+  await act(async () => {});
+  act(() => {
+    fireMenuEvent("dev-panel");
+  });
+}
 
 vi.mock("./useProjectFile", () => ({
   useProjectFile: vi.fn(),
@@ -97,6 +136,7 @@ describe("App panel tabs", () => {
     getVersionMock.mockReset();
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown })
       .__TAURI_INTERNALS__;
+    menuEventHandlers.length = 0;
     devLogMock.events = [];
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
@@ -467,13 +507,16 @@ describe("App panel tabs", () => {
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
   });
 
-  test("Settings tab moves API key and MCP controls into the project panel", () => {
+  test("Settings overlay surfaces API key and MCP controls", async () => {
+    bootstrapTauriRuntime();
     render(<App />);
-
-    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
 
     expect(
-      screen.getByRole("heading", { name: "Connections" }),
+      screen.getByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Anthropic" }),
@@ -526,7 +569,7 @@ describe("App panel tabs", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Connections" }),
+      await screen.findByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API key"), {
@@ -536,7 +579,9 @@ describe("App panel tabs", () => {
     expect(invokeMock).toHaveBeenCalledWith("set_anthropic_api_key", {
       apiKey: "sk-ant-test",
     });
-    expect(await screen.findAllByText("API key saved.")).toHaveLength(2);
+    expect(
+      await screen.findByRole("button", { name: "Replace" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     expect(invokeMock).toHaveBeenCalledWith("set_mcp_server_enabled", {
@@ -575,7 +620,10 @@ describe("App panel tabs", () => {
     getVersionMock.mockResolvedValue("0.1.0");
 
     render(<App />);
-    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
 
     expect(await screen.findByText("External")).toBeInTheDocument();
     expect(screen.getByText(/configured in project MCP/)).toBeInTheDocument();
@@ -617,7 +665,7 @@ describe("App panel tabs", () => {
     expect(openProjectDialogMock).toHaveBeenCalledTimes(1);
   });
 
-  test("opens a dev mode layer with visible chat messages and event counts", () => {
+  test("opens a dev mode layer with visible chat messages and event counts", async () => {
     devLogMock.events = [
       {
         id: "session-location",
@@ -646,9 +694,9 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    await openDevPanelViaMenu();
 
     const devLayer = screen.getByRole("region", { name: "Developer mode" });
     expect(devLayer).toBeInTheDocument();
@@ -706,7 +754,7 @@ describe("App panel tabs", () => {
     expect(container.querySelectorAll(".msg-assistant")).toHaveLength(2);
   });
 
-  test("filters dev events by agent thread", () => {
+  test("filters dev events by agent thread", async () => {
     const childAgentId = "subagent:/tmp/session.jsonl";
     devLogMock.events = [
       {
@@ -781,8 +829,9 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    await openDevPanelViaMenu();
     const devLayer = screen.getByRole("region", { name: "Developer mode" });
 
     expect(
@@ -824,7 +873,7 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("searches dev tool events by tool name and subagent prompt details", () => {
+  test("searches dev tool events by tool name and subagent prompt details", async () => {
     devLogMock.events = [
       {
         id: "spawn-subagent",
@@ -882,8 +931,9 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    await openDevPanelViaMenu();
     const devLayer = screen.getByRole("region", { name: "Developer mode" });
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
 
@@ -913,7 +963,7 @@ describe("App panel tabs", () => {
     ).toBeInTheDocument();
   });
 
-  test("shows tool-only dev events with expandable subagent prompt details", () => {
+  test("shows tool-only dev events with expandable subagent prompt details", async () => {
     devLogMock.events = [
       {
         id: "spawn-subagent",
@@ -975,8 +1025,9 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
+    await openDevPanelViaMenu();
     const devLayer = screen.getByRole("region", { name: "Developer mode" });
 
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));

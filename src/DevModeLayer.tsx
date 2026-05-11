@@ -3,6 +3,8 @@ import type { ChatMessage } from "./chat-stream";
 import type { JsonValue, SidecarDevLogEntry } from "./useSidecarDevLog";
 
 type DevModeLayerProps = {
+  isOpen: boolean;
+  onClose: () => void;
   messages: ChatMessage[];
   events: SidecarDevLogEntry[];
   onEventsCleared: () => void;
@@ -760,11 +762,12 @@ function DevEventRow({ event }: DevEventRowProps) {
 }
 
 export function DevModeLayer({
+  isOpen,
+  onClose,
   messages,
   events,
   onEventsCleared,
 }: DevModeLayerProps) {
-  const [isOpen, setIsOpen] = useState(false);
   const [activePanel, setActivePanel] = useState<DevPanel>("timeline");
   const [selectedAgentId, setSelectedAgentId] = useState<AgentFilterId>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -795,188 +798,169 @@ export function DevModeLayer({
     window.setTimeout(() => setCopiedSessionFile(false), 1200);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <>
-      <button
-        type="button"
-        className="dev-toggle"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        Dev
-      </button>
-      {isOpen && (
-        <section className="dev-layer" aria-label="Developer mode">
-          <header className="dev-layer-header">
-            <div>
-              <p className="dev-layer-kicker">Under the hood</p>
-              <h2>Session Debug</h2>
-            </div>
-            <div className="dev-layer-actions">
-              <button type="button" onClick={onEventsCleared}>
-                Clear
-              </button>
-              <button type="button" onClick={() => setIsOpen(false)}>
-                Close
-              </button>
-            </div>
-          </header>
+    <section className="dev-layer" aria-label="Developer mode">
+      <header className="dev-layer-header">
+        <div>
+          <p className="dev-layer-kicker">Under the hood</p>
+          <h2>Session Debug</h2>
+        </div>
+        <div className="dev-layer-actions">
+          <button type="button" onClick={onEventsCleared}>
+            Clear
+          </button>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </header>
 
-          <dl className="dev-metrics">
-            <div>
-              <dt>New input</dt>
-              <dd title={formatNumber(sessionTokenTotals.input)}>
-                {formatCompactNumber(sessionTokenTotals.input)}
-              </dd>
-            </div>
-            <div>
-              <dt>Cache read</dt>
-              <dd title={formatNumber(sessionTokenTotals.cacheRead)}>
-                {formatCompactNumber(sessionTokenTotals.cacheRead)}
-              </dd>
-            </div>
-            <div>
-              <dt>Cache write</dt>
-              <dd title={formatNumber(sessionTokenTotals.cacheWrite)}>
-                {formatCompactNumber(sessionTokenTotals.cacheWrite)}
-              </dd>
-            </div>
-            <div>
-              <dt>Output</dt>
-              <dd title={formatNumber(sessionTokenTotals.output)}>
-                {formatCompactNumber(sessionTokenTotals.output)}
-              </dd>
-            </div>
-          </dl>
+      <dl className="dev-metrics">
+        <div>
+          <dt>New input</dt>
+          <dd title={formatNumber(sessionTokenTotals.input)}>
+            {formatCompactNumber(sessionTokenTotals.input)}
+          </dd>
+        </div>
+        <div>
+          <dt>Cache read</dt>
+          <dd title={formatNumber(sessionTokenTotals.cacheRead)}>
+            {formatCompactNumber(sessionTokenTotals.cacheRead)}
+          </dd>
+        </div>
+        <div>
+          <dt>Cache write</dt>
+          <dd title={formatNumber(sessionTokenTotals.cacheWrite)}>
+            {formatCompactNumber(sessionTokenTotals.cacheWrite)}
+          </dd>
+        </div>
+        <div>
+          <dt>Output</dt>
+          <dd title={formatNumber(sessionTokenTotals.output)}>
+            {formatCompactNumber(sessionTokenTotals.output)}
+          </dd>
+        </div>
+      </dl>
 
-          {sessionLocation && (
-            <section
-              className="dev-session-location"
-              aria-label="Chat location"
-            >
-              <div>
-                <span>Chat JSONL</span>
-                <code title={sessionLocation.sessionFile}>
-                  {sessionLocation.sessionFile}
-                </code>
-              </div>
-              <button type="button" onClick={() => void copySessionFile()}>
-                {copiedSessionFile ? "Copied" : "Copy"}
-              </button>
-            </section>
-          )}
-
-          <div className="dev-controls">
-            <AgentSelect
-              threads={agentThreads}
-              selectedAgentId={selectedAgentId}
-              events={events}
-              onAgentSelected={setSelectedAgentId}
-            />
-            <label className="dev-field">
-              <span>Search</span>
-              <input
-                type="search"
-                value={searchQuery}
-                placeholder="Filter events"
-                onChange={(event) => setSearchQuery(event.currentTarget.value)}
-              />
-            </label>
+      {sessionLocation && (
+        <section className="dev-session-location" aria-label="Chat location">
+          <div>
+            <span>Chat JSONL</span>
+            <code title={sessionLocation.sessionFile}>
+              {sessionLocation.sessionFile}
+            </code>
           </div>
-
-          <div className="dev-tabs" role="tablist" aria-label="Dev panels">
-            {PANEL_OPTIONS.map((panel) => (
-              <button
-                key={panel.value}
-                type="button"
-                role="tab"
-                aria-selected={activePanel === panel.value}
-                className={`dev-tab${activePanel === panel.value ? " dev-tab-active" : ""}`}
-                onClick={() => setActivePanel(panel.value)}
-              >
-                {panel.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="dev-layer-body">
-            {activePanel === "timeline" && (
-              <ol className="dev-timeline">
-                {latestEvents.length === 0 ? (
-                  <li className="dev-empty">
-                    {hasSearch
-                      ? "No matching dev events."
-                      : "No dev events yet."}
-                  </li>
-                ) : (
-                  latestEvents.map((event) => (
-                    <DevEventRow key={event.id} event={event} />
-                  ))
-                )}
-              </ol>
-            )}
-
-            {activePanel === "tools" && (
-              <ol className="dev-timeline">
-                {latestToolEvents.length === 0 ? (
-                  <li className="dev-empty">
-                    {hasSearch
-                      ? "No matching tool calls."
-                      : "No tool calls yet."}
-                  </li>
-                ) : (
-                  latestToolEvents.map((event) => (
-                    <DevEventRow key={event.id} event={event} />
-                  ))
-                )}
-              </ol>
-            )}
-
-            {activePanel === "messages" && (
-              <ol className="dev-messages">
-                {filteredMessages.length === 0 ? (
-                  <li className="dev-empty">
-                    {hasSearch
-                      ? "No matching chat messages."
-                      : "No chat messages yet."}
-                  </li>
-                ) : (
-                  filteredMessages.map((message) => (
-                    <li
-                      key={message.id}
-                      className={`dev-message dev-message-${message.role}`}
-                    >
-                      <span>{message.role}</span>
-                      <p>{message.text || (message.done ? "" : "...")}</p>
-                    </li>
-                  ))
-                )}
-              </ol>
-            )}
-
-            {activePanel === "raw" && (
-              <ol className="dev-raw-list">
-                {latestEvents.length === 0 ? (
-                  <li className="dev-empty">
-                    {hasSearch
-                      ? "No matching raw events."
-                      : "No raw events yet."}
-                  </li>
-                ) : (
-                  latestEvents.map((event) => (
-                    <li key={event.id}>
-                      <time dateTime={event.receivedAt}>
-                        {formatTime(event.receivedAt)}
-                      </time>
-                      <pre>{formatRawJson(event.payload)}</pre>
-                    </li>
-                  ))
-                )}
-              </ol>
-            )}
-          </div>
+          <button type="button" onClick={() => void copySessionFile()}>
+            {copiedSessionFile ? "Copied" : "Copy"}
+          </button>
         </section>
       )}
-    </>
+
+      <div className="dev-controls">
+        <AgentSelect
+          threads={agentThreads}
+          selectedAgentId={selectedAgentId}
+          events={events}
+          onAgentSelected={setSelectedAgentId}
+        />
+        <label className="dev-field">
+          <span>Search</span>
+          <input
+            type="search"
+            value={searchQuery}
+            placeholder="Filter events"
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
+          />
+        </label>
+      </div>
+
+      <div className="dev-tabs" role="tablist" aria-label="Dev panels">
+        {PANEL_OPTIONS.map((panel) => (
+          <button
+            key={panel.value}
+            type="button"
+            role="tab"
+            aria-selected={activePanel === panel.value}
+            className={`dev-tab${activePanel === panel.value ? " dev-tab-active" : ""}`}
+            onClick={() => setActivePanel(panel.value)}
+          >
+            {panel.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="dev-layer-body">
+        {activePanel === "timeline" && (
+          <ol className="dev-timeline">
+            {latestEvents.length === 0 ? (
+              <li className="dev-empty">
+                {hasSearch ? "No matching dev events." : "No dev events yet."}
+              </li>
+            ) : (
+              latestEvents.map((event) => (
+                <DevEventRow key={event.id} event={event} />
+              ))
+            )}
+          </ol>
+        )}
+
+        {activePanel === "tools" && (
+          <ol className="dev-timeline">
+            {latestToolEvents.length === 0 ? (
+              <li className="dev-empty">
+                {hasSearch ? "No matching tool calls." : "No tool calls yet."}
+              </li>
+            ) : (
+              latestToolEvents.map((event) => (
+                <DevEventRow key={event.id} event={event} />
+              ))
+            )}
+          </ol>
+        )}
+
+        {activePanel === "messages" && (
+          <ol className="dev-messages">
+            {filteredMessages.length === 0 ? (
+              <li className="dev-empty">
+                {hasSearch
+                  ? "No matching chat messages."
+                  : "No chat messages yet."}
+              </li>
+            ) : (
+              filteredMessages.map((message) => (
+                <li
+                  key={message.id}
+                  className={`dev-message dev-message-${message.role}`}
+                >
+                  <span>{message.role}</span>
+                  <p>{message.text || (message.done ? "" : "...")}</p>
+                </li>
+              ))
+            )}
+          </ol>
+        )}
+
+        {activePanel === "raw" && (
+          <ol className="dev-raw-list">
+            {latestEvents.length === 0 ? (
+              <li className="dev-empty">
+                {hasSearch ? "No matching raw events." : "No raw events yet."}
+              </li>
+            ) : (
+              latestEvents.map((event) => (
+                <li key={event.id}>
+                  <time dateTime={event.receivedAt}>
+                    {formatTime(event.receivedAt)}
+                  </time>
+                  <pre>{formatRawJson(event.payload)}</pre>
+                </li>
+              ))
+            )}
+          </ol>
+        )}
+      </div>
+    </section>
   );
 }

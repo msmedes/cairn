@@ -17,6 +17,7 @@
         "height": 800
       }
     ],
+    "withGlobalTauri": true,
     "security": {
       "csp": null
     }
