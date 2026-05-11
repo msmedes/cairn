@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { bugReportUrl } from "./bugReportUrl";
 import type { ChatMessage } from "./chat-stream";
-import type { SidecarDevLogEntry } from "./useSidecarDevLog";
+import type { JsonValue, SidecarDevLogEntry } from "./useSidecarDevLog";
 
 type BugReportProject = {
   path: string;
@@ -21,6 +21,54 @@ type SubmitState =
   | { status: "idle" }
   | { status: "pending" }
   | { status: "error"; message: string };
+
+function isJsonRecord(value: JsonValue): value is { [key: string]: JsonValue } {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function scrubBugReportMessages(messages: ChatMessage[]) {
+  return messages.map((message) => {
+    if (!message.images) return message;
+
+    return {
+      ...message,
+      images: message.images.map(({ mimeType }) => ({ mimeType })),
+    };
+  });
+}
+
+function scrubBugReportJsonValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) {
+    return value.map(scrubBugReportJsonValue);
+  }
+
+  if (!isJsonRecord(value)) {
+    return value;
+  }
+
+  if (
+    typeof value.mimeType === "string" &&
+    ("dataUrl" in value || "data" in value || value.type === "image")
+  ) {
+    return value.type === "image"
+      ? { type: "image", mimeType: value.mimeType }
+      : { mimeType: value.mimeType };
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      scrubBugReportJsonValue(nestedValue),
+    ]),
+  );
+}
+
+function scrubBugReportDevEvents(devEvents: SidecarDevLogEntry[]) {
+  return devEvents.map((event) => ({
+    ...event,
+    payload: scrubBugReportJsonValue(event.payload),
+  }));
+}
 
 function errorMessage(error: unknown) {
   if (typeof error === "string") return error;
@@ -56,8 +104,8 @@ export function BugReportDialog({
     const now = new Date().toISOString();
     const devEventsJson = JSON.stringify(
       {
-        messages,
-        devEvents,
+        messages: scrubBugReportMessages(messages),
+        devEvents: scrubBugReportDevEvents(devEvents),
       },
       null,
       2,
