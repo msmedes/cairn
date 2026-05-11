@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex as StdMutex, MutexGuard as StdMutexGuard};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
@@ -136,6 +137,7 @@ struct McpSettingsStatus {
 
 const SIDECAR_EVENT: &str = "sidecar-event";
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
+const MENU_EVENT: &str = "menu-event";
 const SIDECAR_BIN_NAME: &str = "cairn-sidecar";
 const MAX_DEV_LOG_EVENTS: usize = 1000;
 const CAIRN_MCP_META_KEY: &str = "_cairn";
@@ -1143,6 +1145,79 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
     Ok(())
 }
 
+fn install_app_menu(app: &AppHandle) -> tauri::Result<()> {
+    let settings_item = MenuItemBuilder::with_id("menu:settings", "Settings…")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)?;
+    let dev_panel_item = MenuItemBuilder::with_id("menu:dev-panel", "Show Dev Panel")
+        .accelerator("CmdOrCtrl+Shift+D")
+        .build(app)?;
+    let report_bug_item = MenuItemBuilder::with_id("menu:report-bug", "Report a Bug…").build(app)?;
+
+    let app_submenu = SubmenuBuilder::new(app, "Cairn")
+        .item(&PredefinedMenuItem::about(app, Some("About Cairn"), None)?)
+        .separator()
+        .item(&settings_item)
+        .separator()
+        .item(&PredefinedMenuItem::hide(app, None)?)
+        .item(&PredefinedMenuItem::hide_others(app, None)?)
+        .item(&PredefinedMenuItem::show_all(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+
+    let edit_submenu = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
+
+    let view_submenu = SubmenuBuilder::new(app, "View")
+        .item(&PredefinedMenuItem::fullscreen(app, None)?)
+        .build()?;
+
+    let window_submenu = SubmenuBuilder::new(app, "Window")
+        .item(&PredefinedMenuItem::minimize(app, None)?)
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .build()?;
+
+    let dev_submenu = SubmenuBuilder::new(app, "Developer")
+        .item(&dev_panel_item)
+        .build()?;
+
+    let help_submenu = SubmenuBuilder::new(app, "Help")
+        .item(&report_bug_item)
+        .build()?;
+
+    let menu = MenuBuilder::new(app)
+        .items(&[
+            &app_submenu,
+            &edit_submenu,
+            &view_submenu,
+            &window_submenu,
+            &dev_submenu,
+            &help_submenu,
+        ])
+        .build()?;
+
+    app.set_menu(menu)?;
+    app.on_menu_event(|app, event| {
+        let payload = match event.id().as_ref() {
+            "menu:settings" => "settings",
+            "menu:report-bug" => "report-bug",
+            "menu:dev-panel" => "dev-panel",
+            _ => return,
+        };
+        let _ = app.emit(MENU_EVENT, payload);
+    });
+
+    Ok(())
+}
+
 fn shutdown_sidecar(state: &SidecarState) {
     let mut guard = lock_state(&state.child);
     if let Some(mut child) = guard.take() {
@@ -1171,9 +1246,14 @@ pub fn run() {
         ..SidecarState::default()
     });
 
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+
+    let app = builder
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
@@ -1202,6 +1282,7 @@ pub fn run() {
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            install_app_menu(&app_handle)?;
             let state = sidecar_state.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(err) = spawn_sidecar(app_handle.clone(), state.clone()).await {

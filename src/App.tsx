@@ -1,10 +1,12 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import "./App.css";
@@ -73,6 +75,8 @@ function App() {
   const [appVersion, setAppVersion] = useState("unknown");
   const [bugReportSnapshot, setBugReportSnapshot] =
     useState<BugReportSnapshot | null>(null);
+  const [devPanelOpen, setDevPanelOpen] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const projectBriefJson = useProjectFile("brief.json");
   const projectPlanJson = useProjectFile("plan.json");
   const projectTasksJson = useProjectFile("tasks.json");
@@ -165,7 +169,7 @@ function App() {
         if (cancelled) return;
         setSettingsStatus(status);
         if (!status.hasAnthropicApiKey) {
-          setActiveTab("settings");
+          setSettingsPanelOpen(true);
         }
       })
       .catch((err) => {
@@ -175,7 +179,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [setActiveTab]);
+  }, []);
 
   const activeProjectPath = activeProject?.path ?? null;
 
@@ -235,7 +239,6 @@ function App() {
       });
       setSettingsStatus(next);
       setApiKeyInput("");
-      setSettingsMessage("API key saved.");
     } catch (err) {
       console.error("set_anthropic_api_key failed", err);
       setSettingsMessage("Could not save API key.");
@@ -288,20 +291,75 @@ function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const statusLabel = error ? "error" : ready ? "ready" : "starting…";
-  const statusClass = error ? "err" : ready ? "ok" : "wait";
+  const bugReportInputsRef = useRef({ messages, devEvents, activeProject });
+  useEffect(() => {
+    bugReportInputsRef.current = { messages, devEvents, activeProject };
+  }, [messages, devEvents, activeProject]);
+
+  useEffect(() => {
+    if (!hasTauriRuntime()) return;
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+    listen<string>("menu-event", (event) => {
+      switch (event.payload) {
+        case "settings":
+          setDevPanelOpen(false);
+          setSettingsPanelOpen(true);
+          setSettingsMessage(null);
+          setMcpMessage(null);
+          break;
+        case "report-bug":
+          setDevPanelOpen(false);
+          setSettingsPanelOpen(false);
+          setBugReportSnapshot({ ...bugReportInputsRef.current });
+          break;
+        case "dev-panel":
+          setSettingsPanelOpen(false);
+          setDevPanelOpen(true);
+          break;
+      }
+    })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          cleanup = unlisten;
+        }
+      })
+      .catch((err) => {
+        console.error("menu-event listen failed", err);
+      });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
+  const statusDot = (() => {
+    if (error) {
+      return { tone: "err", tooltip: error } as const;
+    }
+    if (!ready) {
+      return { tone: "wait", tooltip: "Starting…" } as const;
+    }
+    if (settingsStatus && !settingsStatus.hasAnthropicApiKey) {
+      return {
+        tone: "attention",
+        tooltip: "API key missing — click for Settings",
+      } as const;
+    }
+    return { tone: "ok", tooltip: "Ready" } as const;
+  })();
   const panelTabs: PanelTab[] = [
     { key: "project", label: "Project", available: true },
     { key: "plan", label: "Plan", available: true },
     ...(hasTasksArtifact
       ? [{ key: "tasks", label: "Tasks", available: true }]
       : []),
-    { key: "settings", label: "Settings", available: true },
   ];
   const showBriefArtifact = activeTab === "project" && projectBriefArtifact;
   const showPlanArtifact = activeTab === "plan" && projectPlanArtifact;
   const showTasksArtifact = activeTab === "tasks" && projectTasksArtifact;
-  const showSettings = activeTab === "settings";
   const showPlanEmptyState = activeTab === "plan" && !projectPlanArtifact;
   const placeholderCreating =
     showBriefArtifact || showPlanArtifact || showTasksArtifact
@@ -325,46 +383,18 @@ function App() {
         <header className="chat-header">
           <div className="brand">
             <h1>Cairn</h1>
-          </div>
-          <div className="header-actions">
-            {settingsStatus && !settingsStatus.hasAnthropicApiKey && (
-              <span className="key-warning">API key missing</span>
-            )}
             <button
               type="button"
-              className="settings-button"
+              className={`status-dot status-dot-${statusDot.tone}`}
+              title={statusDot.tooltip}
+              aria-label={`Status: ${statusDot.tooltip}`}
               onClick={() => {
-                setActiveTab("settings");
+                setDevPanelOpen(false);
+                setSettingsPanelOpen(true);
                 setSettingsMessage(null);
                 setMcpMessage(null);
               }}
-            >
-              Settings
-            </button>
-            <button
-              type="button"
-              className="bug-report-button"
-              onClick={() =>
-                setBugReportSnapshot({
-                  messages,
-                  devEvents,
-                  activeProject,
-                })
-              }
-            >
-              Report a bug
-            </button>
-            <DevModeLayer
-              messages={messages}
-              events={devEvents}
-              onEventsCleared={clearDevEvents}
             />
-            <span
-              className={`status ${statusClass}`}
-              title={error ?? undefined}
-            >
-              {statusLabel}
-            </span>
           </div>
         </header>
 
@@ -518,34 +548,12 @@ function App() {
           activeKey={activeTab}
           onSelect={(key) =>
             setActiveTab(
-              key === "settings"
-                ? "settings"
-                : key === "tasks"
-                  ? "tasks"
-                  : key === "plan"
-                    ? "plan"
-                    : "project",
+              key === "tasks" ? "tasks" : key === "plan" ? "plan" : "project",
             )
           }
         />
         <div className="panel-body">
-          {showSettings ? (
-            <SettingsPanel
-              settingsStatus={settingsStatus}
-              apiKeyInput={apiKeyInput}
-              settingsMessage={settingsMessage}
-              savingApiKey={savingApiKey}
-              mcpStatus={mcpStatus}
-              mcpMessage={mcpMessage}
-              updatingMcpServer={updatingMcpServer}
-              onApiKeyInputChanged={setApiKeyInput}
-              onApiKeySaved={() => void saveApiKey()}
-              onMcpServerToggled={(server, enabled) =>
-                void setMcpServerEnabled(server, enabled)
-              }
-              onMcpAuthRequested={(server) => void requestMcpAuth(server)}
-            />
-          ) : showBriefArtifact ? (
+          {showBriefArtifact ? (
             <div
               className={`brief-artifact-shell${creating ? " brief-artifact-shell-creating" : ""}`}
             >
@@ -628,6 +636,30 @@ function App() {
           )}
         </div>
       </aside>
+      <DevModeLayer
+        isOpen={devPanelOpen}
+        onClose={() => setDevPanelOpen(false)}
+        messages={messages}
+        events={devEvents}
+        onEventsCleared={clearDevEvents}
+      />
+      <SettingsPanel
+        isOpen={settingsPanelOpen}
+        onClose={() => setSettingsPanelOpen(false)}
+        settingsStatus={settingsStatus}
+        apiKeyInput={apiKeyInput}
+        settingsMessage={settingsMessage}
+        savingApiKey={savingApiKey}
+        mcpStatus={mcpStatus}
+        mcpMessage={mcpMessage}
+        updatingMcpServer={updatingMcpServer}
+        onApiKeyInputChanged={setApiKeyInput}
+        onApiKeySaved={() => void saveApiKey()}
+        onMcpServerToggled={(server, enabled) =>
+          void setMcpServerEnabled(server, enabled)
+        }
+        onMcpAuthRequested={(server) => void requestMcpAuth(server)}
+      />
       {bugReportSnapshot && (
         <BugReportDialog
           messages={bugReportSnapshot.messages}

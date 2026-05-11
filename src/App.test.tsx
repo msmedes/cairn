@@ -1,4 +1,11 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import App from "./App";
 import type { CreatingTarget } from "./useCreatingIndicator";
@@ -15,6 +22,9 @@ const invokeMock = vi.hoisted(() => vi.fn());
 const getVersionMock = vi.hoisted(() => vi.fn());
 const sendPromptMock = vi.hoisted(() => vi.fn());
 const authenticateMcpServerMock = vi.hoisted(() => vi.fn());
+const menuEventHandlers = vi.hoisted(
+  () => [] as Array<(event: { payload: string }) => void>,
+);
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMock,
@@ -23,6 +33,42 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: getVersionMock,
 }));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (
+    eventName: string,
+    handler: (event: { payload: string }) => void,
+  ) => {
+    if (eventName === "menu-event") {
+      menuEventHandlers.push(handler);
+    }
+    return () => {
+      const idx = menuEventHandlers.indexOf(handler);
+      if (idx >= 0) menuEventHandlers.splice(idx, 1);
+    };
+  },
+}));
+
+function fireMenuEvent(payload: string) {
+  for (const handler of menuEventHandlers.slice()) {
+    handler({ payload });
+  }
+}
+
+function bootstrapTauriRuntime() {
+  (
+    window as typeof window & { __TAURI_INTERNALS__?: unknown }
+  ).__TAURI_INTERNALS__ = {};
+  invokeMock.mockImplementation(() => Promise.resolve(null));
+  getVersionMock.mockResolvedValue("test");
+}
+
+async function openDevPanelViaMenu() {
+  await act(async () => {});
+  act(() => {
+    fireMenuEvent("dev-panel");
+  });
+}
 
 vi.mock("./useProjectFile", () => ({
   useProjectFile: vi.fn(),
@@ -97,6 +143,7 @@ describe("App panel tabs", () => {
     getVersionMock.mockReset();
     delete (window as typeof window & { __TAURI_INTERNALS__?: unknown })
       .__TAURI_INTERNALS__;
+    menuEventHandlers.length = 0;
     devLogMock.events = [];
     mockUseProjectFile.mockImplementation((name) => {
       switch (name) {
@@ -467,13 +514,16 @@ describe("App panel tabs", () => {
     expect(mockUseProjectFile).not.toHaveBeenCalledWith("CONTEXT.md");
   });
 
-  test("Settings tab moves API key and MCP controls into the project panel", () => {
+  test("Settings overlay surfaces API key and MCP controls", async () => {
+    bootstrapTauriRuntime();
     render(<App />);
-
-    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
 
     expect(
-      screen.getByRole("heading", { name: "Connections" }),
+      screen.getByRole("dialog", { name: "Settings" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Anthropic" }),
@@ -484,6 +534,36 @@ describe("App panel tabs", () => {
     expect(
       screen.queryByRole("button", { name: "API key" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("Settings overlay behaves like a modal dialog", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+    await act(async () => {});
+
+    const statusButton = screen.getByRole("button", { name: /Status:/ });
+    statusButton.focus();
+    expect(statusButton).toHaveFocus();
+
+    act(() => {
+      fireMenuEvent("settings");
+    });
+
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Close" })).toHaveFocus(),
+    );
+    expect(screen.getByText("Cairn").closest("section")).toHaveAttribute(
+      "inert",
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(
+      screen.queryByRole("dialog", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(statusButton).toHaveFocus();
   });
 
   test("Settings tab saves API keys and toggles built-in MCP servers", async () => {
@@ -526,7 +606,7 @@ describe("App panel tabs", () => {
     render(<App />);
 
     expect(
-      await screen.findByRole("heading", { name: "Connections" }),
+      await screen.findByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("API key"), {
@@ -536,7 +616,9 @@ describe("App panel tabs", () => {
     expect(invokeMock).toHaveBeenCalledWith("set_anthropic_api_key", {
       apiKey: "sk-ant-test",
     });
-    expect(await screen.findAllByText("API key saved.")).toHaveLength(2);
+    expect(
+      await screen.findByRole("button", { name: "Replace" }),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     expect(invokeMock).toHaveBeenCalledWith("set_mcp_server_enabled", {
@@ -548,6 +630,34 @@ describe("App panel tabs", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Authenticate" })[0]);
     expect(authenticateMcpServerMock).toHaveBeenCalledWith("notion");
     expect(sendPromptMock).not.toHaveBeenCalledWith("/mcp-auth notion");
+  });
+
+  test("clearing a replacement API key draft keeps the replace form open", async () => {
+    bootstrapTauriRuntime();
+    invokeMock.mockImplementation((command: string) => {
+      switch (command) {
+        case "get_cairn_settings":
+          return Promise.resolve({ hasAnthropicApiKey: true });
+        case "get_mcp_settings":
+          return Promise.resolve(null);
+        default:
+          return Promise.resolve(null);
+      }
+    });
+
+    render(<App />);
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Replace" }));
+    const input = screen.getByLabelText("API key");
+    fireEvent.change(input, { target: { value: "sk-ant-draft" } });
+    fireEvent.change(input, { target: { value: "" } });
+
+    expect(screen.getByLabelText("API key")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
   test("Settings tab does not let Cairn remove externally configured MCP servers", async () => {
@@ -575,7 +685,10 @@ describe("App panel tabs", () => {
     getVersionMock.mockResolvedValue("0.1.0");
 
     render(<App />);
-    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await act(async () => {});
+    act(() => {
+      fireMenuEvent("settings");
+    });
 
     expect(await screen.findByText("External")).toBeInTheDocument();
     expect(screen.getByText(/configured in project MCP/)).toBeInTheDocument();
@@ -617,7 +730,7 @@ describe("App panel tabs", () => {
     expect(openProjectDialogMock).toHaveBeenCalledTimes(1);
   });
 
-  test("opens a dev mode layer with visible chat messages and event counts", () => {
+  test("opens a dev mode layer with visible chat messages and event counts", async () => {
     devLogMock.events = [
       {
         id: "session-location",
@@ -646,12 +759,13 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
+    await openDevPanelViaMenu();
 
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
-
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
     expect(devLayer).toBeInTheDocument();
+    expect(devLayer).toHaveAttribute("aria-modal", "true");
     expect(screen.getByText("Session Debug")).toBeInTheDocument();
     expect(screen.getByText("Chat JSONL")).toBeInTheDocument();
     expect(
@@ -668,6 +782,10 @@ describe("App panel tabs", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
     expect(within(devLayer).getByText("session_location")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Session Debug" }),
+    ).not.toBeInTheDocument();
   });
 
   test("does not render completed assistant turns with no text", () => {
@@ -706,7 +824,7 @@ describe("App panel tabs", () => {
     expect(container.querySelectorAll(".msg-assistant")).toHaveLength(2);
   });
 
-  test("filters dev events by agent thread", () => {
+  test("filters dev events by agent thread", async () => {
     const childAgentId = "subagent:/tmp/session.jsonl";
     devLogMock.events = [
       {
@@ -781,9 +899,10 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    await openDevPanelViaMenu();
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
 
     expect(
       within(devLayer).getByRole("combobox", { name: "Agent" }),
@@ -824,7 +943,7 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("searches dev tool events by tool name and subagent prompt details", () => {
+  test("searches dev tool events by tool name and subagent prompt details", async () => {
     devLogMock.events = [
       {
         id: "spawn-subagent",
@@ -882,9 +1001,10 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    await openDevPanelViaMenu();
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
 
     fireEvent.change(
@@ -913,7 +1033,7 @@ describe("App panel tabs", () => {
     ).toBeInTheDocument();
   });
 
-  test("shows tool-only dev events with expandable subagent prompt details", () => {
+  test("shows tool-only dev events with expandable subagent prompt details", async () => {
     devLogMock.events = [
       {
         id: "spawn-subagent",
@@ -975,9 +1095,10 @@ describe("App panel tabs", () => {
       },
     ];
 
+    bootstrapTauriRuntime();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Dev" }));
-    const devLayer = screen.getByRole("region", { name: "Developer mode" });
+    await openDevPanelViaMenu();
+    const devLayer = screen.getByRole("dialog", { name: "Session Debug" });
 
     fireEvent.click(within(devLayer).getByRole("tab", { name: "Tools" }));
 
