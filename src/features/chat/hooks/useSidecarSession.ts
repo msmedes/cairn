@@ -1,3 +1,12 @@
+import type {
+  ActiveProjectInfo as ActiveProject,
+  CreatingTarget,
+  McpAuthStatusEvent,
+  PendingQuestion,
+  QuestionAnswer,
+  RecentProjectInfo as RecentProject,
+  SidecarOutMsg,
+} from "@cairn/protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
@@ -8,18 +17,14 @@ import {
   markAssistantDone,
 } from "../chat-stream";
 
-export type ActiveProject = {
-  id: string;
-  name: string;
-  path: string;
-  displayName: string;
-};
-
-export type RecentProject = {
-  path: string;
-  displayName: string;
-  lastOpenedAt: string;
-};
+export type {
+  ActiveProjectInfo as ActiveProject,
+  McpAuthStatusEvent,
+  PendingQuestion,
+  QuestionAnswer,
+  RecentProjectInfo as RecentProject,
+  SidecarQuestionOption as QuestionOption,
+} from "@cairn/protocol";
 
 export type PromptImage = {
   data: string;
@@ -27,74 +32,7 @@ export type PromptImage = {
   dataUrl: string;
 };
 
-export type QuestionOption = {
-  label: string;
-  description: string;
-};
-
-export type PendingQuestion = {
-  toolCallId: string;
-  questions: Array<{
-    header: string;
-    question: string;
-    multiSelect?: boolean;
-    options: QuestionOption[];
-  }>;
-};
-
-export type QuestionAnswer =
-  | {
-      questionIndex: number;
-      header: string;
-      question: string;
-      kind: "option";
-      option: QuestionOption;
-    }
-  | {
-      questionIndex: number;
-      header: string;
-      question: string;
-      kind: "custom";
-      answer: string;
-    }
-  | {
-      questionIndex: number;
-      header: string;
-      question: string;
-      kind: "multi";
-      selected: string[];
-    };
-
-type SidecarEvent =
-  | { type: "hydrate"; messages: ChatMessage[] }
-  | { type: "active_project"; project: ActiveProject }
-  | { type: "ready" }
-  | { type: "recents"; entries: RecentProject[] }
-  | { type: "text_delta"; delta: string }
-  | { type: "text_done" }
-  | {
-      type: "ask_user_question";
-      toolCallId: string;
-      questions: PendingQuestion["questions"];
-    }
-  | {
-      type: "creating_started";
-      target: "brief" | "prd" | "issues" | "plan" | "tasks";
-      message: string;
-    }
-  | {
-      type: "mcp_auth_status";
-      server: string;
-      status: "started" | "authenticated" | "failed";
-      message: string;
-    }
-  | { type: "agent_end" }
-  | { type: "error"; message: string; recoverable?: boolean };
-
-export type McpAuthStatusEvent = Extract<
-  SidecarEvent,
-  { type: "mcp_auth_status" }
->;
+type SidecarEvent = SidecarOutMsg;
 
 type SidecarStatusSnapshot = {
   ready: boolean;
@@ -112,10 +50,7 @@ type SessionStatus =
   | { type: "error"; message: string };
 
 type SidecarSessionHandlers = {
-  onCreatingStarted: (
-    target: "brief" | "prd" | "issues" | "plan" | "tasks",
-    message: string,
-  ) => void;
+  onCreatingStarted: (target: CreatingTarget, message: string) => void;
   onAgentEnd: () => void;
   onHydrate: () => void;
   onError: () => void;

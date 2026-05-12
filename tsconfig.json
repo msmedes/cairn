@@ -18,8 +18,13 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    "baseUrl": ".",
+    "paths": {
+      "@cairn/protocol": ["./sidecar/protocol/messages"]
+    }
   },
-  "include": ["src"],
+  "include": ["src", "sidecar/protocol/messages.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

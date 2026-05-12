@@ -40,16 +40,19 @@ import {
   RecentsRegistry,
 } from "./project/recents-registry";
 import {
-  type HydrateEvent,
-  translateSessionEntriesToHydrateEvent,
-} from "./protocol/hydrate";
+  applyAssistantTextStreamEvent,
+  createAssistantTextStreamState,
+  resetAssistantTextStream,
+} from "./protocol/assistant-text-stream";
+import { translateSessionEntriesToHydrateEvent } from "./protocol/hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
-import { askUserQuestionPendingRegistry } from "./questions/ask-user-question-pending";
 import type {
-  AskUserQuestionAnswer,
-  AskUserQuestionBundle,
-  AskUserQuestionResult,
-} from "./questions/ask-user-question-schema";
+  SidecarInMsg,
+  SidecarOutMsg,
+  WirePromptImage,
+} from "./protocol/messages";
+import { askUserQuestionPendingRegistry } from "./questions/ask-user-question-pending";
+import type { AskUserQuestionResult } from "./questions/ask-user-question-schema";
 import { recoverDanglingToolCallInDir } from "./recovery/dangling-tool-recovery";
 import {
   type AgentThread,
@@ -64,60 +67,8 @@ import {
 import { createCairnTools } from "./tools/cairn-tools";
 import { disambiguate, slugify, withDatePrefix } from "./utils/slug";
 
-type InMsg =
-  | {
-      type: "init";
-      personaPath?: string;
-      skillsPath?: string;
-      skipAutoOpen?: boolean;
-    }
-  | { type: "prompt"; text: string; images?: WirePromptImage[] }
-  | {
-      type: "answer_question";
-      toolCallId: string;
-      cancelled: boolean;
-      answers: AskUserQuestionAnswer[];
-    }
-  | { type: "new_project" }
-  | { type: "open_project"; path: string; locateProjectRoot?: boolean }
-  | { type: "list_recents" }
-  | { type: "reload_mcp_config" }
-  | { type: "authenticate_mcp_server"; server: string }
-  | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
-
-type OutMsg =
-  | HydrateEvent
-  | {
-      type: "active_project";
-      project: Pick<Project, "id" | "name" | "path" | "displayName">;
-    }
-  | { type: "ready" }
-  | { type: "recents"; entries: RecentProjectEntry[] }
-  | { type: "text_delta"; delta: string }
-  | { type: "text_done" }
-  | {
-      type: "ask_user_question";
-      toolCallId: string;
-      questions: AskUserQuestionBundle;
-    }
-  | {
-      type: "creating_started";
-      target: "brief" | "prd" | "issues" | "plan" | "tasks";
-      message: string;
-    }
-  | {
-      type: "mcp_auth_status";
-      server: string;
-      status: "started" | "authenticated" | "failed";
-      message: string;
-    }
-  | { type: "agent_end" }
-  | { type: "error"; message: string; recoverable?: boolean };
-
-type WirePromptImage = {
-  data: string;
-  mimeType: string;
-};
+type InMsg = SidecarInMsg;
+type OutMsg = SidecarOutMsg;
 
 type DevLogMsg =
   | {
@@ -147,7 +98,7 @@ let activePersonaPath: string | null = null;
 let activeSkillsPath: string | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
-let streamedAssistantText = false;
+const assistantTextStreamState = createAssistantTextStreamState();
 let suppressAssistantError = false;
 const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -203,26 +154,6 @@ function createAuthStorageFromRuntimeEnv() {
   return authStorage;
 }
 
-function extractAssistantText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-
-  return content
-    .flatMap((part) => {
-      if (
-        part &&
-        typeof part === "object" &&
-        "type" in part &&
-        part.type === "text" &&
-        "text" in part &&
-        typeof part.text === "string"
-      ) {
-        return [part.text];
-      }
-      return [];
-    })
-    .join("");
-}
-
 function getAssistantErrorMessage(message: unknown): string | null {
   if (!message || typeof message !== "object") return null;
   if (
@@ -241,7 +172,7 @@ function disposeSession() {
   session?.dispose();
   session = null;
   sessionManager = null;
-  streamedAssistantText = false;
+  resetAssistantTextStream(assistantTextStreamState);
   suppressAssistantError = false;
 }
 
@@ -249,22 +180,20 @@ function wireSessionEvents(nextSession: AgentSession) {
   unsubscribeSession = nextSession.subscribe((event: AgentSessionEvent) => {
     emitDevLog({ type: "session_event", event });
     switch (event.type) {
+      case "message_start":
       case "message_update":
-        switch (event.assistantMessageEvent.type) {
-          case "text_delta":
-            streamedAssistantText = true;
-            emit({
-              type: "text_delta",
-              delta: event.assistantMessageEvent.delta,
-            });
-            break;
+        for (const msg of applyAssistantTextStreamEvent(
+          assistantTextStreamState,
+          event,
+        )) {
+          emit(msg);
         }
         break;
       case "message_end":
         if (event.message.role === "assistant") {
           const assistantError = getAssistantErrorMessage(event.message);
           if (assistantError) {
-            streamedAssistantText = false;
+            resetAssistantTextStream(assistantTextStreamState);
             emitDevLog({ type: "assistant_error", message: assistantError });
             if (suppressAssistantError) {
               if (sessionManager) {
@@ -283,17 +212,11 @@ function wireSessionEvents(nextSession: AgentSession) {
             break;
           }
 
-          let emittedAssistantText = streamedAssistantText;
-          if (!streamedAssistantText) {
-            const fullText = extractAssistantText(event.message.content);
-            if (fullText) {
-              emit({ type: "text_delta", delta: fullText });
-              emittedAssistantText = true;
-            }
-          }
-          streamedAssistantText = false;
-          if (emittedAssistantText) {
-            emit({ type: "text_done" });
+          for (const msg of applyAssistantTextStreamEvent(
+            assistantTextStreamState,
+            event,
+          )) {
+            emit(msg);
           }
         }
         break;

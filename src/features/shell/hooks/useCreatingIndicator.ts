@@ -1,6 +1,7 @@
+import type { CreatingTarget } from "@cairn/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type CreatingTarget = "brief" | "prd" | "issues" | "plan" | "tasks";
+export type { CreatingTarget };
 
 export type CreatingIndicator = {
   target: CreatingTarget;
