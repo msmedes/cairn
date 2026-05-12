@@ -39,6 +39,11 @@ import {
   type RecentProjectEntry,
   RecentsRegistry,
 } from "./project/recents-registry";
+import {
+  applyAssistantTextStreamEvent,
+  createAssistantTextStreamState,
+  resetAssistantTextStream,
+} from "./protocol/assistant-text-stream";
 import { translateSessionEntriesToHydrateEvent } from "./protocol/hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
 import type {
@@ -93,7 +98,7 @@ let activePersonaPath: string | null = null;
 let activeSkillsPath: string | null = null;
 let stdinBuffer = "";
 let inputQueue = Promise.resolve();
-let streamedAssistantText = false;
+const assistantTextStreamState = createAssistantTextStreamState();
 let suppressAssistantError = false;
 const startupCwd = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -149,26 +154,6 @@ function createAuthStorageFromRuntimeEnv() {
   return authStorage;
 }
 
-function extractAssistantText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-
-  return content
-    .flatMap((part) => {
-      if (
-        part &&
-        typeof part === "object" &&
-        "type" in part &&
-        part.type === "text" &&
-        "text" in part &&
-        typeof part.text === "string"
-      ) {
-        return [part.text];
-      }
-      return [];
-    })
-    .join("");
-}
-
 function getAssistantErrorMessage(message: unknown): string | null {
   if (!message || typeof message !== "object") return null;
   if (
@@ -187,7 +172,7 @@ function disposeSession() {
   session?.dispose();
   session = null;
   sessionManager = null;
-  streamedAssistantText = false;
+  resetAssistantTextStream(assistantTextStreamState);
   suppressAssistantError = false;
 }
 
@@ -195,22 +180,20 @@ function wireSessionEvents(nextSession: AgentSession) {
   unsubscribeSession = nextSession.subscribe((event: AgentSessionEvent) => {
     emitDevLog({ type: "session_event", event });
     switch (event.type) {
+      case "message_start":
       case "message_update":
-        switch (event.assistantMessageEvent.type) {
-          case "text_delta":
-            streamedAssistantText = true;
-            emit({
-              type: "text_delta",
-              delta: event.assistantMessageEvent.delta,
-            });
-            break;
+        for (const msg of applyAssistantTextStreamEvent(
+          assistantTextStreamState,
+          event,
+        )) {
+          emit(msg);
         }
         break;
       case "message_end":
         if (event.message.role === "assistant") {
           const assistantError = getAssistantErrorMessage(event.message);
           if (assistantError) {
-            streamedAssistantText = false;
+            resetAssistantTextStream(assistantTextStreamState);
             emitDevLog({ type: "assistant_error", message: assistantError });
             if (suppressAssistantError) {
               if (sessionManager) {
@@ -229,17 +212,11 @@ function wireSessionEvents(nextSession: AgentSession) {
             break;
           }
 
-          let emittedAssistantText = streamedAssistantText;
-          if (!streamedAssistantText) {
-            const fullText = extractAssistantText(event.message.content);
-            if (fullText) {
-              emit({ type: "text_delta", delta: fullText });
-              emittedAssistantText = true;
-            }
-          }
-          streamedAssistantText = false;
-          if (emittedAssistantText) {
-            emit({ type: "text_done" });
+          for (const msg of applyAssistantTextStreamEvent(
+            assistantTextStreamState,
+            event,
+          )) {
+            emit(msg);
           }
         }
         break;
