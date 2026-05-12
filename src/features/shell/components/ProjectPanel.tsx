@@ -1,4 +1,3 @@
-import { type PanelTab, PanelTabs } from "../../../components/PanelTabs";
 import { cx } from "../../../lib/cx";
 import type { BriefArtifactEnvelope } from "../../artifacts/briefArtifact";
 import { BriefArtifactView } from "../../artifacts/components/BriefArtifactView";
@@ -10,12 +9,19 @@ import type {
   CreatingIndicator,
   CreatingTarget,
 } from "../hooks/useCreatingIndicator";
+import { PanelTabs } from "./internal/PanelTabs";
 
 type ProjectPanelTab = "project" | "plan" | "tasks";
 
+export type ProjectPanelTabItem = {
+  key: ProjectPanelTab;
+  label: string;
+  available: boolean;
+};
+
 type ProjectPanelProps = {
   activeTab: ProjectPanelTab;
-  tabs: PanelTab[];
+  tabs: ProjectPanelTabItem[];
   creating: CreatingIndicator | null;
   briefArtifact: BriefArtifactEnvelope | null;
   planArtifact: PlanArtifactEnvelope | null;

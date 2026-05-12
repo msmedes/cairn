@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import "./App.css";
-import type { PanelTab } from "../components/PanelTabs";
 import {
   type BriefArtifactEnvelope,
   parseBriefArtifact,
@@ -25,6 +24,8 @@ import {
 import { BugReportDialog } from "../features/bug-report/components/BugReportDialog";
 import type { ChatMessage } from "../features/chat/chat-stream";
 import { ChatPane } from "../features/chat/components/ChatPane";
+import { Composer } from "../features/chat/components/Composer";
+import { MessageList } from "../features/chat/components/MessageList";
 import {
   type ActiveProject,
   type McpAuthStatusEvent,
@@ -40,7 +41,10 @@ import { useProjectFile } from "../features/project/hooks/useProjectFile";
 import { SettingsPanel } from "../features/settings/components/SettingsPanel";
 import { useSettingsBridge } from "../features/settings/hooks/useSettingsBridge";
 import { PaneDivider } from "../features/shell/components/PaneDivider";
-import { ProjectPanel } from "../features/shell/components/ProjectPanel";
+import {
+  ProjectPanel,
+  type ProjectPanelTabItem,
+} from "../features/shell/components/ProjectPanel";
 import { useActivePanelTab } from "../features/shell/hooks/useActivePanelTab";
 import { useCreatingIndicator } from "../features/shell/hooks/useCreatingIndicator";
 import { usePaneSplit } from "../features/shell/hooks/usePaneSplit";
@@ -227,13 +231,13 @@ function App() {
     }
     return { tone: "ok", tooltip: "Ready" } as const;
   })();
-  const panelTabs: PanelTab[] = [
+  const panelTabs: ProjectPanelTabItem[] = [
     { key: "project", label: "Project", available: true },
     { key: "plan", label: "Plan", available: true },
-    ...(hasTasksArtifact
-      ? [{ key: "tasks", label: "Tasks", available: true }]
-      : []),
   ];
+  if (hasTasksArtifact) {
+    panelTabs.push({ key: "tasks", label: "Tasks", available: true });
+  }
   const appStyle: CSSProperties = {
     ["--chat-pane" as string]: `${chatPanePercent}%`,
     ["--project-pane" as string]: `${100 - chatPanePercent}%`,
@@ -254,20 +258,23 @@ function App() {
       className={cx(appClass, isResizing && "app-resizing")}
       style={appStyle}
     >
-      <ChatPane
-        messages={messages}
-        recents={recents}
-        projectOpenError={projectOpenError}
-        ready={ready}
-        sending={sending}
-        recapInteracted={recapInteracted}
-        status={statusDot}
-        onProjectOpened={(path) => void openProject(path)}
-        onProjectDialogOpened={() => void openProjectDialog()}
-        onPromptSubmitted={submitPrompt}
-        onRecapInteracted={() => setRecapInteracted(true)}
-        onStatusClicked={openSettingsPanel}
-      />
+      <ChatPane status={statusDot} onStatusClicked={openSettingsPanel}>
+        <MessageList
+          messages={messages}
+          recents={recents}
+          projectOpenError={projectOpenError}
+          isReady={ready}
+          hasRecapInteracted={recapInteracted}
+          onProjectOpened={(path) => void openProject(path)}
+          onProjectDialogOpened={() => void openProjectDialog()}
+        />
+        <Composer
+          isReady={ready}
+          isSending={sending}
+          onPromptSubmitted={submitPrompt}
+          onRecapInteracted={() => setRecapInteracted(true)}
+        />
+      </ChatPane>
       <PaneDivider
         chatPanePercent={chatPanePercent}
         isResizing={isResizing}
