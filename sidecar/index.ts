@@ -39,17 +39,15 @@ import {
   type RecentProjectEntry,
   RecentsRegistry,
 } from "./project/recents-registry";
-import {
-  type HydrateEvent,
-  translateSessionEntriesToHydrateEvent,
-} from "./protocol/hydrate";
+import { translateSessionEntriesToHydrateEvent } from "./protocol/hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
-import { askUserQuestionPendingRegistry } from "./questions/ask-user-question-pending";
 import type {
-  AskUserQuestionAnswer,
-  AskUserQuestionBundle,
-  AskUserQuestionResult,
-} from "./questions/ask-user-question-schema";
+  SidecarInMsg,
+  SidecarOutMsg,
+  WirePromptImage,
+} from "./protocol/messages";
+import { askUserQuestionPendingRegistry } from "./questions/ask-user-question-pending";
+import type { AskUserQuestionResult } from "./questions/ask-user-question-schema";
 import { recoverDanglingToolCallInDir } from "./recovery/dangling-tool-recovery";
 import {
   type AgentThread,
@@ -64,60 +62,8 @@ import {
 import { createCairnTools } from "./tools/cairn-tools";
 import { disambiguate, slugify, withDatePrefix } from "./utils/slug";
 
-type InMsg =
-  | {
-      type: "init";
-      personaPath?: string;
-      skillsPath?: string;
-      skipAutoOpen?: boolean;
-    }
-  | { type: "prompt"; text: string; images?: WirePromptImage[] }
-  | {
-      type: "answer_question";
-      toolCallId: string;
-      cancelled: boolean;
-      answers: AskUserQuestionAnswer[];
-    }
-  | { type: "new_project" }
-  | { type: "open_project"; path: string; locateProjectRoot?: boolean }
-  | { type: "list_recents" }
-  | { type: "reload_mcp_config" }
-  | { type: "authenticate_mcp_server"; server: string }
-  | { type: "set_api_key"; provider: "anthropic"; apiKey: string };
-
-type OutMsg =
-  | HydrateEvent
-  | {
-      type: "active_project";
-      project: Pick<Project, "id" | "name" | "path" | "displayName">;
-    }
-  | { type: "ready" }
-  | { type: "recents"; entries: RecentProjectEntry[] }
-  | { type: "text_delta"; delta: string }
-  | { type: "text_done" }
-  | {
-      type: "ask_user_question";
-      toolCallId: string;
-      questions: AskUserQuestionBundle;
-    }
-  | {
-      type: "creating_started";
-      target: "brief" | "prd" | "issues" | "plan" | "tasks";
-      message: string;
-    }
-  | {
-      type: "mcp_auth_status";
-      server: string;
-      status: "started" | "authenticated" | "failed";
-      message: string;
-    }
-  | { type: "agent_end" }
-  | { type: "error"; message: string; recoverable?: boolean };
-
-type WirePromptImage = {
-  data: string;
-  mimeType: string;
-};
+type InMsg = SidecarInMsg;
+type OutMsg = SidecarOutMsg;
 
 type DevLogMsg =
   | {

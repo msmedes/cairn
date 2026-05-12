@@ -1,8 +1,12 @@
 /// <reference types="vitest/config" />
 
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+
+const projectRoot = resolve(fileURLToPath(import.meta.url), "..");
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
@@ -18,6 +22,11 @@ const nonCodeWatchIgnores = [
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@cairn/protocol": resolve(projectRoot, "sidecar/protocol/messages.ts"),
+    },
+  },
   test: {
     environment: "jsdom",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
