@@ -44,6 +44,14 @@ struct SidecarState {
     // Latest hydrate payload so the frontend can recover if it subscribes
     // after the sidecar emits the one-shot startup event.
     last_hydrate: StdMutex<Option<Vec<HydratedMessage>>>,
+    // User prompt accepted by the Rust bridge but not yet confirmed by any
+    // sidecar turn event. Flushed before assistant output so reload snapshots
+    // preserve transcript order without exposing prompts after sidecar errors.
+    pending_user_prompt: StdMutex<Option<PendingUserPrompt>>,
+    // Assistant text streamed since the last completed assistant message.
+    // Folded into last_hydrate on text_done so frontend remounts can recover
+    // the same transcript the live event stream showed.
+    live_assistant_text: StdMutex<String>,
     // Empty on a fresh install until the first prompt creates a project.
     active_project: StdMutex<Option<ActiveProject>>,
     // Latest recents payload so the frontend can recover if it subscribes
@@ -78,6 +86,12 @@ struct HydratedMessage {
 struct HydratedMessageImage {
     data_url: String,
     mime_type: String,
+}
+
+#[derive(Clone, Debug)]
+struct PendingUserPrompt {
+    text: String,
+    images: Vec<ImagePayload>,
 }
 
 #[derive(Serialize)]
@@ -750,11 +764,24 @@ async fn send_prompt(
     images: Option<Vec<ImagePayload>>,
     state: State<'_, Arc<SidecarState>>,
 ) -> Result<(), String> {
-    let payload = match images.filter(|images| !images.is_empty()) {
-        Some(images) => serde_json::json!({ "type": "prompt", "text": text, "images": images }),
-        None => serde_json::json!({ "type": "prompt", "text": text }),
+    let prompt_images = images.unwrap_or_default();
+    let payload = if prompt_images.is_empty() {
+        serde_json::json!({ "type": "prompt", "text": &text })
+    } else {
+        serde_json::json!({
+            "type": "prompt",
+            "text": &text,
+            "images": &prompt_images,
+        })
     };
-    write_line(&state.stdin, &payload).await
+    let result = write_line(&state.stdin, &payload).await;
+    if result.is_ok() {
+        *lock_state(&state.pending_user_prompt) = Some(PendingUserPrompt {
+            text,
+            images: prompt_images,
+        });
+    }
+    result
 }
 
 #[tauri::command]
@@ -778,6 +805,8 @@ async fn submit_question_answer(
 async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
     *lock_state(&state.active_project) = None;
     *lock_state(&state.last_hydrate) = Some(vec![]);
+    clear_pending_user_prompt(state.inner().as_ref());
+    clear_live_assistant_text(state.inner().as_ref());
     *lock_state(&state.last_pending_question) = None;
     lock_state(&state.last_dev_logs).clear();
     let payload = serde_json::json!({ "type": "new_project" });
@@ -830,6 +859,10 @@ async fn list_recents(state: State<'_, Arc<SidecarState>>) -> Result<(), String>
     reason = "Tauri command handlers receive framework-owned State values."
 )]
 fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
+    sidecar_status_from_state(state.inner().as_ref())
+}
+
+fn sidecar_status_from_state(state: &SidecarState) -> SidecarStatus {
     let error = lock_state(&state.last_error).clone();
     let project_open_error = lock_state(&state.last_project_open_error).clone();
     let hydrate = lock_state(&state.last_hydrate).clone();
@@ -845,6 +878,80 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
         pending_question,
         recents,
     }
+}
+
+fn clear_live_assistant_text(state: &SidecarState) {
+    lock_state(&state.live_assistant_text).clear();
+}
+
+fn clear_pending_user_prompt(state: &SidecarState) {
+    *lock_state(&state.pending_user_prompt) = None;
+}
+
+fn replace_last_hydrate(state: &SidecarState, messages: Vec<HydratedMessage>) {
+    *lock_state(&state.last_hydrate) = Some(messages);
+    clear_pending_user_prompt(state);
+    clear_live_assistant_text(state);
+}
+
+fn append_hydrated_message(
+    hydrate: &mut Option<Vec<HydratedMessage>>,
+    role: &str,
+    text: String,
+    images: Option<Vec<HydratedMessageImage>>,
+) -> Option<String> {
+    let images = images.filter(|images| !images.is_empty());
+    if text.is_empty() && images.is_none() {
+        return None;
+    }
+
+    let messages = hydrate.get_or_insert_with(Vec::new);
+    let id = format!("live-{role}-{}", messages.len());
+    messages.push(HydratedMessage {
+        id: id.clone(),
+        role: role.to_string(),
+        text,
+        done: true,
+        kind: None,
+        images,
+    });
+    Some(id)
+}
+
+fn prompt_images_to_hydrate_images(images: &[ImagePayload]) -> Vec<HydratedMessageImage> {
+    images
+        .iter()
+        .map(|image| HydratedMessageImage {
+            data_url: format!("data:{};base64,{}", image.mime_type, image.data),
+            mime_type: image.mime_type.clone(),
+        })
+        .collect()
+}
+
+fn flush_pending_user_prompt_to_hydrate(state: &SidecarState) {
+    let Some(prompt) = lock_state(&state.pending_user_prompt).take() else {
+        return;
+    };
+    let images = prompt_images_to_hydrate_images(&prompt.images);
+    let mut hydrate = lock_state(&state.last_hydrate);
+    let _ = append_hydrated_message(
+        &mut hydrate,
+        "user",
+        prompt.text,
+        (!images.is_empty()).then_some(images),
+    );
+}
+
+fn append_assistant_delta_to_hydrate(state: &SidecarState, delta: &str) {
+    flush_pending_user_prompt_to_hydrate(state);
+    lock_state(&state.live_assistant_text).push_str(delta);
+}
+
+fn finish_assistant_message_in_hydrate(state: &SidecarState) {
+    flush_pending_user_prompt_to_hydrate(state);
+    let mut hydrate = lock_state(&state.last_hydrate);
+    let text = std::mem::take(&mut *lock_state(&state.live_assistant_text));
+    let _ = append_hydrated_message(&mut hydrate, "assistant", text, None);
 }
 
 #[tauri::command]
@@ -988,6 +1095,8 @@ fn reset_sidecar_state(state: &SidecarState) {
     state.ready.store(false, Ordering::Release);
     *lock_state(&state.last_error) = None;
     *lock_state(&state.last_hydrate) = None;
+    clear_pending_user_prompt(state);
+    clear_live_assistant_text(state);
     *lock_state(&state.active_project) = None;
     lock_state(&state.last_recents).clear();
     *lock_state(&state.last_project_open_error) = None;
@@ -1050,6 +1159,8 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
         }
         Some("error") => {
             *lock_state(&state.last_pending_question) = None;
+            clear_pending_user_prompt(state);
+            clear_live_assistant_text(state);
             let recoverable = value
                 .get("recoverable")
                 .and_then(serde_json::Value::as_bool)
@@ -1070,9 +1181,17 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             if let Some(messages) = value.get("messages") {
                 if let Ok(parsed) = serde_json::from_value::<Vec<HydratedMessage>>(messages.clone())
                 {
-                    *lock_state(&state.last_hydrate) = Some(parsed);
+                    replace_last_hydrate(state, parsed);
                 }
             }
+        }
+        Some("text_delta") => {
+            if let Some(delta) = value.get("delta").and_then(Value::as_str) {
+                append_assistant_delta_to_hydrate(state, delta);
+            }
+        }
+        Some("text_done") => {
+            finish_assistant_message_in_hydrate(state);
         }
         Some("active_project") => {
             *lock_state(&state.last_pending_question) = None;
@@ -1090,6 +1209,7 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             *lock_state(&state.last_pending_question) = Some(value.clone());
         }
         Some("agent_end") => {
+            flush_pending_user_prompt_to_hydrate(state);
             *lock_state(&state.last_pending_question) = None;
         }
         _ => {}
@@ -1462,6 +1582,116 @@ mod tests {
         assert_eq!(
             config["oauth"]["clientId"],
             json!("3660753192626.8903469228982")
+        );
+    }
+
+    #[test]
+    fn sidecar_status_hydrate_tracks_live_multi_turn_messages() {
+        let state = SidecarState::default();
+        replace_last_hydrate(
+            &state,
+            vec![HydratedMessage {
+                id: "opened-user".into(),
+                role: "user".into(),
+                text: "Last thing before I sketch this out.".into(),
+                done: true,
+                kind: None,
+                images: None,
+            }],
+        );
+
+        *lock_state(&state.pending_user_prompt) = Some(PendingUserPrompt {
+            text: "Keep going.".into(),
+            images: vec![],
+        });
+        append_assistant_delta_to_hydrate(&state, "Brief's up");
+        append_assistant_delta_to_hydrate(&state, " — what should we call it?");
+        finish_assistant_message_in_hydrate(&state);
+        *lock_state(&state.pending_user_prompt) = Some(PendingUserPrompt {
+            text: "Call it Field Notes.".into(),
+            images: vec![],
+        });
+        append_assistant_delta_to_hydrate(&state, "Done.");
+        finish_assistant_message_in_hydrate(&state);
+
+        let status = sidecar_status_from_state(&state);
+
+        assert_eq!(
+            status
+                .hydrate
+                .unwrap()
+                .iter()
+                .map(|message| (message.role.as_str(), message.text.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("user", "Last thing before I sketch this out."),
+                ("user", "Keep going."),
+                ("assistant", "Brief's up — what should we call it?"),
+                ("user", "Call it Field Notes."),
+                ("assistant", "Done."),
+            ]
+        );
+    }
+
+    #[test]
+    fn project_reopen_replaces_live_hydrate_without_duplicates() {
+        let state = SidecarState::default();
+        replace_last_hydrate(&state, vec![]);
+        *lock_state(&state.pending_user_prompt) = Some(PendingUserPrompt {
+            text: "Keep going.".into(),
+            images: vec![],
+        });
+        append_assistant_delta_to_hydrate(&state, "Done.");
+        finish_assistant_message_in_hydrate(&state);
+
+        replace_last_hydrate(
+            &state,
+            vec![
+                HydratedMessage {
+                    id: "jsonl-user".into(),
+                    role: "user".into(),
+                    text: "Keep going.".into(),
+                    done: true,
+                    kind: None,
+                    images: None,
+                },
+                HydratedMessage {
+                    id: "jsonl-assistant".into(),
+                    role: "assistant".into(),
+                    text: "Done.".into(),
+                    done: true,
+                    kind: None,
+                    images: None,
+                },
+            ],
+        );
+
+        let status = sidecar_status_from_state(&state);
+
+        assert_eq!(status.hydrate.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn pending_user_prompt_waits_for_sidecar_turn_event() {
+        let state = SidecarState::default();
+        replace_last_hydrate(&state, vec![]);
+        *lock_state(&state.pending_user_prompt) = Some(PendingUserPrompt {
+            text: "Persist me only after the sidecar starts.".into(),
+            images: vec![],
+        });
+
+        assert_eq!(sidecar_status_from_state(&state).hydrate.unwrap().len(), 0);
+
+        append_assistant_delta_to_hydrate(&state, "Started.");
+
+        assert_eq!(
+            sidecar_status_from_state(&state)
+                .hydrate
+                .unwrap()
+                .iter()
+                .map(|message| (message.role.as_str(), message.text.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("user", "Persist me only after the sidecar starts.")]
         );
     }
 

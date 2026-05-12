@@ -257,6 +257,11 @@ function emitActiveProject(project: Project) {
   });
 }
 
+function emitCurrentHydrate() {
+  if (!sessionManager) return;
+  emit(translateSessionEntriesToHydrateEvent(sessionManager.getEntries()));
+}
+
 function transientProjectForPath(projectPath: string): Project {
   const displayName = basename(projectPath) || projectPath;
   const now = new Date().toISOString();
@@ -494,6 +499,7 @@ async function handlePrompt(text: string, images: WirePromptImage[] = []) {
   }
   if (images.length === 0) {
     await session.prompt(text);
+    emitCurrentHydrate();
     return;
   }
 
@@ -503,6 +509,7 @@ async function handlePrompt(text: string, images: WirePromptImage[] = []) {
     mimeType: image.mimeType,
   }));
   await session.prompt(text, { images: promptImages });
+  emitCurrentHydrate();
 }
 
 async function handleNewProject() {
