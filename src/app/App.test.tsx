@@ -597,6 +597,20 @@ describe("App panel tabs", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("native Report a Bug menu event opens the bug report dialog", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      fireMenuEvent("report-bug");
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "Report a bug" }),
+    ).toBeInTheDocument();
+  });
+
   test("Settings overlay behaves like a modal dialog", async () => {
     bootstrapTauriRuntime();
     render(<App />);
