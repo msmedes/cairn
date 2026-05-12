@@ -7,9 +7,9 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { useProjectFile } from "../features/project/hooks/useProjectFile";
+import type { CreatingTarget } from "../features/shell/hooks/useCreatingIndicator";
 import App from "./App";
-import type { CreatingTarget } from "./useCreatingIndicator";
-import { useProjectFile } from "./useProjectFile";
 
 const devLogMock = vi.hoisted(() => ({
   events: [] as Array<{
@@ -70,11 +70,11 @@ async function openDevPanelViaMenu() {
   });
 }
 
-vi.mock("./useProjectFile", () => ({
+vi.mock("../features/project/hooks/useProjectFile", () => ({
   useProjectFile: vi.fn(),
 }));
 
-vi.mock("./useSidecarDevLog", () => ({
+vi.mock("../features/dev-mode/useSidecarDevLog", () => ({
   useSidecarDevLog: () => ({
     events: devLogMock.events,
     clearEvents: vi.fn(),
@@ -107,10 +107,16 @@ let mockRecents: Array<{
   displayName: string;
   lastOpenedAt: string;
 }> = [];
+let mockActiveProject: {
+  id: string;
+  name: string;
+  path: string;
+  displayName: string;
+} | null = null;
 const openProjectMock = vi.hoisted(() => vi.fn());
 const openProjectDialogMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./useSidecarSession", () => ({
+vi.mock("../features/chat/hooks/useSidecarSession", () => ({
   useSidecarSession: (handlers: SidecarSessionHandlers) => {
     sidecarSessionHandlers = handlers;
 
@@ -118,6 +124,7 @@ vi.mock("./useSidecarSession", () => ({
       messages: mockMessages,
       recents: mockRecents,
       projectOpenError: null,
+      activeProject: mockActiveProject,
       ready: true,
       error: null,
       sending: false,
@@ -136,6 +143,7 @@ describe("App panel tabs", () => {
     sidecarSessionHandlers = null;
     mockMessages = [];
     mockRecents = [];
+    mockActiveProject = null;
     openProjectMock.mockReset();
     openProjectDialogMock.mockReset();
     sendPromptMock.mockReset();
@@ -595,6 +603,86 @@ describe("App panel tabs", () => {
     expect(
       screen.queryByRole("button", { name: "API key" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("native Report a Bug menu event opens the bug report dialog", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      fireMenuEvent("report-bug");
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "Report a bug" }),
+    ).toBeInTheDocument();
+  });
+
+  test("bug report submission uses the current menu-event snapshot", async () => {
+    bootstrapTauriRuntime();
+    mockMessages = [
+      {
+        id: "m1",
+        role: "user",
+        text: "it broke",
+        done: true,
+      },
+    ];
+    devLogMock.events = [
+      {
+        id: "event-1",
+        receivedAt: "2026-05-01T12:00:00.000Z",
+        payload: { type: "tool", value: "ran" },
+      },
+    ];
+    mockActiveProject = {
+      id: "project-1",
+      name: "demo",
+      path: "/tmp/demo",
+      displayName: "Demo Project",
+    };
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      fireMenuEvent("report-bug");
+    });
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Bad state" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "The app did a weird thing." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare report" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        "bug_report_bundler",
+        expect.any(Object),
+      );
+    });
+    const bugReportCall = invokeMock.mock.calls.find(
+      ([command]) => command === "bug_report_bundler",
+    );
+    expect(bugReportCall).toBeDefined();
+    const payload = bugReportCall?.[1] as {
+      projectPath: string | null;
+      devEventsJson: string;
+      metaJson: string;
+      githubUrl: string;
+    };
+    expect(payload.projectPath).toBe("/tmp/demo");
+    expect(JSON.parse(payload.devEventsJson)).toMatchObject({
+      messages: [{ id: "m1", text: "it broke" }],
+      devEvents: [{ id: "event-1", payload: { type: "tool", value: "ran" } }],
+    });
+    expect(JSON.parse(payload.metaJson)).toMatchObject({
+      activeProjectName: "Demo Project",
+      title: "Bad state",
+      description: "The app did a weird thing.",
+    });
+    expect(decodeURIComponent(payload.githubUrl)).toContain("Bad state");
   });
 
   test("Settings overlay behaves like a modal dialog", async () => {

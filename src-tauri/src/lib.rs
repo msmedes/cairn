@@ -1175,12 +1175,15 @@ fn install_app_menu(app: &AppHandle) -> tauri::Result<()> {
     let dev_panel_item = MenuItemBuilder::with_id("menu:dev-panel", "Show Dev Panel")
         .accelerator("CmdOrCtrl+Shift+D")
         .build(app)?;
-    let report_bug_item = MenuItemBuilder::with_id("menu:report-bug", "Report a Bug…").build(app)?;
+    let report_bug_item = MenuItemBuilder::with_id("menu:report-bug", "Report a Bug…")
+        .accelerator("CmdOrCtrl+Shift+B")
+        .build(app)?;
 
     let app_submenu = SubmenuBuilder::new(app, "Cairn")
         .item(&PredefinedMenuItem::about(app, Some("About Cairn"), None)?)
         .separator()
         .item(&settings_item)
+        .item(&report_bug_item)
         .separator()
         .item(&PredefinedMenuItem::hide(app, None)?)
         .item(&PredefinedMenuItem::hide_others(app, None)?)
@@ -1212,10 +1215,6 @@ fn install_app_menu(app: &AppHandle) -> tauri::Result<()> {
         .item(&dev_panel_item)
         .build()?;
 
-    let help_submenu = SubmenuBuilder::new(app, "Help")
-        .item(&report_bug_item)
-        .build()?;
-
     let menu = MenuBuilder::new(app)
         .items(&[
             &app_submenu,
@@ -1223,7 +1222,6 @@ fn install_app_menu(app: &AppHandle) -> tauri::Result<()> {
             &view_submenu,
             &window_submenu,
             &dev_submenu,
-            &help_submenu,
         ])
         .build()?;
 

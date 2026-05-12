@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { applyAssistantDelta, markAssistantDone } from "../../src/chat-stream";
+import {
+  applyAssistantDelta,
+  markAssistantDone,
+} from "../../src/features/chat/chat-stream";
 
 test("applyAssistantDelta appends to the active assistant turn", () => {
   const result = applyAssistantDelta(
