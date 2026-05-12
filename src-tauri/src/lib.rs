@@ -52,6 +52,9 @@ struct SidecarState {
     // Latest recoverable open-project error so startup path failures are not
     // lost if they occur before the frontend subscribes.
     last_project_open_error: StdMutex<Option<String>>,
+    // Latest pending user-question payload so a frontend remount can still
+    // answer a parked tool call after the one-shot event has already fired.
+    last_pending_question: StdMutex<Option<Value>>,
     // Recent raw sidecar dev events. The frontend pulls this after subscribing
     // so events emitted during startup/hydration are not lost.
     last_dev_logs: StdMutex<Vec<Value>>,
@@ -85,6 +88,7 @@ struct SidecarStatus {
     project_open_error: Option<String>,
     hydrate: Option<Vec<HydratedMessage>>,
     active_project: Option<ActiveProject>,
+    pending_question: Option<Value>,
     recents: Vec<RecentProjectEntry>,
 }
 
@@ -754,9 +758,27 @@ async fn send_prompt(
 }
 
 #[tauri::command]
+async fn submit_question_answer(
+    tool_call_id: String,
+    cancelled: bool,
+    answers: Vec<Value>,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<(), String> {
+    *lock_state(&state.last_pending_question) = None;
+    let payload = serde_json::json!({
+        "type": "answer_question",
+        "toolCallId": tool_call_id,
+        "cancelled": cancelled,
+        "answers": answers,
+    });
+    write_line(&state.stdin, &payload).await
+}
+
+#[tauri::command]
 async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
     *lock_state(&state.active_project) = None;
     *lock_state(&state.last_hydrate) = Some(vec![]);
+    *lock_state(&state.last_pending_question) = None;
     lock_state(&state.last_dev_logs).clear();
     let payload = serde_json::json!({ "type": "new_project" });
     write_line(&state.stdin, &payload).await
@@ -764,6 +786,7 @@ async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> 
 
 #[tauri::command]
 async fn open_project(path: String, state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
+    *lock_state(&state.last_pending_question) = None;
     let payload = serde_json::json!({ "type": "open_project", "path": path });
     write_line(&state.stdin, &payload).await
 }
@@ -811,6 +834,7 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
     let project_open_error = lock_state(&state.last_project_open_error).clone();
     let hydrate = lock_state(&state.last_hydrate).clone();
     let active_project = lock_state(&state.active_project).clone();
+    let pending_question = lock_state(&state.last_pending_question).clone();
     let recents = lock_state(&state.last_recents).clone();
     SidecarStatus {
         ready: state.ready.load(Ordering::Acquire),
@@ -818,6 +842,7 @@ fn get_sidecar_status(state: State<'_, Arc<SidecarState>>) -> SidecarStatus {
         project_open_error,
         hydrate,
         active_project,
+        pending_question,
         recents,
     }
 }
@@ -966,6 +991,7 @@ fn reset_sidecar_state(state: &SidecarState) {
     *lock_state(&state.active_project) = None;
     lock_state(&state.last_recents).clear();
     *lock_state(&state.last_project_open_error) = None;
+    *lock_state(&state.last_pending_question) = None;
     lock_state(&state.last_dev_logs).clear();
 }
 
@@ -1023,6 +1049,7 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             handle_ready_event(app, state).await;
         }
         Some("error") => {
+            *lock_state(&state.last_pending_question) = None;
             let recoverable = value
                 .get("recoverable")
                 .and_then(serde_json::Value::as_bool)
@@ -1039,6 +1066,7 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             }
         }
         Some("hydrate") => {
+            *lock_state(&state.last_pending_question) = None;
             if let Some(messages) = value.get("messages") {
                 if let Ok(parsed) = serde_json::from_value::<Vec<HydratedMessage>>(messages.clone())
                 {
@@ -1047,6 +1075,7 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             }
         }
         Some("active_project") => {
+            *lock_state(&state.last_pending_question) = None;
             if let Ok(parsed) = serde_json::from_value::<ActiveProjectEvent>(value.clone()) {
                 *lock_state(&state.active_project) = Some(parsed.project);
                 *lock_state(&state.last_project_open_error) = None;
@@ -1056,6 +1085,12 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
             if let Ok(parsed) = serde_json::from_value::<RecentsEvent>(value.clone()) {
                 *lock_state(&state.last_recents) = parsed.entries;
             }
+        }
+        Some("ask_user_question") => {
+            *lock_state(&state.last_pending_question) = Some(value.clone());
+        }
+        Some("agent_end") => {
+            *lock_state(&state.last_pending_question) = None;
         }
         _ => {}
     }
@@ -1278,6 +1313,7 @@ pub fn run() {
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
+            submit_question_answer,
             new_project,
             open_project,
             open_project_dialog,

@@ -125,6 +125,8 @@ vi.mock("../features/chat/hooks/useSidecarSession", () => ({
       recents: mockRecents,
       projectOpenError: null,
       activeProject: mockActiveProject,
+      pendingQuestion: null,
+      submittingQuestion: false,
       ready: true,
       error: null,
       sending: false,

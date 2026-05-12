@@ -26,6 +26,7 @@ import type { ChatMessage } from "../features/chat/chat-stream";
 import { ChatPane } from "../features/chat/components/ChatPane";
 import { Composer } from "../features/chat/components/Composer";
 import { MessageList } from "../features/chat/components/MessageList";
+import { QuestionCard } from "../features/chat/components/QuestionCard";
 import {
   type ActiveProject,
   type McpAuthStatusEvent,
@@ -126,10 +127,14 @@ function App() {
     recents,
     projectOpenError,
     activeProject,
+    pendingQuestion,
     ready,
     error,
     sending,
     sendPrompt,
+    submitQuestionAnswer,
+    cancelQuestion,
+    submittingQuestion,
     authenticateMcpServer,
     openProject,
     openProjectDialog,
@@ -268,12 +273,21 @@ function App() {
           onProjectOpened={(path) => void openProject(path)}
           onProjectDialogOpened={() => void openProjectDialog()}
         />
-        <Composer
-          isReady={ready}
-          isSending={sending}
-          onPromptSubmitted={submitPrompt}
-          onRecapInteracted={() => setRecapInteracted(true)}
-        />
+        {pendingQuestion ? (
+          <QuestionCard
+            pendingQuestion={pendingQuestion}
+            isSubmitting={submittingQuestion}
+            onSubmitted={(answers) => void submitQuestionAnswer(answers)}
+            onSkipped={() => void cancelQuestion()}
+          />
+        ) : (
+          <Composer
+            isReady={ready}
+            isSending={sending}
+            onPromptSubmitted={submitPrompt}
+            onRecapInteracted={() => setRecapInteracted(true)}
+          />
+        )}
       </ChatPane>
       <PaneDivider
         chatPanePercent={chatPanePercent}

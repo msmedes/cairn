@@ -44,6 +44,11 @@ import {
 } from "../project/project-context";
 import type { Project, ProjectRenameResult } from "../project/project-store";
 import {
+  type AskUserQuestionBundle,
+  type AskUserQuestionResult,
+  AskUserQuestionToolParamsSchema,
+} from "../questions/ask-user-question-schema";
+import {
   SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
   SPAWN_SUBAGENT_SKILL_NAMES,
   type SpawnSubagentResult,
@@ -100,6 +105,10 @@ export type CairnToolsOptions = {
     projectRoot: string;
     updates: ReturnType<typeof paramsToProjectContextUpdates>;
   }) => ProjectContextResult | Promise<ProjectContextResult>;
+  askUserQuestion?: (input: {
+    toolCallId: string;
+    questions: AskUserQuestionBundle;
+  }) => Promise<AskUserQuestionResult>;
 };
 
 const setProjectNameParamsSchema = z.object({
@@ -178,6 +187,39 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
   // the persona can fold into its own voice. Artifact-writing work such as PRDs
   // and issues ships as skills; tools stay reserved for declared side effects.
   return [
+    defineTool({
+      name: "ask_user_question",
+      label: "Ask User Question",
+      description:
+        "Ask the user one to four grouped single-select questions with two to four concrete options each, then wait for structured answers or a cancellation. Adapted from @juicesharp/rpiv-ask-user-question (MIT) for Cairn's React question card.",
+      promptSnippet: "Ask grouped clarifying questions",
+      promptGuidelines: [
+        "Use ask_user_question when the user needs to make a real decision and clear choices will move Scoping, Slicing, or implementation forward.",
+        "Prefer one grouped question card over several single-question chat turns when the decisions are related and the user should see the trade-offs together.",
+        "Write short option labels and concrete descriptions that explain what choosing that option means.",
+        "Do not use this for casual clarifications, simple yes/no checks, or questions where freeform conversation is more natural.",
+        "If the result is cancelled, acknowledge that and continue in chat without re-asking the same card.",
+      ],
+      parameters: toolSchemaFromZod(AskUserQuestionToolParamsSchema),
+      executionMode: "sequential",
+      async execute(toolCallId, params) {
+        const parsed = AskUserQuestionToolParamsSchema.parse(params);
+        const result = options.askUserQuestion
+          ? await options.askUserQuestion({
+              toolCallId,
+              questions: parsed.questions,
+            })
+          : ({
+              cancelled: true,
+              answers: [],
+            } satisfies AskUserQuestionResult);
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          details: result,
+        };
+      },
+    }),
     defineTool({
       name: "create_brief_artifact",
       label: "Create Brief Artifact",

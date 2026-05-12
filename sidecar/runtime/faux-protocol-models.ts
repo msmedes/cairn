@@ -384,6 +384,67 @@ function getFakeProtocolSetProjectNameModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolAskUserQuestionModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.CAIRN_FAKE_PROTOCOL_ASK_USER_QUESTION !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "ask_user_question",
+        {
+          questions: [
+            {
+              header: "Audience",
+              question: "Who should this first version serve?",
+              options: [
+                {
+                  label: "Team leads",
+                  description: "People who need lightweight training checks.",
+                },
+                {
+                  label: "Learners",
+                  description: "People taking the quizzes themselves.",
+                },
+              ],
+            },
+            {
+              header: "Scope",
+              question: "What should the first slice include?",
+              options: [
+                {
+                  label: "One video",
+                  description: "Keep the first version focused on one upload.",
+                },
+                {
+                  label: "Many videos",
+                  description: "Start with batch setup from the beginning.",
+                },
+              ],
+            },
+          ],
+        },
+        { id: "tool-ask-user-question" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(
+        `ask_user_question result: ${findLastToolResultText(context)}`,
+      ),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolTextModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
@@ -414,6 +475,7 @@ export function getFakeProtocolModel():
     getFakeProtocolUpdatePlanModel() ??
     getFakeProtocolUpdateProjectContextModel() ??
     getFakeProtocolSetProjectNameModel() ??
+    getFakeProtocolAskUserQuestionModel() ??
     getFakeProtocolTextModel()
   );
 }

@@ -629,6 +629,92 @@ test(
 );
 
 test(
+  "ask_user_question parks, emits a question bundle, and resumes from an out-of-band answer",
+  async () => {
+    const cairnHome = createCairnHome();
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_ASK_USER_QUESTION: "1",
+    });
+    const personaPath = createPersonaFile("You are Cairn.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Ask me grouped questions.",
+    });
+    const questionEvents = await collectEvents(
+      proc,
+      (event) => event.type === "ask_user_question",
+      DEFAULT_TIMEOUT_MS,
+    );
+    const questionEvent = questionEvents.at(-1);
+    expect(questionEvent).toMatchObject({
+      type: "ask_user_question",
+      toolCallId: "tool-ask-user-question",
+      questions: [
+        {
+          header: "Audience",
+          question: "Who should this first version serve?",
+        },
+        {
+          header: "Scope",
+          question: "What should the first slice include?",
+        },
+      ],
+    });
+
+    writeJsonToSidecar(proc, {
+      type: "answer_question",
+      toolCallId: "tool-ask-user-question",
+      cancelled: false,
+      answers: [
+        {
+          questionIndex: 0,
+          header: "Audience",
+          question: "Who should this first version serve?",
+          kind: "option",
+          option: {
+            label: "Team leads",
+            description: "People who need lightweight training checks.",
+          },
+        },
+        {
+          questionIndex: 1,
+          header: "Scope",
+          question: "What should the first slice include?",
+          kind: "option",
+          option: {
+            label: "One video",
+            description: "Keep the first version focused on one upload.",
+          },
+        },
+      ],
+    });
+
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain(
+      'ask_user_question result: {"cancelled":false,"answers":[{"questionIndex":0',
+    );
+    expect(text).toContain('"label":"One video"');
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
   "update_task_status mutates tasks.json through the sidecar protocol",
   async () => {
     const cairnHome = createCairnHome();
