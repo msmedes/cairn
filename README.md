@@ -69,7 +69,7 @@ You can supply your Anthropic API key either through the in-app settings dialog 
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-`.env.local` is gitignored. The sidecar reads it on startup (see `sidecar/env.ts`).
+`.env.local` is gitignored. The sidecar reads it on startup (see `sidecar/config/env.ts`).
 
 ## Run
 

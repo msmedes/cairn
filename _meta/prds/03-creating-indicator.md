@@ -41,7 +41,7 @@ This generalizes. When slicing lands and the Cairn writes a PRD, the same surfac
 
 ### Modules
 
-- **`set_creating` tool** *(modification to `sidecar/cairn-tools.ts`)*. New `defineTool` entry alongside `set_project_name`. Parameters: `target` (TypeBox `Type.Union([Type.Literal("brief")])` to start), `message` (string). The tool's `execute` invokes a new `onCreatingStart(target, message)` callback supplied by `createGuideTools` options, then returns a one-line confirmation `content` (so the model knows the indicator is up and can proceed). `promptGuidelines` constrain the call: only before user-visible artifact creation, paired with one short line of chat, message phrased in persona voice, no mention of paths/files/tools.
+- **`set_creating` tool** *(modification to `sidecar/tools/cairn-tools.ts`)*. New `defineTool` entry alongside `set_project_name`. Parameters: `target` (TypeBox `Type.Union([Type.Literal("brief")])` to start), `message` (string). The tool's `execute` invokes a new `onCreatingStart(target, message)` callback supplied by `createGuideTools` options, then returns a one-line confirmation `content` (so the model knows the indicator is up and can proceed). `promptGuidelines` constrain the call: only before user-visible artifact creation, paired with one short line of chat, message phrased in persona voice, no mention of paths/files/tools.
 
 - **Sidecar runtime** *(modification to `sidecar/index.ts`)*. `OutMsg` gains `{ type: "creating_started"; target: "brief"; message: string }`. The `onCreatingStart` callback emits this event over the existing line-delimited JSON stdio. No other protocol changes.
 

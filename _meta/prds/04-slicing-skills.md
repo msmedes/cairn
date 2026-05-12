@@ -35,7 +35,7 @@ This is the layer that makes Implementing possible. Once issues exist on disk in
 13. As the project owner, I want the `set_creating` target enum extended to include `"prd"` and `"issues"` (per ADR 0001), with the panel showing one short Cairn-voice message per phase, so the bracketing rule the persona already follows for the brief generalizes without parallel mechanisms.
 14. As the project owner, I want the skill descriptions tight enough that the persona auto-discovers them via pi.dev's progressive disclosure, so the persona's base-context system prompt does not bloat with the full SKILL.md bodies.
 15. As the project owner, I want each skill's SKILL.md to instruct the writing agent to return a single targeted clarifying question when the input genuinely doesn't support a useful artifact, so quality is enforced at the stage that knows what quality looks like.
-16. As the project owner, I want the existing comment at `sidecar/cairn-tools.ts:18-21` (which names `write_prd` / `write_issue` as future *tools*) corrected when this slice lands, so the next reader is not misled about the intended mechanism.
+16. As the project owner, I want the existing comment at `sidecar/tools/cairn-tools.ts:18-21` (which names `write_prd` / `write_issue` as future *tools*) corrected when this slice lands, so the next reader is not misled about the intended mechanism.
 17. As the project owner, I want phase to remain derived from artifacts (brief exists? slice proposed? PRD written?) rather than persisted on Project state, so v1 does not over-build a state machine that Implementing has not yet forced.
 
 ## Implementation Decisions
@@ -48,7 +48,7 @@ This is the layer that makes Implementing possible. Once issues exist on disk in
 
 - **Sidecar wiring** *(modification to `sidecar/index.ts`)*. The `DefaultResourceLoader` construction at `sidecar/index.ts:266-272` gains `additionalSkillPaths: [resolve(repoRoot, "prompts/skills")]`. The repo root is resolvable from `import.meta.url` at sidecar startup; the constant is set once at module load. No other sidecar protocol changes required for skill discovery — pi.dev's `loadSkills` recurses into the directory and finds both SKILL.md files automatically.
 
-- **`set_creating` tool extension** *(modification to `sidecar/cairn-tools.ts`)*. The `target` parameter union extends from `Type.Union([Type.Literal("brief")])` to `Type.Union([Type.Literal("brief"), Type.Literal("prd"), Type.Literal("issues")])`. The `OutMsg.creating_started` type in `sidecar/index.ts` widens to match. The `CreatingTarget` type alias updates to the same set. `promptGuidelines` get one additional bullet acknowledging the new targets without leaking implementation paths.
+- **`set_creating` tool extension** *(modification to `sidecar/tools/cairn-tools.ts`)*. The `target` parameter union extends from `Type.Union([Type.Literal("brief")])` to `Type.Union([Type.Literal("brief"), Type.Literal("prd"), Type.Literal("issues")])`. The `OutMsg.creating_started` type in `sidecar/index.ts` widens to match. The `CreatingTarget` type alias updates to the same set. `promptGuidelines` get one additional bullet acknowledging the new targets without leaking implementation paths.
 
 - **`useCreatingIndicator` hook** *(modification to `src/useCreatingIndicator.ts`)*. The target-content map gains entries for `"prd"` (watches `<project>/.cairn/prds/`) and `"issues"` (watches `<project>/.cairn/issues/`). Auto-clear fires when the watched directory transitions from "no matching file" to "at least one file matching the target's slot prefix." `agent_end` continues to fire as the abandoned-mid-creation fallback. Hook output type unchanged.
 
@@ -56,7 +56,7 @@ This is the layer that makes Implementing possible. Once issues exist on disk in
 
 - **Persona prompt** *(modification to `prompts/persona.md`)*. The Slicing bullet under "Your job" is rewritten to commit the persona to: (a) propose one slice in plain language when the brief is concrete enough that a first chunk is nameable; (b) await user agreement; (c) on agreement, invoke `write-prd` (loaded by progressive disclosure), then `write-issue` once the PRD lands; (d) bracket each skill invocation with `set_creating(target="prd"|"issues", ...)` and one short chat line per the existing bracketing rule; (e) confirm in one short chat line when both artifacts have landed. The "Where you are right now" section is updated to drop the absolute "stay in scoping" instruction once the brief exists and the project has been named — the bar becomes "first-slice-nameable," not "the user has explicitly asked to move on."
 
-- **`sidecar/cairn-tools.ts:18-21` comment update.** The comment that names `write_prd` / `write_issue` as future *tools* is corrected to reflect that they ship as skills under `prompts/skills/`, with the established sidecar tool pattern reserved for declared side effects (e.g., `set_project_name`, `set_creating`). One-line change; not behavioral.
+- **`sidecar/tools/cairn-tools.ts:18-21` comment update.** The comment that names `write_prd` / `write_issue` as future *tools* is corrected to reflect that they ship as skills under `prompts/skills/`, with the established sidecar tool pattern reserved for declared side effects (e.g., `set_project_name`, `set_creating`). One-line change; not behavioral.
 
 ### Architectural decisions
 
@@ -134,7 +134,7 @@ Prior art: `sidecar/tests/cairn-tools.test.ts` for the tool extension; `sidecar/
 
 - **Quality bar is per-stage, not at the Scoping gate.** Tempting to require the persona to ask for "all the context" before pivoting to Slicing; rejected during design because it conflicts with persona.md's *"five questions, not thirty"* rule. Each skill's SKILL.md is where its own quality bar lives, and the bubble-up clarifying-question pattern catches genuine gaps lazily.
 
-- **`sidecar/cairn-tools.ts:18-21` is wrong post-this-slice.** The comment reads *"Future Cairn tools such as `write_prd` or `write_issue` should follow this same sidecar-local pattern"* — they aren't tools and shouldn't follow that pattern. Fix as part of the slice; do not leave dangling.
+- **`sidecar/tools/cairn-tools.ts:18-21` is wrong post-this-slice.** The comment reads *"Future Cairn tools such as `write_prd` or `write_issue` should follow this same sidecar-local pattern"* — they aren't tools and shouldn't follow that pattern. Fix as part of the slice; do not leave dangling.
 
 - **ADR 0002 captures the general principle** ("default to pi.dev primitives") that motivated implementing slicing as skills rather than tools. This PRD is one specific application of that principle; future slices apply the same lens before writing custom sidecar code.
 
