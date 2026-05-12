@@ -21,6 +21,8 @@ export type ProjectRenameResult =
   | { ok: true; project: Project; message: string }
   | { ok: false; project: Project | null; message: string };
 
+const DEFAULT_PROJECT_DISPLAY_NAME = "Untitled";
+
 function cleanDisplayName(input: string): string {
   const compact = input.replace(/\s+/g, " ").trim();
   if (
@@ -85,7 +87,7 @@ export class ProjectStore {
     now: Date = new Date(),
   ): Project {
     const path = resolve(projectPath);
-    const displayName = cleanDisplayName(firstMessage);
+    const displayName = DEFAULT_PROJECT_DISPLAY_NAME;
     const timestamp = now.toISOString();
     const metadata: ProjectJson = {
       id: withDatePrefix(slugify(firstMessage), now),
