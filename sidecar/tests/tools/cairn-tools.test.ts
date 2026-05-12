@@ -303,9 +303,10 @@ test("create_tasks_artifact tool writes tasks.json only", async () => {
     artifact: "tasks",
     path: "tasks.json",
     taskCount: 2,
+    taskSlugs: ["create-the-first-quiz-draft", "preview-it-as-a-learner"],
   });
   expect(toolText(result)).toBe(
-    '{"ok":true,"artifact":"tasks","path":"tasks.json","schemaVersion":1,"taskCount":2}',
+    '{"ok":true,"artifact":"tasks","path":"tasks.json","schemaVersion":1,"taskCount":2,"taskSlugs":["create-the-first-quiz-draft","preview-it-as-a-learner"]}',
   );
   expect(
     readFileSync(CairnDir.tasksPath(activeProject.path), "utf8"),
@@ -315,7 +316,87 @@ test("create_tasks_artifact tool writes tasks.json only", async () => {
   ).toThrow();
 });
 
-test("update_task_status tool mutates a task by slug and reports unknown slugs", async () => {
+test("update_task_status tool accepts a slug returned by create_tasks_artifact on the first attempt", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Temporary quiz idea",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+  const [createTasks, updateTaskStatus] = createCairnTools({
+    getActiveProject: () => activeProject,
+    renameProject: () => {
+      throw new Error("should not rename while updating task status");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while updating task status");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while updating task status",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while updating task status",
+      );
+    },
+  }).filter((tool) =>
+    ["create_tasks_artifact", "update_task_status"].includes(tool.name),
+  );
+
+  if (!createTasks || !updateTaskStatus) {
+    throw new Error("tasks artifact tools were not registered");
+  }
+
+  const createResult = await createTasks.execute(
+    "tool-call-1",
+    {
+      issues: [
+        {
+          issue_path: "issues/01-create-the-first-quiz-draft.md",
+          title: "Create the first quiz draft",
+        },
+        {
+          issue_path: "issues/02-preview-it-as-a-learner.md",
+          title: "Preview it as a learner",
+        },
+      ],
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+  expect(createResult.details).toMatchObject({
+    ok: true,
+    taskSlugs: ["create-the-first-quiz-draft", "preview-it-as-a-learner"],
+  });
+  const taskSlugs = (createResult.details as { taskSlugs: string[] }).taskSlugs;
+
+  const result = await updateTaskStatus.execute(
+    "tool-call-2",
+    { task_slug: taskSlugs[1], status: "in_progress" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toEqual({
+    ok: true,
+    artifact: "tasks",
+    path: "tasks.json",
+    taskSlug: "preview-it-as-a-learner",
+    status: "in_progress",
+  });
+  expect(toolText(result)).toBe(
+    '{"ok":true,"artifact":"tasks","path":"tasks.json","taskSlug":"preview-it-as-a-learner","status":"in_progress"}',
+  );
+  expect(
+    readFileSync(CairnDir.tasksPath(activeProject.path), "utf8"),
+  ).toContain('"status": "in_progress"');
+});
+
+test("update_task_status tool reports unknown slugs without rewriting tasks", async () => {
   const store = new ProjectStore();
   const activeProject = store.create(
     tempProjectPath(),
@@ -366,6 +447,7 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
     undefined,
     {} as never,
   );
+
   const beforeMissing = readFileSync(
     CairnDir.tasksPath(activeProject.path),
     "utf8",
@@ -387,28 +469,6 @@ test("update_task_status tool mutates a task by slug and reports unknown slugs",
   expect(readFileSync(CairnDir.tasksPath(activeProject.path), "utf8")).toBe(
     beforeMissing,
   );
-
-  const result = await updateTaskStatus.execute(
-    "tool-call-3",
-    { task_slug: "preview-it-as-a-learner", status: "in_progress" },
-    undefined,
-    undefined,
-    {} as never,
-  );
-
-  expect(result.details).toEqual({
-    ok: true,
-    artifact: "tasks",
-    path: "tasks.json",
-    taskSlug: "preview-it-as-a-learner",
-    status: "in_progress",
-  });
-  expect(toolText(result)).toBe(
-    '{"ok":true,"artifact":"tasks","path":"tasks.json","taskSlug":"preview-it-as-a-learner","status":"in_progress"}',
-  );
-  expect(
-    readFileSync(CairnDir.tasksPath(activeProject.path), "utf8"),
-  ).toContain('"status": "in_progress"');
 });
 
 test("create_brief_artifact tool writes brief.json only", async () => {

@@ -111,6 +111,7 @@ export type TasksArtifactSuccess = {
   path: typeof TASKS_ARTIFACT_PATH;
   schemaVersion: typeof TASKS_SCHEMA_VERSION;
   taskCount: number;
+  taskSlugs: string[];
 };
 
 export type TaskStatusSuccess = {
@@ -244,6 +245,7 @@ function writeEnvelope(
     path: TASKS_ARTIFACT_PATH,
     schemaVersion: TASKS_SCHEMA_VERSION,
     taskCount: envelope.data.tasks.length,
+    taskSlugs: envelope.data.tasks.map((task) => task.slug),
   };
 }
 
