@@ -126,6 +126,20 @@ function newId() {
   return Math.random().toString(36).slice(2);
 }
 
+function formatAnswerSummary(answers: QuestionAnswer[]): string {
+  return answers
+    .map((answer) => {
+      if (answer.kind === "option") {
+        return `${answer.header}: ${answer.option.label}`;
+      }
+      if (answer.kind === "custom") {
+        return `${answer.header}: ${answer.answer}`;
+      }
+      return `${answer.header}: ${answer.selected.join(", ")}`;
+    })
+    .join("\n");
+}
+
 export function useSidecarSession({
   onCreatingStarted,
   onAgentEnd,
@@ -382,6 +396,13 @@ export function useSidecarSession({
         cancelled: false,
         answers,
       });
+      const summary = formatAnswerSummary(answers);
+      if (summary) {
+        setMessages((prev) => [
+          ...prev,
+          { id: newId(), role: "user", text: summary, done: true },
+        ]);
+      }
       setPendingQuestion(null);
     } finally {
       submittingQuestionRef.current = false;
@@ -401,6 +422,10 @@ export function useSidecarSession({
         cancelled: true,
         answers: [],
       });
+      setMessages((prev) => [
+        ...prev,
+        { id: newId(), role: "user", text: "(skipped)", done: true },
+      ]);
       setPendingQuestion(null);
     } finally {
       submittingQuestionRef.current = false;

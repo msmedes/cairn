@@ -29,9 +29,10 @@ const tabsClass =
   "flex min-w-0 gap-2 overflow-x-auto border-b border-[rgba(220,215,186,0.08)] pb-2";
 
 const tabClass =
-  "grid min-w-[118px] gap-1 rounded-md border-0 bg-transparent px-3 py-2 text-left font-[inherit] text-kanagawa-text-soft transition-[background,color,box-shadow] duration-150 enabled:cursor-pointer hover:bg-[rgba(220,215,186,0.06)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.26)]";
+  "grid min-w-[118px] gap-1 rounded-t-md border-0 bg-transparent px-3 py-2 text-left font-[inherit] text-kanagawa-text-soft transition-[background,color,box-shadow] duration-150 enabled:cursor-pointer hover:bg-[rgba(220,215,186,0.06)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.26)]";
 
-const activeTabClass = "bg-[rgba(126,156,216,0.13)] text-kanagawa-text";
+const activeTabClass =
+  "text-kanagawa-text shadow-[inset_0_-2px_0_0_rgba(126,156,216,0.9)]";
 
 const tabHeaderClass = "text-[0.82rem] font-semibold leading-tight";
 
@@ -59,10 +60,18 @@ const optionDescriptionClass =
 const customAnswerInputClass =
   "ml-6 min-h-10 rounded-md border-0 bg-[rgba(22,22,29,0.5)] px-3 font-[inherit] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.14)] outline-none transition-shadow duration-150 placeholder:text-kanagawa-text-soft focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.5),0_0_0_3px_rgba(126,156,216,0.18)] disabled:cursor-not-allowed disabled:opacity-70";
 
-const footerClass = "flex justify-end gap-2";
+const footerClass = "flex items-center justify-between gap-2";
+
+const footerRightClass = "flex items-center gap-2";
+
+const progressClass =
+  "text-[0.78rem] font-medium leading-tight text-kanagawa-text-soft";
 
 const skipButtonClass =
   "min-h-10 rounded-md border-0 bg-transparent px-4 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.12)] transition-[background,color] duration-150 enabled:cursor-pointer hover:enabled:bg-[rgba(220,215,186,0.06)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_rgba(126,156,216,0.26)]";
+
+const navButtonClass =
+  "min-h-10 rounded-md border-0 bg-transparent px-3 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.12)] transition-[background,color,opacity] duration-150 enabled:cursor-pointer hover:enabled:bg-[rgba(220,215,186,0.06)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_rgba(126,156,216,0.26)] disabled:cursor-not-allowed disabled:opacity-40";
 
 const submitButtonClass =
   "min-h-10 rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-4 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)] transition-[transform,box-shadow,opacity,background] duration-[120ms,180ms,180ms,180ms] enabled:cursor-pointer enabled:bg-[linear-gradient(180deg,#7e9cd8,#658594)] enabled:text-kanagawa-bg enabled:shadow-[0_1px_1px_rgba(255,255,255,0.12)_inset,0_10px_20px_rgba(101,133,148,0.22)] active:enabled:scale-[0.96] disabled:cursor-not-allowed disabled:[background:rgba(42,42,55,0.7)]";
@@ -114,6 +123,9 @@ export function QuestionCard({
       ...current,
       [activeIndex]: { kind: "option", optionIndex },
     }));
+    if (activeIndex < pendingQuestion.questions.length - 1) {
+      setActiveIndex(activeIndex + 1);
+    }
   }
 
   function chooseCustomAnswer() {
@@ -302,13 +314,42 @@ export function QuestionCard({
           >
             Skip
           </button>
-          <button
-            type="submit"
-            className={submitButtonClass}
-            disabled={!allAnswered || isSubmitting}
-          >
-            Submit
-          </button>
+          <div className={footerRightClass}>
+            {pendingQuestion.questions.length > 1 && (
+              <>
+                <span className={progressClass} aria-live="polite">
+                  Question {activeIndex + 1} of{" "}
+                  {pendingQuestion.questions.length}
+                </span>
+                <button
+                  type="button"
+                  className={navButtonClass}
+                  disabled={isSubmitting || activeIndex === 0}
+                  onClick={() => setActiveIndex(activeIndex - 1)}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className={navButtonClass}
+                  disabled={
+                    isSubmitting ||
+                    activeIndex === pendingQuestion.questions.length - 1
+                  }
+                  onClick={() => setActiveIndex(activeIndex + 1)}
+                >
+                  Next
+                </button>
+              </>
+            )}
+            <button
+              type="submit"
+              className={submitButtonClass}
+              disabled={!allAnswered || isSubmitting}
+            >
+              Submit
+            </button>
+          </div>
         </div>
       </div>
     </form>
