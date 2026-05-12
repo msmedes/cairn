@@ -25,7 +25,7 @@ const brandTitleClass =
   "m-0 font-serif text-[1.9rem] font-semibold leading-none tracking-[-0.03em] text-balance";
 
 const statusDotClass =
-  "status-dot inline-block h-3 w-3 cursor-pointer rounded-full border-0 bg-kanagawa-text-soft p-0 shadow-[0_0_0_4px_transparent] transition-[background-color,box-shadow,transform] duration-[220ms,220ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] hover:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:outline-none active:scale-[0.92]";
+  "status-dot inline-block h-3 w-3 cursor-pointer rounded-full border-0 p-0 shadow-[0_0_0_4px_transparent] transition-[background-color,box-shadow,transform] duration-[220ms,220ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] hover:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:shadow-[0_0_0_4px_rgba(126,156,216,0.18),var(--status-dot-halo,0_0_0_0_transparent)] focus-visible:outline-none active:scale-[0.92]";
 
 const statusDotToneClass = {
   ok: "status-dot-ok bg-kanagawa-green [--status-dot-halo:0_0_0_4px_rgba(152,187,108,0.18)] shadow-[var(--status-dot-halo)]",
