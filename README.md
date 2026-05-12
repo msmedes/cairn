@@ -32,7 +32,7 @@ That's the whole loop. The sections below cover architecture, build output, and 
 
 ## Status
 
-v0 — proves the **scoping** experience works for a non-technical user. Slicing and implementing land in v1. See `_meta/project-brief.md` for the full non-goals list.
+Active. v0 proved the **scoping** experience works for non-technical users. The **Plan** (slicing) and **Tasks** (implementing) tabs are now in and iterating. See `_meta/project-brief.md` for the original v0 scope and non-goals.
 
 ## Architecture
 
