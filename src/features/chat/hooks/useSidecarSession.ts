@@ -54,6 +54,13 @@ export type QuestionAnswer =
       questionIndex: number;
       header: string;
       question: string;
+      kind: "custom";
+      answer: string;
+    }
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
       kind: "multi";
       selected: string[];
     };

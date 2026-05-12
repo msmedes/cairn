@@ -14,7 +14,10 @@ type QuestionCardProps = {
 
 type SelectedAnswer =
   | { kind: "option"; optionIndex: number }
+  | { kind: "custom"; answer: string }
   | { kind: "multi"; optionIndexes: number[] };
+
+const CUSTOM_ANSWER_LABEL = "Type your own answer";
 
 const cardClass =
   "question-card grid gap-4 px-7 pb-[22px] pt-3.5 max-[640px]:mx-3 max-[640px]:mb-3 max-[640px]:mt-0 max-[640px]:p-3";
@@ -53,6 +56,9 @@ const optionLabelClass = "font-semibold leading-tight text-kanagawa-text";
 const optionDescriptionClass =
   "m-0 pl-6 text-[0.84rem] leading-snug text-kanagawa-text-soft";
 
+const customAnswerInputClass =
+  "ml-6 min-h-10 rounded-md border-0 bg-[rgba(22,22,29,0.5)] px-3 font-[inherit] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.14)] outline-none transition-shadow duration-150 placeholder:text-kanagawa-text-soft focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.5),0_0_0_3px_rgba(126,156,216,0.18)] disabled:cursor-not-allowed disabled:opacity-70";
+
 const footerClass = "flex justify-end gap-2";
 
 const skipButtonClass =
@@ -79,7 +85,10 @@ export function QuestionCard({
     if (question.multiSelect) {
       return selection.kind === "multi" && selection.optionIndexes.length > 0;
     }
-    return selection.kind === "option";
+    return (
+      selection.kind === "option" ||
+      (selection.kind === "custom" && selection.answer.trim().length > 0)
+    );
   });
 
   function isOptionChecked(optionIndex: number) {
@@ -96,10 +105,31 @@ export function QuestionCard({
     );
   }
 
+  function isCustomAnswerChecked() {
+    return activeSelection?.kind === "custom";
+  }
+
   function chooseOption(optionIndex: number) {
     setSelectedAnswers((current) => ({
       ...current,
       [activeIndex]: { kind: "option", optionIndex },
+    }));
+  }
+
+  function chooseCustomAnswer() {
+    setSelectedAnswers((current) => ({
+      ...current,
+      [activeIndex]:
+        current[activeIndex]?.kind === "custom"
+          ? current[activeIndex]
+          : { kind: "custom", answer: "" },
+    }));
+  }
+
+  function updateCustomAnswer(answer: string) {
+    setSelectedAnswers((current) => ({
+      ...current,
+      [activeIndex]: { kind: "custom", answer },
     }));
   }
 
@@ -137,6 +167,16 @@ export function QuestionCard({
         };
       }
 
+      if (selection.kind === "custom") {
+        return {
+          questionIndex,
+          header: question.header,
+          question: question.question,
+          kind: "custom" as const,
+          answer: selection.answer.trim(),
+        };
+      }
+
       const option = question.options[selection.optionIndex];
       return {
         questionIndex,
@@ -164,6 +204,8 @@ export function QuestionCard({
               const selection = selectedAnswers[index];
               const answered =
                 selection?.kind === "option" ||
+                (selection?.kind === "custom" &&
+                  selection.answer.trim().length > 0) ||
                 (selection?.kind === "multi" &&
                   selection.optionIndexes.length > 0);
               return (
@@ -219,6 +261,37 @@ export function QuestionCard({
               </label>
             </li>
           ))}
+          {!activeQuestion.multiSelect && (
+            <li>
+              <label className={optionClass}>
+                <span className={optionTopClass}>
+                  <input
+                    type="radio"
+                    aria-label={CUSTOM_ANSWER_LABEL}
+                    name={`question-${activeIndex}`}
+                    checked={isCustomAnswerChecked()}
+                    disabled={isSubmitting}
+                    onChange={chooseCustomAnswer}
+                  />
+                  <span className={optionLabelClass}>
+                    {CUSTOM_ANSWER_LABEL}
+                  </span>
+                </span>
+                {activeSelection?.kind === "custom" && (
+                  <input
+                    type="text"
+                    aria-label={CUSTOM_ANSWER_LABEL}
+                    className={customAnswerInputClass}
+                    value={activeSelection.answer}
+                    disabled={isSubmitting}
+                    onChange={(event) =>
+                      updateCustomAnswer(event.currentTarget.value)
+                    }
+                  />
+                )}
+              </label>
+            </li>
+          )}
         </ul>
         <div className={footerClass}>
           <button
