@@ -34,25 +34,28 @@ import {
   getAgentDir,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
-import { CairnDir } from "./cairn-dir";
-import { createCairnTools } from "./cairn-tools";
-import { recoverDanglingToolCallInDir } from "./dangling-tool-recovery";
-import { loadCairnSettingsEnv, loadRepoLocalEnv } from "./env";
+import { loadCairnSettingsEnv, loadRepoLocalEnv } from "./config/env";
+import { authenticateConfiguredMcpServer } from "./integrations/mcp-auth";
+import { CAIRN_EXTENSION_FACTORIES } from "./integrations/pi-extensions";
+import { CairnDir } from "./project/cairn-dir";
+import { migrateLegacyProject } from "./project/legacy-migrator";
+import { findProjectRoot } from "./project/project-locator";
+import { getProjectState, type ProjectPhase } from "./project/project-phase";
+import { type Project, ProjectStore } from "./project/project-store";
+import {
+  type RecentProjectEntry,
+  RecentsRegistry,
+} from "./project/recents-registry";
 import {
   type HydrateEvent,
   translateSessionEntriesToDevLogMessages,
   translateSessionEntriesToHydrateEvent,
-} from "./hydrate";
-import { emitHydrateAndMaybeResumeRecap } from "./init-recap";
-import { migrateLegacyProject } from "./legacy-migrator";
-import { authenticateConfiguredMcpServer } from "./mcp-auth";
-import { CAIRN_EXTENSION_FACTORIES } from "./pi-extensions";
-import { findProjectRoot } from "./project-locator";
-import { getProjectState, type ProjectPhase } from "./project-phase";
-import { type Project, ProjectStore } from "./project-store";
-import { type RecentProjectEntry, RecentsRegistry } from "./recents-registry";
-import { disambiguate, slugify, withDatePrefix } from "./slug";
-import type { SpawnSubagentResult } from "./spawn-subagent";
+} from "./protocol/hydrate";
+import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
+import { recoverDanglingToolCallInDir } from "./recovery/dangling-tool-recovery";
+import type { SpawnSubagentResult } from "./subagents/spawn-subagent";
+import { createCairnTools } from "./tools/cairn-tools";
+import { disambiguate, slugify, withDatePrefix } from "./utils/slug";
 
 type InMsg =
   | {
