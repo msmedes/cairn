@@ -61,7 +61,12 @@ const fieldLabelClass =
 const fieldControlClass =
   "min-h-[38px] w-full min-w-0 cursor-pointer rounded-md border-0 bg-[rgba(22,22,29,0.72)] px-3 py-0 font-[inherit] text-sm font-medium text-kanagawa-text outline outline-1 outline-[var(--line)] transition-[background-color,outline-color,box-shadow] duration-180 ease-in placeholder:text-kanagawa-text-soft hover:bg-[rgba(31,31,40,0.85)] focus:bg-[rgba(31,31,40,0.95)] focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.46),0_0_0_3px_rgba(126,156,216,0.18)] focus:outline-none";
 
-const selectClass = `${fieldControlClass} truncate pr-8`;
+const selectWrapClass = "relative min-w-0";
+
+const selectClass = `${fieldControlClass} appearance-none truncate pr-10 [-webkit-appearance:none]`;
+
+const selectChevronClass =
+  "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-kanagawa-text-soft";
 
 const devLayerClass =
   "dev-layer fixed inset-0 z-20 grid min-h-0 text-kanagawa-text antialiased [--dev-pad-x:clamp(20px,4vw,48px)] [grid-template-rows:auto_auto_auto_auto_auto_minmax(0,1fr)] bg-[radial-gradient(circle_at_12%_-10%,rgba(126,156,216,0.14),transparent_38%),radial-gradient(circle_at_92%_6%,rgba(255,160,102,0.08),transparent_32%),linear-gradient(180deg,#181821_0%,#101016_100%)] [-moz-osx-font-smoothing:grayscale] animate-[dev-layer-in_220ms_cubic-bezier(0.2,0,0,1)_both] max-[980px]:[--dev-pad-x:18px] max-[640px]:[--dev-pad-x:14px]";
@@ -829,23 +834,28 @@ function AgentSelect({
   return (
     <label className={fieldClass}>
       <span className={fieldLabelClass}>Agent</span>
-      <select
-        className={selectClass}
-        value={selectedAgentId}
-        onChange={(event) => onAgentSelected(event.currentTarget.value)}
-      >
-        <option value="all">All agents ({events.length})</option>
-        {threads.map((thread) => {
-          const depth = agentDepth(threads, thread);
-          const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
-          return (
-            <option key={thread.id} value={thread.id}>
-              {prefix}
-              {thread.label} ({eventCounts.get(thread.id) ?? 0})
-            </option>
-          );
-        })}
-      </select>
+      <div className={selectWrapClass}>
+        <select
+          className={selectClass}
+          value={selectedAgentId}
+          onChange={(event) => onAgentSelected(event.currentTarget.value)}
+        >
+          <option value="all">All agents ({events.length})</option>
+          {threads.map((thread) => {
+            const depth = agentDepth(threads, thread);
+            const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
+            return (
+              <option key={thread.id} value={thread.id}>
+                {prefix}
+                {thread.label} ({eventCounts.get(thread.id) ?? 0})
+              </option>
+            );
+          })}
+        </select>
+        <span className={selectChevronClass} aria-hidden="true">
+          <ChevronIcon open={false} />
+        </span>
+      </div>
     </label>
   );
 }
