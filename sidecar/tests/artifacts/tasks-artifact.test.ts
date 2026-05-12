@@ -43,6 +43,11 @@ test("createTasksArtifact persists canonical tasks.json with issue-derived slugs
     path: "tasks.json",
     schemaVersion: 1,
     taskCount: 3,
+    taskSlugs: [
+      "create-the-first-quiz-draft",
+      "preview-it-as-a-learner",
+      "share-the-finished-quiz",
+    ],
   });
   expect(existsSync(join(CairnDir.root(projectRoot), "tasks.html"))).toBe(
     false,
