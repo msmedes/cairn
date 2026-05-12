@@ -37,17 +37,26 @@ export type PendingQuestion = {
   questions: Array<{
     header: string;
     question: string;
+    multiSelect?: boolean;
     options: QuestionOption[];
   }>;
 };
 
-export type QuestionAnswer = {
-  questionIndex: number;
-  header: string;
-  question: string;
-  kind: "option";
-  option: QuestionOption;
-};
+export type QuestionAnswer =
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
+      kind: "option";
+      option: QuestionOption;
+    }
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
+      kind: "multi";
+      selected: string[];
+    };
 
 type SidecarEvent =
   | { type: "hydrate"; messages: ChatMessage[] }

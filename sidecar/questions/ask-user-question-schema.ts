@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Adapted from @juicesharp/rpiv-ask-user-question (MIT). Cairn keeps the
-// schema-only pieces for a React-rendered single-select tracer surface.
+// schema-only pieces for a React-rendered grouped question surface.
 const optionSchema = z.object({
   label: z.string().min(1).describe("Short label for this option."),
   description: z
@@ -16,6 +16,10 @@ const questionSchema = z.object({
     .min(1)
     .describe("Short tab label for this question, such as Audience or Scope."),
   question: z.string().min(1).describe("The decision the user should make."),
+  multiSelect: z
+    .boolean()
+    .optional()
+    .describe("Whether the user may select more than one option."),
   options: z
     .array(optionSchema)
     .min(2)
@@ -28,7 +32,7 @@ export const AskUserQuestionToolParamsSchema = z.object({
     .array(questionSchema)
     .min(1)
     .max(4)
-    .describe("One to four related single-select questions."),
+    .describe("One to four related single-select or multi-select questions."),
 });
 
 export type AskUserQuestionParams = z.infer<
@@ -103,16 +107,24 @@ export function validateQuestionnaire(
   return { ok: true };
 }
 
-export type AskUserQuestionAnswer = {
-  questionIndex: number;
-  header: string;
-  question: string;
-  kind: "option";
-  option: {
-    label: string;
-    description: string;
-  };
-};
+export type AskUserQuestionAnswer =
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
+      kind: "option";
+      option: {
+        label: string;
+        description: string;
+      };
+    }
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
+      kind: "multi";
+      selected: string[];
+    };
 
 export type AskUserQuestionResult =
   | {
