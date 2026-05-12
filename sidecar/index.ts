@@ -232,6 +232,12 @@ function wireSessionEvents(nextSession: AgentSession) {
         break;
       case "agent_end":
         suppressAssistantError = false;
+        for (const msg of applyAssistantTextStreamEvent(
+          assistantTextStreamState,
+          event,
+        )) {
+          emit(msg);
+        }
         emit({ type: "agent_end" });
         emitProjectState();
         break;
