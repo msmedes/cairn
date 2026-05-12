@@ -27,6 +27,28 @@ export type PromptImage = {
   dataUrl: string;
 };
 
+export type QuestionOption = {
+  label: string;
+  description: string;
+};
+
+export type PendingQuestion = {
+  toolCallId: string;
+  questions: Array<{
+    header: string;
+    question: string;
+    options: QuestionOption[];
+  }>;
+};
+
+export type QuestionAnswer = {
+  questionIndex: number;
+  header: string;
+  question: string;
+  kind: "option";
+  option: QuestionOption;
+};
+
 type SidecarEvent =
   | { type: "hydrate"; messages: ChatMessage[] }
   | { type: "active_project"; project: ActiveProject }
@@ -34,6 +56,11 @@ type SidecarEvent =
   | { type: "recents"; entries: RecentProject[] }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
+  | {
+      type: "ask_user_question";
+      toolCallId: string;
+      questions: PendingQuestion["questions"];
+    }
   | {
       type: "creating_started";
       target: "brief" | "prd" | "issues" | "plan" | "tasks";
@@ -59,6 +86,7 @@ type SidecarStatusSnapshot = {
   projectOpenError?: string | null;
   hydrate: ChatMessage[] | null;
   activeProject: ActiveProject | null;
+  pendingQuestion?: PendingQuestion | null;
   recents?: RecentProject[];
 };
 
@@ -96,11 +124,15 @@ export function useSidecarSession({
   const [activeProject, setActiveProject] = useState<ActiveProject | null>(
     null,
   );
+  const [pendingQuestion, setPendingQuestion] =
+    useState<PendingQuestion | null>(null);
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [sending, setSending] = useState(false);
   const activeAssistantId = useRef<string | null>(null);
   const hydratedFromStartupRef = useRef(false);
   const messageCountRef = useRef(0);
   const sendingRef = useRef(false);
+  const submittingQuestionRef = useRef(false);
 
   useEffect(() => {
     messageCountRef.current = messages.length;
@@ -127,6 +159,9 @@ export function useSidecarSession({
       activeAssistantId.current = null;
       sendingRef.current = false;
       setSending(false);
+      submittingQuestionRef.current = false;
+      setSubmittingQuestion(false);
+      setPendingQuestion(null);
     }
 
     listen<SidecarEvent>("sidecar-event", (event) => {
@@ -137,6 +172,9 @@ export function useSidecarSession({
           activeAssistantId.current = null;
           sendingRef.current = false;
           setSending(false);
+          submittingQuestionRef.current = false;
+          setSubmittingQuestion(false);
+          setPendingQuestion(null);
           hydratedFromStartupRef.current = true;
           setMessages(payload.messages);
           break;
@@ -172,6 +210,12 @@ export function useSidecarSession({
           activeAssistantId.current = null;
           break;
         }
+        case "ask_user_question":
+          setPendingQuestion({
+            toolCallId: payload.toolCallId,
+            questions: payload.questions,
+          });
+          break;
         case "creating_started":
           onCreatingStarted(payload.target, payload.message);
           break;
@@ -227,6 +271,9 @@ export function useSidecarSession({
             }
             if (snapshot.activeProject) {
               setActiveProject(snapshot.activeProject);
+            }
+            if (snapshot.pendingQuestion) {
+              setPendingQuestion(snapshot.pendingQuestion);
             }
             if (snapshot.recents) {
               setRecents(snapshot.recents);
@@ -307,6 +354,44 @@ export function useSidecarSession({
     }
   }
 
+  async function submitQuestionAnswer(answers: QuestionAnswer[]) {
+    if (!pendingQuestion || submittingQuestionRef.current) return;
+    submittingQuestionRef.current = true;
+    setSubmittingQuestion(true);
+    const toolCallId = pendingQuestion.toolCallId;
+
+    try {
+      await invoke("submit_question_answer", {
+        toolCallId,
+        cancelled: false,
+        answers,
+      });
+      setPendingQuestion(null);
+    } finally {
+      submittingQuestionRef.current = false;
+      setSubmittingQuestion(false);
+    }
+  }
+
+  async function cancelQuestion() {
+    if (!pendingQuestion || submittingQuestionRef.current) return;
+    submittingQuestionRef.current = true;
+    setSubmittingQuestion(true);
+    const toolCallId = pendingQuestion.toolCallId;
+
+    try {
+      await invoke("submit_question_answer", {
+        toolCallId,
+        cancelled: true,
+        answers: [],
+      });
+      setPendingQuestion(null);
+    } finally {
+      submittingQuestionRef.current = false;
+      setSubmittingQuestion(false);
+    }
+  }
+
   async function authenticateMcpServer(server: string) {
     if (!server) throw new Error("MCP server is required.");
     if (status.type !== "ready") {
@@ -341,10 +426,14 @@ export function useSidecarSession({
     recents,
     projectOpenError,
     activeProject,
+    pendingQuestion,
+    submittingQuestion,
     ready: status.type === "ready",
     error: status.type === "error" ? status.message : null,
     sending,
     sendPrompt,
+    submitQuestionAnswer,
+    cancelQuestion,
     authenticateMcpServer,
     openProject,
     openProjectDialog,

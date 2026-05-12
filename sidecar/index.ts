@@ -44,6 +44,12 @@ import {
   translateSessionEntriesToHydrateEvent,
 } from "./protocol/hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
+import { askUserQuestionPendingRegistry } from "./questions/ask-user-question-pending";
+import type {
+  AskUserQuestionAnswer,
+  AskUserQuestionBundle,
+  AskUserQuestionResult,
+} from "./questions/ask-user-question-schema";
 import { recoverDanglingToolCallInDir } from "./recovery/dangling-tool-recovery";
 import {
   type AgentThread,
@@ -66,6 +72,12 @@ type InMsg =
       skipAutoOpen?: boolean;
     }
   | { type: "prompt"; text: string; images?: WirePromptImage[] }
+  | {
+      type: "answer_question";
+      toolCallId: string;
+      cancelled: boolean;
+      answers: AskUserQuestionAnswer[];
+    }
   | { type: "new_project" }
   | { type: "open_project"; path: string; locateProjectRoot?: boolean }
   | { type: "list_recents" }
@@ -83,6 +95,11 @@ type OutMsg =
   | { type: "recents"; entries: RecentProjectEntry[] }
   | { type: "text_delta"; delta: string }
   | { type: "text_done" }
+  | {
+      type: "ask_user_question";
+      toolCallId: string;
+      questions: AskUserQuestionBundle;
+    }
   | {
       type: "creating_started";
       target: "brief" | "prd" | "issues" | "plan" | "tasks";
@@ -218,6 +235,7 @@ function getAssistantErrorMessage(message: unknown): string | null {
 }
 
 function disposeSession() {
+  askUserQuestionPendingRegistry.cancelAllPending("session closed");
   unsubscribeSession?.();
   unsubscribeSession = null;
   session?.dispose();
@@ -421,6 +439,12 @@ async function openProject(
       onProjectUpdate: emitActiveProject,
       onCreatingStart: (target, message) => {
         emit({ type: "creating_started", target, message });
+      },
+      askUserQuestion: ({ toolCallId, questions }) => {
+        const pending =
+          askUserQuestionPendingRegistry.registerPending(toolCallId);
+        emit({ type: "ask_user_question", toolCallId, questions });
+        return pending;
       },
       getLoadedSkills: () => resourceLoader.getSkills().skills,
       spawnSubagent: getFakeSpawnSubagentResultFromEnv(),
@@ -644,6 +668,26 @@ async function handleAuthenticateMcpServer(
   }
 }
 
+function handleAnswerQuestion(
+  msg: Extract<InMsg, { type: "answer_question" }>,
+) {
+  const result: AskUserQuestionResult = msg.cancelled
+    ? { cancelled: true, answers: [] }
+    : { cancelled: false, answers: msg.answers };
+
+  const resolved = askUserQuestionPendingRegistry.resolvePending(
+    msg.toolCallId,
+    result,
+  );
+  if (!resolved) {
+    emit({
+      type: "error",
+      message: `No pending question exists for ${msg.toolCallId}.`,
+      recoverable: true,
+    });
+  }
+}
+
 async function handleLine(line: string) {
   const trimmed = line.trim();
   if (!trimmed) return;
@@ -662,6 +706,9 @@ async function handleLine(line: string) {
       break;
     case "prompt":
       await handlePrompt(msg.text, msg.images);
+      break;
+    case "answer_question":
+      handleAnswerQuestion(msg);
       break;
     case "new_project":
       await handleNewProject();
@@ -684,7 +731,33 @@ async function handleLine(line: string) {
   }
 }
 
+function tryHandleOutOfBandLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return false;
+  }
+
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("type" in parsed) ||
+    parsed.type !== "answer_question"
+  ) {
+    return false;
+  }
+
+  handleAnswerQuestion(parsed as Extract<InMsg, { type: "answer_question" }>);
+  return true;
+}
+
 function queueLine(line: string) {
+  if (tryHandleOutOfBandLine(line)) return;
+
   inputQueue = inputQueue
     .then(() => handleLine(line))
     .catch((err) => {
