@@ -1,4 +1,3 @@
-import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -38,18 +37,15 @@ import {
   useSidecarDevLog,
 } from "../features/dev-mode/useSidecarDevLog";
 import { useProjectFile } from "../features/project/hooks/useProjectFile";
-import {
-  type CairnSettingsStatus,
-  type McpServerKey,
-  type McpSettingsStatus,
-  SettingsPanel,
-} from "../features/settings/components/SettingsPanel";
+import { SettingsPanel } from "../features/settings/components/SettingsPanel";
+import { useSettingsBridge } from "../features/settings/hooks/useSettingsBridge";
 import { PaneDivider } from "../features/shell/components/PaneDivider";
 import { ProjectPanel } from "../features/shell/components/ProjectPanel";
 import { useActivePanelTab } from "../features/shell/hooks/useActivePanelTab";
 import { useCreatingIndicator } from "../features/shell/hooks/useCreatingIndicator";
 import { usePaneSplit } from "../features/shell/hooks/usePaneSplit";
 import { cx } from "../lib/cx";
+import { hasTauriRuntime } from "../lib/tauri";
 
 type BugReportSnapshot = {
   messages: ChatMessage[];
@@ -57,29 +53,14 @@ type BugReportSnapshot = {
   activeProject: ActiveProject | null;
 };
 
-function hasTauriRuntime() {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
-
 const appClass =
   "app grid h-[calc(100vh-36px)] items-stretch gap-0 [grid-template-columns:minmax(320px,var(--chat-pane,41%))_14px_minmax(360px,calc(var(--project-pane,59%)-14px))] max-[980px]:h-auto max-[980px]:min-h-[calc(100vh-24px)] max-[980px]:grid-cols-1 max-[980px]:gap-3";
 
 function App() {
   const [recapInteracted, setRecapInteracted] = useState(false);
-  const [settingsStatus, setSettingsStatus] =
-    useState<CairnSettingsStatus | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
-  const [savingApiKey, setSavingApiKey] = useState(false);
-  const [mcpStatus, setMcpStatus] = useState<McpSettingsStatus | null>(null);
-  const [mcpMessage, setMcpMessage] = useState<string | null>(null);
-  const [updatingMcpServer, setUpdatingMcpServer] =
-    useState<McpServerKey | null>(null);
-  const [appVersion, setAppVersion] = useState("unknown");
   const [bugReportSnapshot, setBugReportSnapshot] =
     useState<BugReportSnapshot | null>(null);
   const [devPanelOpen, setDevPanelOpen] = useState(false);
-  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const projectBriefJson = useProjectFile("brief.json");
   const projectPlanJson = useProjectFile("plan.json");
   const projectTasksJson = useProjectFile("tasks.json");
@@ -130,8 +111,11 @@ function App() {
     clearCreatingOnHydrate();
     setRecapInteracted(false);
   }, [clearCreatingOnHydrate]);
+  const mcpAuthStatusHandlerRef = useRef<(event: McpAuthStatusEvent) => void>(
+    () => {},
+  );
   const handleMcpAuthStatus = useCallback((event: McpAuthStatusEvent) => {
-    setMcpMessage(event.message);
+    mcpAuthStatusHandlerRef.current(event);
   }, []);
   const {
     messages,
@@ -160,116 +144,14 @@ function App() {
     setChatPanePercent,
     startResizing,
   } = usePaneSplit();
-
-  useEffect(() => {
-    if (!hasTauriRuntime()) return;
-
-    let cancelled = false;
-    invoke<CairnSettingsStatus>("get_cairn_settings")
-      .then((status) => {
-        if (cancelled) return;
-        setSettingsStatus(status);
-        if (!status.hasAnthropicApiKey) {
-          setSettingsPanelOpen(true);
-        }
-      })
-      .catch((err) => {
-        console.error("get_cairn_settings failed", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const activeProjectPath = activeProject?.path ?? null;
-
-  useEffect(() => {
-    if (!hasTauriRuntime()) return;
-
-    let cancelled = false;
-    invoke<McpSettingsStatus>("get_mcp_settings", {
-      projectPath: activeProjectPath,
-    })
-      .then((status) => {
-        if (!cancelled) setMcpStatus(status);
-      })
-      .catch((err) => {
-        console.error("get_mcp_settings failed", err);
-        if (!cancelled) setMcpMessage("Could not load MCP settings.");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeProjectPath]);
-
-  useEffect(() => {
-    if (!hasTauriRuntime()) return;
-
-    let cancelled = false;
-    getVersion()
-      .then((version) => {
-        if (!cancelled) setAppVersion(version);
-      })
-      .catch((err) => {
-        console.error("getVersion failed", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function saveApiKey() {
-    const apiKey = apiKeyInput.trim();
-    if (!apiKey || savingApiKey) return;
-
-    setSavingApiKey(true);
-    setSettingsMessage(null);
-    try {
-      const next = await invoke<CairnSettingsStatus>("set_anthropic_api_key", {
-        apiKey,
-      });
-      setSettingsStatus(next);
-      setApiKeyInput("");
-    } catch (err) {
-      console.error("set_anthropic_api_key failed", err);
-      setSettingsMessage("Could not save API key.");
-    } finally {
-      setSavingApiKey(false);
-    }
-  }
-
-  async function setMcpServerEnabled(server: McpServerKey, enabled: boolean) {
-    if (updatingMcpServer) return;
-
-    setUpdatingMcpServer(server);
-    setMcpMessage(null);
-    try {
-      const next = await invoke<McpSettingsStatus>("set_mcp_server_enabled", {
-        server,
-        enabled,
-      });
-      setMcpStatus(next);
-      setMcpMessage(enabled ? "MCP server added." : "MCP server removed.");
-    } catch (err) {
-      console.error("set_mcp_server_enabled failed", err);
-      setMcpMessage("Could not update MCP settings.");
-    } finally {
-      setUpdatingMcpServer(null);
-    }
-  }
-
-  async function requestMcpAuth(server: McpServerKey) {
-    setMcpMessage(`Opening ${server} OAuth in your browser...`);
-    try {
-      await authenticateMcpServer(server);
-    } catch (err) {
-      console.error("authenticate_mcp_server failed", err);
-      setMcpMessage(`Could not start ${server} OAuth.`);
-    }
-  }
+  const settings = useSettingsBridge({
+    activeProjectPath,
+    authenticateMcpServer,
+  });
+  mcpAuthStatusHandlerRef.current = (event) => {
+    settings.setMcpMessage(event.message);
+  };
 
   useEffect(() => {
     function handler(event: KeyboardEvent) {
@@ -298,17 +180,15 @@ function App() {
       switch (event.payload) {
         case "settings":
           setDevPanelOpen(false);
-          setSettingsPanelOpen(true);
-          setSettingsMessage(null);
-          setMcpMessage(null);
+          settings.openSettingsPanel();
           break;
         case "report-bug":
           setDevPanelOpen(false);
-          setSettingsPanelOpen(false);
+          settings.closeSettingsPanel();
           setBugReportSnapshot({ ...bugReportInputsRef.current });
           break;
         case "dev-panel":
-          setSettingsPanelOpen(false);
+          settings.closeSettingsPanel();
           setDevPanelOpen(true);
           break;
       }
@@ -327,7 +207,7 @@ function App() {
       cancelled = true;
       cleanup?.();
     };
-  }, []);
+  }, [settings.closeSettingsPanel, settings.openSettingsPanel]);
 
   const statusDot = (() => {
     if (error) {
@@ -336,7 +216,10 @@ function App() {
     if (!ready) {
       return { tone: "wait", tooltip: "Starting…" } as const;
     }
-    if (settingsStatus && !settingsStatus.hasAnthropicApiKey) {
+    if (
+      settings.settingsStatus &&
+      !settings.settingsStatus.hasAnthropicApiKey
+    ) {
       return {
         tone: "attention",
         tooltip: "API key missing — click for Settings",
@@ -358,9 +241,7 @@ function App() {
 
   function openSettingsPanel() {
     setDevPanelOpen(false);
-    setSettingsPanelOpen(true);
-    setSettingsMessage(null);
-    setMcpMessage(null);
+    settings.openSettingsPanel();
   }
 
   function submitPrompt(text: string, images: PromptImage[]) {
@@ -410,21 +291,21 @@ function App() {
         onEventsCleared={clearDevEvents}
       />
       <SettingsPanel
-        isOpen={settingsPanelOpen}
-        onClose={() => setSettingsPanelOpen(false)}
-        settingsStatus={settingsStatus}
-        apiKeyInput={apiKeyInput}
-        settingsMessage={settingsMessage}
-        savingApiKey={savingApiKey}
-        mcpStatus={mcpStatus}
-        mcpMessage={mcpMessage}
-        updatingMcpServer={updatingMcpServer}
-        onApiKeyInputChanged={setApiKeyInput}
-        onApiKeySaved={() => void saveApiKey()}
+        isOpen={settings.settingsPanelOpen}
+        onClose={settings.closeSettingsPanel}
+        settingsStatus={settings.settingsStatus}
+        apiKeyInput={settings.apiKeyInput}
+        settingsMessage={settings.settingsMessage}
+        savingApiKey={settings.savingApiKey}
+        mcpStatus={settings.mcpStatus}
+        mcpMessage={settings.mcpMessage}
+        updatingMcpServer={settings.updatingMcpServer}
+        onApiKeyInputChanged={settings.setApiKeyInput}
+        onApiKeySaved={() => void settings.saveApiKey()}
         onMcpServerToggled={(server, enabled) =>
-          void setMcpServerEnabled(server, enabled)
+          void settings.setMcpServerEnabled(server, enabled)
         }
-        onMcpAuthRequested={(server) => void requestMcpAuth(server)}
+        onMcpAuthRequested={(server) => void settings.requestMcpAuth(server)}
       />
       {bugReportSnapshot && (
         <BugReportDialog
@@ -438,7 +319,7 @@ function App() {
                 }
               : null
           }
-          appVersion={appVersion}
+          appVersion={settings.appVersion}
           onClosed={() => setBugReportSnapshot(null)}
         />
       )}

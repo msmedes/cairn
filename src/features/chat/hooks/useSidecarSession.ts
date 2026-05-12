@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
+import { hasTauriRuntime } from "../../../lib/tauri";
 import {
   applyAssistantDelta,
   type ChatMessage,
@@ -76,10 +77,6 @@ type SidecarSessionHandlers = {
   onError: () => void;
   onMcpAuthStatus?: (event: McpAuthStatusEvent) => void;
 };
-
-function hasTauriRuntime() {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
 
 function newId() {
   return Math.random().toString(36).slice(2);
