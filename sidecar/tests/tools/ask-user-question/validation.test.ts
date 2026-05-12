@@ -137,6 +137,8 @@ test.each([
   "  OTHER  ",
   "Type something.",
   "type something.",
+  "Type your own answer",
+  "type your own answer",
 ])("validateQuestionnaire rejects reserved option label %s", (label) => {
   const result = validateQuestionnaire(
     validBundle({

@@ -76,6 +76,11 @@ const mixedBundle: PendingQuestion = {
   ],
 };
 
+const singleSelectBundle: PendingQuestion = {
+  toolCallId: "tool-call-3",
+  questions: [bundle.questions[0]],
+};
+
 describe("QuestionCard", () => {
   test("submits selected options from a multi-question bundle", () => {
     const onSubmitted = vi.fn();
@@ -163,6 +168,88 @@ describe("QuestionCard", () => {
         },
       },
     ]);
+  });
+
+  test("submits a custom free-text answer from the single-select sentinel row", () => {
+    const onSubmitted = vi.fn();
+
+    render(
+      <QuestionCard
+        pendingQuestion={singleSelectBundle}
+        isSubmitting={false}
+        onSubmitted={onSubmitted}
+        onSkipped={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("radio", { name: "Type your own answer" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("radio", { name: "Type your own answer" }),
+    );
+
+    const customAnswerInput = screen.getByRole("textbox", {
+      name: "Type your own answer",
+    });
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+
+    fireEvent.change(customAnswerInput, {
+      target: { value: "   Coaches who assign training   " },
+    });
+    expect(screen.getByRole("button", { name: "Submit" })).toBeEnabled();
+
+    fireEvent.click(screen.getByLabelText("Team leads"));
+    expect(
+      screen.queryByRole("textbox", { name: "Type your own answer" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("radio", { name: "Type your own answer" }),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Type your own answer" }),
+    ).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Type your own answer" }),
+      {
+        target: { value: "   Coaches who assign training   " },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onSubmitted).toHaveBeenCalledWith([
+      {
+        questionIndex: 0,
+        header: "Audience",
+        question: "Who should this first version serve?",
+        kind: "custom",
+        answer: "Coaches who assign training",
+      },
+    ]);
+  });
+
+  test("does not render the free-text sentinel row for multi-select questions", () => {
+    render(
+      <QuestionCard
+        pendingQuestion={mixedBundle}
+        isSubmitting={false}
+        onSubmitted={vi.fn()}
+        onSkipped={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("checkbox", { name: "Type your own answer" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Type your own answer" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Type your own answer")).not.toBeInTheDocument();
   });
 
   test("skip resolves through the skip callback", () => {

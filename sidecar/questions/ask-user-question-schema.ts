@@ -54,7 +54,11 @@ export type AskUserQuestionValidationResult =
       message: string;
     };
 
-const RESERVED_OPTION_LABELS = ["Other", "Type something."] as const;
+const RESERVED_OPTION_LABELS = [
+  "Other",
+  "Type something.",
+  "Type your own answer",
+] as const;
 
 function comparableText(value: string): string {
   return value.trim().toLowerCase();
@@ -117,6 +121,13 @@ export type AskUserQuestionAnswer =
         label: string;
         description: string;
       };
+    }
+  | {
+      questionIndex: number;
+      header: string;
+      question: string;
+      kind: "custom";
+      answer: string;
     }
   | {
       questionIndex: number;
