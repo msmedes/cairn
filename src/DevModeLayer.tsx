@@ -46,6 +46,151 @@ const PANEL_OPTIONS: Array<{ value: DevPanel; label: string }> = [
   { value: "raw", label: "Raw" },
 ];
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+const chevronClass =
+  "transition-transform duration-[220ms] ease-[cubic-bezier(0.2,0,0,1)]";
+
+const fieldClass = "dev-field grid min-w-0 grid-rows-[auto_auto] gap-1.5";
+
+const fieldLabelClass =
+  "text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-kanagawa-text-soft";
+
+const fieldControlClass =
+  "min-h-[38px] w-full min-w-0 cursor-pointer rounded-md border-0 bg-[rgba(22,22,29,0.72)] px-3 py-0 font-[inherit] text-sm font-medium text-kanagawa-text outline outline-1 outline-[var(--line)] transition-[background-color,outline-color,box-shadow] duration-180 ease-in placeholder:text-kanagawa-text-soft hover:bg-[rgba(31,31,40,0.85)] focus:bg-[rgba(31,31,40,0.95)] focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.46),0_0_0_3px_rgba(126,156,216,0.18)] focus:outline-none";
+
+const selectWrapClass = "relative min-w-0";
+
+const selectClass = `${fieldControlClass} appearance-none truncate pr-10 [-webkit-appearance:none]`;
+
+const selectChevronClass =
+  "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-kanagawa-text-soft";
+
+const devLayerClass =
+  "dev-layer fixed inset-0 z-20 grid min-h-0 text-kanagawa-text antialiased [--dev-pad-x:clamp(20px,4vw,48px)] [grid-template-rows:auto_auto_auto_auto_auto_minmax(0,1fr)] bg-[radial-gradient(circle_at_12%_-10%,rgba(126,156,216,0.14),transparent_38%),radial-gradient(circle_at_92%_6%,rgba(255,160,102,0.08),transparent_32%),linear-gradient(180deg,#181821_0%,#101016_100%)] [-moz-osx-font-smoothing:grayscale] animate-[dev-layer-in_220ms_cubic-bezier(0.2,0,0,1)_both] max-[980px]:[--dev-pad-x:18px] max-[640px]:[--dev-pad-x:14px]";
+
+const devHeaderClass =
+  "dev-layer-header flex items-center justify-between gap-6 px-[var(--dev-pad-x)] pb-[18px] pt-[22px] animate-[dev-section-rise_320ms_cubic-bezier(0.2,0,0,1)_both] max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-3.5";
+
+const devKickerClass =
+  "dev-layer-kicker mb-1.5 mt-0 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-kanagawa-accent";
+
+const devTitleClass =
+  "m-0 text-balance font-serif text-2xl font-semibold leading-[1.05] tracking-[-0.025em] text-kanagawa-text";
+
+const devActionsClass =
+  "dev-layer-actions inline-flex items-center gap-2 max-[640px]:items-stretch";
+
+const devActionButtonClass =
+  "min-h-9 min-w-[72px] cursor-pointer rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold text-kanagawa-text-muted transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[rgba(50,50,66,0.96)] hover:text-kanagawa-text focus-visible:bg-[rgba(50,50,66,0.96)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none max-[640px]:flex-1";
+
+const metricsClass =
+  "dev-metrics m-0 grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-2.5 px-[var(--dev-pad-x)] pb-3.5 pt-1.5 animate-[dev-section-rise_360ms_cubic-bezier(0.2,0,0,1)_60ms_both] max-[640px]:grid-cols-1";
+
+const metricCardClass =
+  "min-w-0 rounded-md bg-[rgba(31,31,40,0.62)] px-3.5 py-3 outline outline-1 outline-[var(--line)]";
+
+const metricValueClass =
+  "mt-1 mb-0 overflow-hidden text-ellipsis whitespace-nowrap font-serif text-[1.45rem] font-semibold leading-none tracking-[-0.02em] text-kanagawa-text tabular-nums";
+
+const sessionLocationClass =
+  "dev-session-location grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5 px-[var(--dev-pad-x)] pb-3.5 pt-0 animate-[dev-section-rise_370ms_cubic-bezier(0.2,0,0,1)_90ms_both] max-[640px]:grid-cols-1";
+
+const sessionLocationCopyClass = "grid min-w-0 gap-1.5";
+
+const sessionFileClass =
+  "block min-h-[38px] min-w-0 overflow-x-auto whitespace-nowrap rounded-md bg-[rgba(22,22,29,0.72)] px-3 py-2.5 font-mono text-[0.78rem] leading-[1.35] text-kanagawa-text outline outline-1 outline-[var(--line)]";
+
+const sessionCopyButtonClass =
+  "min-h-[38px] cursor-pointer rounded-md border-0 bg-[rgba(31,31,40,0.78)] px-3.5 py-0 font-[inherit] text-[0.82rem] font-bold text-kanagawa-text outline outline-1 outline-[var(--line)] transition-[background-color,outline-color,transform] duration-160 ease-in hover:bg-[rgba(42,42,54,0.92)] focus-visible:bg-[rgba(42,42,54,0.92)] active:scale-[0.96]";
+
+const controlsClass =
+  "dev-controls grid grid-cols-[minmax(220px,1fr)_minmax(280px,1fr)] gap-3 px-[var(--dev-pad-x)] pb-3.5 pt-1 animate-[dev-section-rise_380ms_cubic-bezier(0.2,0,0,1)_120ms_both] max-[640px]:grid-cols-1";
+
+const tabsClass =
+  "dev-tabs flex gap-1 px-[var(--dev-pad-x)] pb-3.5 pt-0 animate-[dev-section-rise_400ms_cubic-bezier(0.2,0,0,1)_180ms_both]";
+
+const tabClass =
+  "dev-tab relative min-h-9 cursor-pointer rounded-md border-0 bg-transparent px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold tracking-[-0.005em] text-kanagawa-text-soft transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[rgba(42,42,55,0.6)] hover:text-kanagawa-text focus-visible:bg-[rgba(42,42,55,0.6)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none";
+
+const activeTabClass =
+  "dev-tab-active bg-[rgba(126,156,216,0.18)] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(126,156,216,0.32),0_1px_0_rgba(255,255,255,0.04)] hover:bg-[rgba(126,156,216,0.18)] hover:text-kanagawa-text";
+
+const devBodyClass =
+  "dev-layer-body min-h-0 overflow-auto px-[var(--dev-pad-x)] pb-8 pt-1 animate-[dev-section-rise_460ms_cubic-bezier(0.2,0,0,1)_240ms_both]";
+
+const listClass = "m-0 grid list-none gap-2 p-0";
+
+const emptyClass =
+  "dev-empty rounded-md bg-[rgba(31,31,40,0.62)] p-[22px] text-center text-[0.92rem] text-kanagawa-text-soft shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+
+const eventRowClass =
+  "dev-event relative grid grid-cols-[78px_minmax(0,1fr)] gap-3.5 overflow-hidden rounded-md bg-[rgba(31,31,40,0.62)] py-3 pr-3.5 pl-4 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)] max-[640px]:grid-cols-1";
+
+const eventAccentClass: Record<DevEventKind, string> = {
+  assistant: "bg-kanagawa-accent",
+  user: "bg-kanagawa-yellow",
+  tool: "bg-kanagawa-green",
+  subagent: "bg-kanagawa-warm",
+  project: "bg-kanagawa-magenta",
+  system: "bg-kanagawa-text-soft",
+};
+
+const eventTimeClass =
+  "font-mono text-[0.74rem] tracking-[-0.01em] text-kanagawa-text-soft tabular-nums";
+
+const eventContentClass = "dev-event-content min-w-0";
+
+const eventHeaderClass =
+  "dev-event-header-row grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3";
+
+const eventSummaryClass = "dev-event-summary min-w-0";
+
+const eventTitleClass =
+  "block text-[0.92rem] font-semibold leading-[1.3] tracking-[-0.005em] text-kanagawa-text";
+
+const tokenChipClass =
+  "dev-token-chip mt-1.5 inline-block rounded-full bg-[rgba(22,22,29,0.72)] px-2 py-0.5 font-mono text-[0.72rem] leading-[1.35] text-kanagawa-text-soft tabular-nums";
+
+const eventTextClass =
+  "mt-1 mb-0 [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-kanagawa-text-muted [text-wrap:pretty]";
+
+const eventToggleClass =
+  "dev-event-toggle relative grid min-h-8 w-8 min-w-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-kanagawa-text-soft transition-[background-color,color,transform] duration-[180ms,180ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] before:absolute before:-inset-1 before:content-[''] hover:bg-[rgba(50,50,66,0.72)] hover:text-kanagawa-text focus-visible:bg-[rgba(50,50,66,0.72)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none";
+
+const eventDetailsClass =
+  "dev-event-details mt-3.5 grid gap-3 border-t border-[rgba(220,215,186,0.08)] pt-3.5";
+
+const detailClass = "dev-detail min-w-0";
+
+const detailHeadingClass =
+  "mb-1.5 mt-0 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-kanagawa-text-soft";
+
+const detailTextClass =
+  "m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted";
+
+const detailPreClass =
+  "m-0 max-h-[280px] overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(12,12,17,0.7)] p-3 font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)] [overflow-wrap:anywhere]";
+
+const messageClass =
+  "dev-message rounded-md bg-[rgba(31,31,40,0.62)] px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+
+const messageRoleClass = {
+  user: "bg-[rgba(45,79,103,0.36)]",
+  assistant: "bg-[rgba(42,42,55,0.74)]",
+} as const;
+
+const messageTextClass =
+  "mt-1 mb-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-kanagawa-text-muted [text-wrap:pretty]";
+
+const rawItemClass =
+  "grid gap-2.5 rounded-md bg-[rgba(31,31,40,0.62)] p-3.5 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+
+const rawPreClass =
+  "m-0 max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted [overflow-wrap:anywhere]";
+
 function isObject(value: JsonValue | undefined): value is {
   [key: string]: JsonValue;
 } {
@@ -230,7 +375,7 @@ function formatCompactNumber(value: number) {
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
-      className={`dev-event-chevron${open ? " dev-event-chevron-open" : ""}`}
+      className={cx(chevronClass, open && "rotate-180")}
       width="14"
       height="14"
       viewBox="0 0 14 14"
@@ -687,24 +832,30 @@ function AgentSelect({
   }
 
   return (
-    <label className="dev-field">
-      <span>Agent</span>
-      <select
-        value={selectedAgentId}
-        onChange={(event) => onAgentSelected(event.currentTarget.value)}
-      >
-        <option value="all">All agents ({events.length})</option>
-        {threads.map((thread) => {
-          const depth = agentDepth(threads, thread);
-          const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
-          return (
-            <option key={thread.id} value={thread.id}>
-              {prefix}
-              {thread.label} ({eventCounts.get(thread.id) ?? 0})
-            </option>
-          );
-        })}
-      </select>
+    <label className={fieldClass}>
+      <span className={fieldLabelClass}>Agent</span>
+      <div className={selectWrapClass}>
+        <select
+          className={selectClass}
+          value={selectedAgentId}
+          onChange={(event) => onAgentSelected(event.currentTarget.value)}
+        >
+          <option value="all">All agents ({events.length})</option>
+          {threads.map((thread) => {
+            const depth = agentDepth(threads, thread);
+            const prefix = depth > 0 ? `${"  ".repeat(depth)}- ` : "";
+            return (
+              <option key={thread.id} value={thread.id}>
+                {prefix}
+                {thread.label} ({eventCounts.get(thread.id) ?? 0})
+              </option>
+            );
+          })}
+        </select>
+        <span className={selectChevronClass} aria-hidden="true">
+          <ChevronIcon open={false} />
+        </span>
+      </div>
     </label>
   );
 }
@@ -721,20 +872,31 @@ function DevEventRow({ event }: DevEventRowProps) {
   const usage = tokenUsageForPayload(event.payload);
 
   return (
-    <li className={`dev-event dev-event-${kind}`}>
-      <time dateTime={event.receivedAt}>{formatTime(event.receivedAt)}</time>
-      <div className="dev-event-content">
-        <div className="dev-event-header-row">
-          <div className="dev-event-summary">
-            <strong>{summary.title}</strong>
+    <li className={eventRowClass}>
+      <span
+        className={cx(
+          "absolute inset-y-0 left-0 w-[3px] rounded-l-md",
+          eventAccentClass[kind],
+        )}
+        aria-hidden="true"
+      />
+      <time className={eventTimeClass} dateTime={event.receivedAt}>
+        {formatTime(event.receivedAt)}
+      </time>
+      <div className={eventContentClass}>
+        <div className={eventHeaderClass}>
+          <div className={eventSummaryClass}>
+            <strong className={eventTitleClass}>{summary.title}</strong>
             {usage && (
-              <span className="dev-token-chip">{formatTokenUsage(usage)}</span>
+              <span className={tokenChipClass}>{formatTokenUsage(usage)}</span>
             )}
-            {summary.detail && <p>{summary.detail}</p>}
+            {summary.detail && (
+              <p className={eventTextClass}>{summary.detail}</p>
+            )}
           </div>
           <button
             type="button"
-            className="dev-event-toggle"
+            className={eventToggleClass}
             aria-label={isExpanded ? "Collapse event" : "Expand event"}
             aria-expanded={isExpanded}
             onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -744,14 +906,14 @@ function DevEventRow({ event }: DevEventRowProps) {
         </div>
 
         {isExpanded && (
-          <div className="dev-event-details">
+          <div className={eventDetailsClass}>
             {details.map((detail) => (
-              <section key={detail.label} className="dev-detail">
-                <h3>{detail.label}</h3>
+              <section key={detail.label} className={detailClass}>
+                <h3 className={detailHeadingClass}>{detail.label}</h3>
                 {detail.isCode ? (
-                  <pre>{detail.value}</pre>
+                  <pre className={detailPreClass}>{detail.value}</pre>
                 ) : (
-                  <p>{detail.value}</p>
+                  <p className={detailTextClass}>{detail.value}</p>
                 )}
               </section>
             ))}
@@ -805,78 +967,108 @@ export function DevModeLayer({
   return (
     <section
       ref={overlayRef}
-      className="dev-layer"
+      className={devLayerClass}
       role="dialog"
       aria-modal="true"
       aria-labelledby="dev-layer-heading"
       tabIndex={-1}
     >
-      <header className="dev-layer-header">
+      <header className={devHeaderClass}>
         <div>
-          <p className="dev-layer-kicker">Under the hood</p>
-          <h2 id="dev-layer-heading">Session Debug</h2>
+          <p className={devKickerClass}>Under the hood</p>
+          <h2 className={devTitleClass} id="dev-layer-heading">
+            Session Debug
+          </h2>
         </div>
-        <div className="dev-layer-actions">
-          <button type="button" onClick={onEventsCleared}>
+        <div className={devActionsClass}>
+          <button
+            type="button"
+            className={devActionButtonClass}
+            onClick={onEventsCleared}
+          >
             Clear
           </button>
-          <button type="button" onClick={onClose}>
+          <button
+            type="button"
+            className={devActionButtonClass}
+            onClick={onClose}
+          >
             Close
           </button>
         </div>
       </header>
 
-      <dl className="dev-metrics">
-        <div>
-          <dt>New input</dt>
-          <dd title={formatNumber(sessionTokenTotals.input)}>
+      <dl className={metricsClass}>
+        <div className={metricCardClass}>
+          <dt className={fieldLabelClass}>New input</dt>
+          <dd
+            className={metricValueClass}
+            title={formatNumber(sessionTokenTotals.input)}
+          >
             {formatCompactNumber(sessionTokenTotals.input)}
           </dd>
         </div>
-        <div>
-          <dt>Cache read</dt>
-          <dd title={formatNumber(sessionTokenTotals.cacheRead)}>
+        <div className={metricCardClass}>
+          <dt className={fieldLabelClass}>Cache read</dt>
+          <dd
+            className={metricValueClass}
+            title={formatNumber(sessionTokenTotals.cacheRead)}
+          >
             {formatCompactNumber(sessionTokenTotals.cacheRead)}
           </dd>
         </div>
-        <div>
-          <dt>Cache write</dt>
-          <dd title={formatNumber(sessionTokenTotals.cacheWrite)}>
+        <div className={metricCardClass}>
+          <dt className={fieldLabelClass}>Cache write</dt>
+          <dd
+            className={metricValueClass}
+            title={formatNumber(sessionTokenTotals.cacheWrite)}
+          >
             {formatCompactNumber(sessionTokenTotals.cacheWrite)}
           </dd>
         </div>
-        <div>
-          <dt>Output</dt>
-          <dd title={formatNumber(sessionTokenTotals.output)}>
+        <div className={metricCardClass}>
+          <dt className={fieldLabelClass}>Output</dt>
+          <dd
+            className={metricValueClass}
+            title={formatNumber(sessionTokenTotals.output)}
+          >
             {formatCompactNumber(sessionTokenTotals.output)}
           </dd>
         </div>
       </dl>
 
       {sessionLocation && (
-        <section className="dev-session-location" aria-label="Chat location">
-          <div>
-            <span>Chat JSONL</span>
-            <code title={sessionLocation.sessionFile}>
+        <section className={sessionLocationClass} aria-label="Chat location">
+          <div className={sessionLocationCopyClass}>
+            <span className={fieldLabelClass}>Chat JSONL</span>
+            <code
+              className={sessionFileClass}
+              title={sessionLocation.sessionFile}
+            >
               {sessionLocation.sessionFile}
             </code>
           </div>
-          <button type="button" onClick={() => void copySessionFile()}>
+          <button
+            type="button"
+            className={sessionCopyButtonClass}
+            onClick={() => void copySessionFile()}
+          >
             {copiedSessionFile ? "Copied" : "Copy"}
           </button>
         </section>
       )}
 
-      <div className="dev-controls">
+      <div className={controlsClass}>
         <AgentSelect
           threads={agentThreads}
           selectedAgentId={selectedAgentId}
           events={events}
           onAgentSelected={setSelectedAgentId}
         />
-        <label className="dev-field">
-          <span>Search</span>
+        <label className={fieldClass}>
+          <span className={fieldLabelClass}>Search</span>
           <input
+            className={fieldControlClass}
             type="search"
             value={searchQuery}
             placeholder="Filter events"
@@ -885,14 +1077,17 @@ export function DevModeLayer({
         </label>
       </div>
 
-      <div className="dev-tabs" role="tablist" aria-label="Dev panels">
+      <div className={tabsClass} role="tablist" aria-label="Dev panels">
         {PANEL_OPTIONS.map((panel) => (
           <button
             key={panel.value}
             type="button"
             role="tab"
             aria-selected={activePanel === panel.value}
-            className={`dev-tab${activePanel === panel.value ? " dev-tab-active" : ""}`}
+            className={cx(
+              tabClass,
+              activePanel === panel.value && activeTabClass,
+            )}
             onClick={() => setActivePanel(panel.value)}
           >
             {panel.label}
@@ -900,11 +1095,11 @@ export function DevModeLayer({
         ))}
       </div>
 
-      <div className="dev-layer-body">
+      <div className={devBodyClass}>
         {activePanel === "timeline" && (
-          <ol className="dev-timeline">
+          <ol className={listClass}>
             {latestEvents.length === 0 ? (
-              <li className="dev-empty">
+              <li className={emptyClass}>
                 {hasSearch ? "No matching dev events." : "No dev events yet."}
               </li>
             ) : (
@@ -916,9 +1111,9 @@ export function DevModeLayer({
         )}
 
         {activePanel === "tools" && (
-          <ol className="dev-timeline">
+          <ol className={listClass}>
             {latestToolEvents.length === 0 ? (
-              <li className="dev-empty">
+              <li className={emptyClass}>
                 {hasSearch ? "No matching tool calls." : "No tool calls yet."}
               </li>
             ) : (
@@ -930,9 +1125,9 @@ export function DevModeLayer({
         )}
 
         {activePanel === "messages" && (
-          <ol className="dev-messages">
+          <ol className={listClass}>
             {filteredMessages.length === 0 ? (
-              <li className="dev-empty">
+              <li className={emptyClass}>
                 {hasSearch
                   ? "No matching chat messages."
                   : "No chat messages yet."}
@@ -941,10 +1136,12 @@ export function DevModeLayer({
               filteredMessages.map((message) => (
                 <li
                   key={message.id}
-                  className={`dev-message dev-message-${message.role}`}
+                  className={cx(messageClass, messageRoleClass[message.role])}
                 >
-                  <span>{message.role}</span>
-                  <p>{message.text || (message.done ? "" : "...")}</p>
+                  <span className={fieldLabelClass}>{message.role}</span>
+                  <p className={messageTextClass}>
+                    {message.text || (message.done ? "" : "...")}
+                  </p>
                 </li>
               ))
             )}
@@ -952,18 +1149,20 @@ export function DevModeLayer({
         )}
 
         {activePanel === "raw" && (
-          <ol className="dev-raw-list">
+          <ol className={listClass}>
             {latestEvents.length === 0 ? (
-              <li className="dev-empty">
+              <li className={emptyClass}>
                 {hasSearch ? "No matching raw events." : "No raw events yet."}
               </li>
             ) : (
               latestEvents.map((event) => (
-                <li key={event.id}>
-                  <time dateTime={event.receivedAt}>
+                <li className={rawItemClass} key={event.id}>
+                  <time className={eventTimeClass} dateTime={event.receivedAt}>
                     {formatTime(event.receivedAt)}
                   </time>
-                  <pre>{formatRawJson(event.payload)}</pre>
+                  <pre className={rawPreClass}>
+                    {formatRawJson(event.payload)}
+                  </pre>
                 </li>
               ))
             )}
