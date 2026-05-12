@@ -316,6 +316,20 @@ test(
       (event) => event.type === "agent_end",
       DEFAULT_TIMEOUT_MS,
     );
+    const postTurnHydrateEvents = await collectEvents(
+      proc,
+      (event) => event.type === "hydrate",
+      DEFAULT_TIMEOUT_MS,
+    );
+    const postTurnHydrate = postTurnHydrateEvents.at(-1) as
+      | (SidecarEvent & { messages?: Array<{ role: string; text: string }> })
+      | undefined;
+    expect(postTurnHydrate?.messages).toContainEqual(
+      expect.objectContaining({
+        role: "user",
+        text: "Start this project.",
+      }),
+    );
     expect(existsSync(CairnDir.metadataPath(projectPath))).toBe(true);
     expect(
       JSON.parse(readFileSync(CairnDir.metadataPath(projectPath), "utf8")),
