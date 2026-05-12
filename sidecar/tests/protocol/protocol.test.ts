@@ -311,12 +311,27 @@ test(
       type: "prompt",
       text: "Start this project.",
     });
-    await collectEvents(
+    const promptEvents = await collectEvents(
       proc,
       (event) => event.type === "agent_end",
       DEFAULT_TIMEOUT_MS,
     );
     expect(existsSync(CairnDir.metadataPath(projectPath))).toBe(true);
+    expect(
+      JSON.parse(readFileSync(CairnDir.metadataPath(projectPath), "utf8")),
+    ).toMatchObject({ displayName: "Untitled" });
+    const promptRecentsEvent = promptEvents
+      .filter(
+        (
+          event,
+        ): event is SidecarEvent & { entries: Array<Record<string, string>> } =>
+          event.type === "recents" && Array.isArray(event.entries),
+      )
+      .at(-1);
+    expect(promptRecentsEvent?.entries[0]).toMatchObject({
+      path: projectPath,
+      displayName: "Untitled",
+    });
     expect(
       readdirSync(CairnDir.sessionsDir(projectPath)).some((name) =>
         name.endsWith(".jsonl"),
@@ -335,6 +350,18 @@ test(
     expect(
       restartEvents.find((event) => event.type === "active_project")?.project,
     ).toMatchObject({ path: projectPath });
+    const restartRecentsEvent = restartEvents
+      .filter(
+        (
+          event,
+        ): event is SidecarEvent & { entries: Array<Record<string, string>> } =>
+          event.type === "recents" && Array.isArray(event.entries),
+      )
+      .at(-1);
+    expect(restartRecentsEvent?.entries[0]).toMatchObject({
+      path: projectPath,
+      displayName: "Untitled",
+    });
     const hydrateEvent = restartEvents.find(
       (event): event is SidecarEvent & { messages: Array<{ text: string }> } =>
         event.type === "hydrate" && Array.isArray(event.messages),

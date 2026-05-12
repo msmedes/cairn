@@ -9,7 +9,7 @@ function tempProjectPath() {
   return mkdtempSync(join(tmpdir(), "cairn-project-"));
 }
 
-test("create and read round-trip project metadata by path", () => {
+test("create and read round-trip project metadata by path with placeholder display name", () => {
   const store = new ProjectStore();
   const projectPath = tempProjectPath();
   const project = store.create(
@@ -20,10 +20,10 @@ test("create and read round-trip project metadata by path", () => {
 
   expect(project).toMatchObject({
     id: "2026-04-28-build-me-a-tiny-quiz-app",
-    name: "Build me a tiny quiz app.",
+    name: "Untitled",
     createdAt: "2026-04-28T10:00:00.000Z",
     lastOpenedAt: "2026-04-28T10:00:00.000Z",
-    displayName: "Build me a tiny quiz app.",
+    displayName: "Untitled",
     path: projectPath,
   });
   expect(existsSync(CairnDir.metadataPath(project.path))).toBe(true);
@@ -42,6 +42,21 @@ test("create falls back to untitled without using the folder name as identity", 
   expect(second.id).toBe("2026-04-28-untitled");
   expect(second.name).toBe("Untitled");
   expect(first.path).not.toBe(second.path);
+});
+
+test("create uses the first message for the id but not the display name", () => {
+  const store = new ProjectStore();
+  const project = store.create(
+    tempProjectPath(),
+    "Hey, I want to build a little tool for myself that tracks chores",
+    new Date("2026-04-28T10:00:00.000Z"),
+  );
+
+  expect(project.id).toBe(
+    "2026-04-28-hey-i-want-to-build-a-little-tool-for-myself-that-tracks-chores",
+  );
+  expect(project.name).toBe("Untitled");
+  expect(project.displayName).toBe("Untitled");
 });
 
 test("touch updates lastOpenedAt without changing createdAt", () => {
@@ -65,7 +80,7 @@ test("touch updates lastOpenedAt without changing createdAt", () => {
   );
 });
 
-test("rename updates display name in metadata while keeping the on-disk path stable", () => {
+test("rename overwrites the placeholder display name while keeping the on-disk path stable", () => {
   const store = new ProjectStore();
   const project = store.create(
     tempProjectPath(),
@@ -130,7 +145,7 @@ test("rename handles empty names without changing the project folder", () => {
   expect(renamed.ok).toBe(false);
   expect(renamed.project).toEqual(project);
   expect(existsSync(project.path)).toBe(true);
-  expect(store.read(project.path)?.name).toBe("Temporary quiz idea");
+  expect(store.read(project.path)?.name).toBe("Untitled");
 });
 
 test("rename preserves non-Latin display names while keeping the original id", () => {
