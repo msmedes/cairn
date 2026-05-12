@@ -37,6 +37,45 @@ const bundle: PendingQuestion = {
   ],
 };
 
+const mixedBundle: PendingQuestion = {
+  toolCallId: "tool-call-2",
+  questions: [
+    {
+      header: "Priorities",
+      question: "Which priorities matter most?",
+      multiSelect: true,
+      options: [
+        {
+          label: "Fast setup",
+          description: "The first version should be quick to configure.",
+        },
+        {
+          label: "Polished results",
+          description: "The first version should feel finished to users.",
+        },
+        {
+          label: "Team sharing",
+          description: "The first version should support collaboration.",
+        },
+      ],
+    },
+    {
+      header: "Audience",
+      question: "Who should this first version serve?",
+      options: [
+        {
+          label: "Team leads",
+          description: "People who need lightweight training checks.",
+        },
+        {
+          label: "Learners",
+          description: "People taking the quizzes themselves.",
+        },
+      ],
+    },
+  ],
+};
+
 describe("QuestionCard", () => {
   test("submits selected options from a multi-question bundle", () => {
     const onSubmitted = vi.fn();
@@ -80,6 +119,47 @@ describe("QuestionCard", () => {
         option: {
           label: "One video",
           description: "Keep the first version focused on one upload.",
+        },
+      },
+    ]);
+  });
+
+  test("submits mixed multi-select and single-select answers", () => {
+    const onSubmitted = vi.fn();
+
+    render(
+      <QuestionCard
+        pendingQuestion={mixedBundle}
+        isSubmitting={false}
+        onSubmitted={onSubmitted}
+        onSkipped={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Fast setup" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Polished results" }));
+    fireEvent.click(screen.getByRole("tab", { name: /Audience/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Learners" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+
+    expect(onSubmitted).toHaveBeenCalledWith([
+      {
+        questionIndex: 0,
+        header: "Priorities",
+        question: "Which priorities matter most?",
+        kind: "multi",
+        selected: ["Fast setup", "Polished results"],
+      },
+      {
+        questionIndex: 1,
+        header: "Audience",
+        question: "Who should this first version serve?",
+        kind: "option",
+        option: {
+          label: "Learners",
+          description: "People taking the quizzes themselves.",
         },
       },
     ]);

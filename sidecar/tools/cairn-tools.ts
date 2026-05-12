@@ -198,12 +198,13 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
       name: "ask_user_question",
       label: "Ask User Question",
       description:
-        "Ask the user one to four grouped single-select questions with two to four concrete options each, then wait for structured answers or a cancellation. Adapted from @juicesharp/rpiv-ask-user-question (MIT) for Cairn's React question card.",
+        "Ask the user one to four grouped questions with two to four concrete options each, then wait for structured answers or a cancellation. Questions can be single-select or multi-select. Adapted from @juicesharp/rpiv-ask-user-question (MIT) for Cairn's React question card.",
       promptSnippet: "Ask grouped clarifying questions",
       promptGuidelines: [
         "Use ask_user_question when the user needs to make a real decision and clear choices will move Scoping, Slicing, or implementation forward.",
         "Prefer one grouped question card over several single-question chat turns when the decisions are related and the user should see the trade-offs together.",
         "Write short option labels and concrete descriptions that explain what choosing that option means.",
+        "Set multiSelect only when more than one option can honestly be true at once; otherwise leave questions single-select.",
         'Do not author reserved option labels such as "Other" or "Type something."; the React question card owns those sentinel labels.',
         "Do not use this for casual clarifications, simple yes/no checks, or questions where freeform conversation is more natural.",
         "If the result is cancelled, acknowledge that and continue in chat without re-asking the same card.",

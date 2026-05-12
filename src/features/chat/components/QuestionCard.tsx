@@ -12,6 +12,10 @@ type QuestionCardProps = {
   onSkipped: () => void;
 };
 
+type SelectedAnswer =
+  | { kind: "option"; optionIndex: number }
+  | { kind: "multi"; optionIndexes: number[] };
+
 const cardClass =
   "question-card grid gap-4 px-7 pb-[22px] pt-3.5 max-[640px]:mx-3 max-[640px]:mb-3 max-[640px]:mt-0 max-[640px]:p-3";
 
@@ -64,19 +68,76 @@ export function QuestionCard({
   onSkipped,
 }: QuestionCardProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedOptions, setSelectedOptions] = useState<
-    Record<number, number>
+  const [selectedAnswers, setSelectedAnswers] = useState<
+    Record<number, SelectedAnswer>
   >({});
   const activeQuestion = pendingQuestion.questions[activeIndex];
-  const allAnswered = pendingQuestion.questions.every(
-    (_question, index) => selectedOptions[index] !== undefined,
-  );
+  const activeSelection = selectedAnswers[activeIndex];
+  const allAnswered = pendingQuestion.questions.every((question, index) => {
+    const selection = selectedAnswers[index];
+    if (!selection) return false;
+    if (question.multiSelect) {
+      return selection.kind === "multi" && selection.optionIndexes.length > 0;
+    }
+    return selection.kind === "option";
+  });
+
+  function isOptionChecked(optionIndex: number) {
+    if (!activeSelection) return false;
+    if (activeQuestion.multiSelect) {
+      return (
+        activeSelection.kind === "multi" &&
+        activeSelection.optionIndexes.includes(optionIndex)
+      );
+    }
+    return (
+      activeSelection.kind === "option" &&
+      activeSelection.optionIndex === optionIndex
+    );
+  }
+
+  function chooseOption(optionIndex: number) {
+    setSelectedAnswers((current) => ({
+      ...current,
+      [activeIndex]: { kind: "option", optionIndex },
+    }));
+  }
+
+  function toggleMultiOption(optionIndex: number) {
+    setSelectedAnswers((current) => {
+      const currentSelection = current[activeIndex];
+      const optionIndexes =
+        currentSelection?.kind === "multi"
+          ? currentSelection.optionIndexes
+          : [];
+      const nextOptionIndexes = optionIndexes.includes(optionIndex)
+        ? optionIndexes.filter((index) => index !== optionIndex)
+        : [...optionIndexes, optionIndex].sort((left, right) => left - right);
+
+      return {
+        ...current,
+        [activeIndex]: { kind: "multi", optionIndexes: nextOptionIndexes },
+      };
+    });
+  }
 
   function submit() {
     if (!allAnswered || isSubmitting) return;
     const answers = pendingQuestion.questions.map((question, questionIndex) => {
-      const optionIndex = selectedOptions[questionIndex];
-      const option = question.options[optionIndex];
+      const selection = selectedAnswers[questionIndex];
+      if (selection.kind === "multi") {
+        return {
+          questionIndex,
+          header: question.header,
+          question: question.question,
+          kind: "multi" as const,
+          selected: selection.optionIndexes.map(
+            (optionIndex) => question.options[optionIndex].label,
+          ),
+        };
+      }
+
+      const option = question.options[selection.optionIndex];
       return {
         questionIndex,
         header: question.header,
@@ -100,7 +161,11 @@ export function QuestionCard({
         {pendingQuestion.questions.length > 1 && (
           <div className={tabsClass} role="tablist" aria-label="Questions">
             {pendingQuestion.questions.map((question, index) => {
-              const answered = selectedOptions[index] !== undefined;
+              const selection = selectedAnswers[index];
+              const answered =
+                selection?.kind === "option" ||
+                (selection?.kind === "multi" &&
+                  selection.optionIndexes.length > 0);
               return (
                 <button
                   type="button"
@@ -135,16 +200,15 @@ export function QuestionCard({
               <label className={optionClass}>
                 <span className={optionTopClass}>
                   <input
-                    type="radio"
+                    type={activeQuestion.multiSelect ? "checkbox" : "radio"}
                     aria-label={option.label}
                     name={`question-${activeIndex}`}
-                    checked={selectedOptions[activeIndex] === optionIndex}
+                    checked={isOptionChecked(optionIndex)}
                     disabled={isSubmitting}
                     onChange={() =>
-                      setSelectedOptions((current) => ({
-                        ...current,
-                        [activeIndex]: optionIndex,
-                      }))
+                      activeQuestion.multiSelect
+                        ? toggleMultiOption(optionIndex)
+                        : chooseOption(optionIndex)
                     }
                   />
                   <span className={optionLabelClass}>{option.label}</span>
