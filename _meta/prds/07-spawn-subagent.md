@@ -41,7 +41,7 @@ This slice's user is the developer; the end user's experience is unchanged. Stor
 
 ### `spawn_subagent` custom tool
 
-A new pi.dev custom tool registered in `sidecar/cairn-tools.ts`. The thin tool surface is intentional; the deep module behind it carries the work.
+A new pi.dev custom tool registered in `sidecar/tools/cairn-tools.ts`. The thin tool surface is intentional; the deep module behind it carries the work.
 
 Parameters:
 
@@ -69,7 +69,7 @@ The deep module is the test seam — pure-function `mapSubAgentResult` per schem
 
 ### Existing tools retired
 
-- `start_task` (the custom tool surface in `cairn-tools.ts`) is removed. The persona prompt is updated to use `spawn_subagent({ skill_name: "implement-issue", args: { issuePath }, response_schema: "task_outcome" })`.
+- `start_task` (the custom tool surface in `sidecar/tools/cairn-tools.ts`) is removed. The persona prompt is updated to use `spawn_subagent({ skill_name: "implement-issue", args: { issuePath }, response_schema: "task_outcome" })`.
 - `verify_slice` (the custom tool surface) is removed. Replaced by `spawn_subagent({ skill_name: "verify-slice", args: {}, response_schema: "verify_result" })`.
 
 The deep modules `start-task.ts` and `verify-slice.ts` survive in spirit — their pi.dev sub-agent invocation patterns are absorbed into `spawn-subagent.ts`. The files themselves may be deleted if the new module fully subsumes them; that decision belongs to the implementing developer.
@@ -139,7 +139,7 @@ The existing `start_task` / `verify_slice` synthesis paths can be removed once t
 
 Both `skill_name` and `response_schema` are TypeBox literal unions, not free-form strings. Pi.dev validates tool-call parameters against the schema before dispatch; a typo (`"wrtie-plan"`) produces a tool-call rejection that the persona observes and corrects, rather than reaching the deep module and returning `blocked`. This is a defense-in-depth: the deep module still handles unknown-skill cases (in case the union grows out of sync with loaded skills), but the common case is caught earlier.
 
-When a new skill is added, the literal union in `spawn_subagent`'s parameters needs to be updated. Worth a comment in `cairn-tools.ts` calling this out.
+When a new skill is added, the literal union in `spawn_subagent`'s parameters needs to be updated. Worth a comment in `sidecar/tools/cairn-tools.ts` calling this out.
 
 ## Testing Decisions
 

@@ -18,7 +18,7 @@ The persona itself is the orchestrator. During Implementing, the persona's tool-
 
 ### Persona-in-the-loop dispatch
 
-The persona dispatches sub-agents directly, via `spawn_subagent` registered in `sidecar/cairn-tools.ts`. The tool wraps a pi.dev sub-agent / sub-session (per ADR 0002), launched against the project's working tree, with the issue file and PRD as the explicit handoff artifacts. The dispatch is synchronous from the persona's perspective: the tool call blocks until the sub-agent returns. The persona's chat thread is therefore the long-running thing during Implementing.
+The persona dispatches sub-agents directly, via `spawn_subagent` registered in `sidecar/tools/cairn-tools.ts`. The tool wraps a pi.dev sub-agent / sub-session (per ADR 0002), launched against the project's working tree, with the issue file and PRD as the explicit handoff artifacts. The dispatch is synchronous from the persona's perspective: the tool call blocks until the sub-agent returns. The persona's chat thread is therefore the long-running thing during Implementing.
 
 Out-of-loop dispatch (a separate worker process the persona observes) was considered and rejected — see Considered alternatives.
 
@@ -99,9 +99,9 @@ The `target` enum gains a new entry `"tasks"`. The `creating_started` event payl
 
 ## Consequences
 
-- **Custom sub-agent dispatch in `sidecar/cairn-tools.ts`** via `spawn_subagent`. Side-effecting; registers with the pi.dev `AgentSession`. Returns a structured `{ outcome: "complete" | "failure" | "blocked", message: string }` payload for implementation work. Wraps a pi.dev sub-agent / sub-session, launched in the project working tree with the issue file and PRD as the explicit handoff artifacts and a red-green TDD instruction.
+- **Custom sub-agent dispatch in `sidecar/tools/cairn-tools.ts`** via `spawn_subagent`. Side-effecting; registers with the pi.dev `AgentSession`. Returns a structured `{ outcome: "complete" | "failure" | "blocked", message: string }` payload for implementation work. Wraps a pi.dev sub-agent / sub-session, launched in the project working tree with the issue file and PRD as the explicit handoff artifacts and a red-green TDD instruction.
 
-- **Task artifact tools in `sidecar/cairn-tools.ts`** create `tasks.json` through `create_tasks_artifact` and update progress through `update_task_status(task_slug, status)`.
+- **Task artifact tools in `sidecar/tools/cairn-tools.ts`** create `tasks.json` through `create_tasks_artifact` and update progress through `update_task_status(task_slug, status)`.
 
 - **`creating_started` `target` enum extends to include `"tasks"`** for the initial Tasks artifact creation.
 
