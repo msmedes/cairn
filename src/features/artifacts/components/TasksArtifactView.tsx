@@ -2,7 +2,7 @@ import type {
   TaskArtifactItem,
   TaskStatus,
   TasksArtifactData,
-} from "./tasksArtifact";
+} from "../tasksArtifact";
 
 type TasksArtifactViewProps = {
   data: TasksArtifactData;

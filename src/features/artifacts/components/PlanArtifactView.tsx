@@ -1,4 +1,4 @@
-import type { PlanArtifactData } from "./planArtifact";
+import type { PlanArtifactData } from "../planArtifact";
 
 type PlanArtifactViewProps = {
   data: PlanArtifactData;

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { ChatMessage } from "./chat-stream";
-import { useModalOverlay } from "./useModalOverlay";
-import type { JsonValue, SidecarDevLogEntry } from "./useSidecarDevLog";
+import { useModalOverlay } from "../../../hooks/useModalOverlay";
+import type { ChatMessage } from "../../chat/chat-stream";
+import type { JsonValue, SidecarDevLogEntry } from "../useSidecarDevLog";
 
 type DevModeLayerProps = {
   isOpen: boolean;

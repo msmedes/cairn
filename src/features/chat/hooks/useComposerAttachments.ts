@@ -3,7 +3,7 @@ import {
   encodeImageAttachment,
   type ImageAttachment,
   type ImageAttachmentRejectionReason,
-} from "./imageAttachment";
+} from "../imageAttachment";
 
 export type ComposerImageAttachment = ImageAttachment & {
   id: string;

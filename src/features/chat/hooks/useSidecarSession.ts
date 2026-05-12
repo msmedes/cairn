@@ -5,7 +5,7 @@ import {
   applyAssistantDelta,
   type ChatMessage,
   markAssistantDone,
-} from "./chat-stream";
+} from "../chat-stream";
 
 export type ActiveProject = {
   id: string;

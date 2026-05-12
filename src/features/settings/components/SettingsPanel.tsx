@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useModalOverlay } from "./useModalOverlay";
+import { useModalOverlay } from "../../../hooks/useModalOverlay";
 
 export type CairnSettingsStatus = {
   hasAnthropicApiKey: boolean;

@@ -1,8 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
-import { bugReportUrl } from "./bugReportUrl";
-import type { ChatMessage } from "./chat-stream";
-import type { JsonValue, SidecarDevLogEntry } from "./useSidecarDevLog";
+import type { ChatMessage } from "../../chat/chat-stream";
+import type {
+  JsonValue,
+  SidecarDevLogEntry,
+} from "../../dev-mode/useSidecarDevLog";
+import { bugReportUrl } from "../bugReportUrl";
 
 type BugReportProject = {
   path: string;

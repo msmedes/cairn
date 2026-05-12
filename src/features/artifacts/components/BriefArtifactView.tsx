@@ -1,4 +1,4 @@
-import type { BriefArtifactData } from "./briefArtifact";
+import type { BriefArtifactData } from "../briefArtifact";
 
 type BriefArtifactViewProps = {
   data: BriefArtifactData;

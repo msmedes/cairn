@@ -7,9 +7,9 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { useProjectFile } from "../features/project/hooks/useProjectFile";
+import type { CreatingTarget } from "../features/shell/hooks/useCreatingIndicator";
 import App from "./App";
-import type { CreatingTarget } from "./useCreatingIndicator";
-import { useProjectFile } from "./useProjectFile";
 
 const devLogMock = vi.hoisted(() => ({
   events: [] as Array<{
@@ -70,11 +70,11 @@ async function openDevPanelViaMenu() {
   });
 }
 
-vi.mock("./useProjectFile", () => ({
+vi.mock("../features/project/hooks/useProjectFile", () => ({
   useProjectFile: vi.fn(),
 }));
 
-vi.mock("./useSidecarDevLog", () => ({
+vi.mock("../features/dev-mode/useSidecarDevLog", () => ({
   useSidecarDevLog: () => ({
     events: devLogMock.events,
     clearEvents: vi.fn(),
@@ -110,7 +110,7 @@ let mockRecents: Array<{
 const openProjectMock = vi.hoisted(() => vi.fn());
 const openProjectDialogMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./useSidecarSession", () => ({
+vi.mock("../features/chat/hooks/useSidecarSession", () => ({
   useSidecarSession: (handlers: SidecarSessionHandlers) => {
     sidecarSessionHandlers = handlers;
 

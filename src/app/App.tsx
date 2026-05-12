@@ -12,47 +12,53 @@ import {
   useState,
 } from "react";
 import "./App.css";
-import { BriefArtifactView } from "./BriefArtifactView";
-import { BugReportDialog } from "./BugReportDialog";
+import { type PanelTab, PanelTabs } from "../components/PanelTabs";
 import {
   type BriefArtifactEnvelope,
   parseBriefArtifact,
-} from "./briefArtifact";
-import type { ChatMessage } from "./chat-stream";
-import { DevModeLayer } from "./DevModeLayer";
-import type { ImageAttachmentRejectionReason } from "./imageAttachment";
-import { type PanelTab, PanelTabs } from "./PanelTabs";
-import { PlanArtifactView } from "./PlanArtifactView";
-import { type PlanArtifactEnvelope, parsePlanArtifact } from "./planArtifact";
+} from "../features/artifacts/briefArtifact";
+import { BriefArtifactView } from "../features/artifacts/components/BriefArtifactView";
+import { PlanArtifactView } from "../features/artifacts/components/PlanArtifactView";
+import { TasksArtifactView } from "../features/artifacts/components/TasksArtifactView";
+import {
+  type PlanArtifactEnvelope,
+  parsePlanArtifact,
+} from "../features/artifacts/planArtifact";
+import {
+  parseTasksArtifact,
+  type TasksArtifactEnvelope,
+} from "../features/artifacts/tasksArtifact";
+import { BugReportDialog } from "../features/bug-report/components/BugReportDialog";
+import type { ChatMessage } from "../features/chat/chat-stream";
+import { useAutoResizingTextarea } from "../features/chat/hooks/useAutoResizingTextarea";
+import { useComposerAttachments } from "../features/chat/hooks/useComposerAttachments";
+import {
+  type ActiveProject,
+  type McpAuthStatusEvent,
+  useSidecarSession,
+} from "../features/chat/hooks/useSidecarSession";
+import type { ImageAttachmentRejectionReason } from "../features/chat/imageAttachment";
+import { DevModeLayer } from "../features/dev-mode/components/DevModeLayer";
+import {
+  type SidecarDevLogEntry,
+  useSidecarDevLog,
+} from "../features/dev-mode/useSidecarDevLog";
+import { useProjectFile } from "../features/project/hooks/useProjectFile";
 import {
   type CairnSettingsStatus,
   type McpServerKey,
   type McpSettingsStatus,
   SettingsPanel,
-} from "./SettingsPanel";
-import { TasksArtifactView } from "./TasksArtifactView";
-import {
-  parseTasksArtifact,
-  type TasksArtifactEnvelope,
-} from "./tasksArtifact";
-import { useActivePanelTab } from "./useActivePanelTab";
-import { useAutoResizingTextarea } from "./useAutoResizingTextarea";
-import { useAutoScroll } from "./useAutoScroll";
-import { useComposerAttachments } from "./useComposerAttachments";
-import { useCreatingIndicator } from "./useCreatingIndicator";
+} from "../features/settings/components/SettingsPanel";
+import { useActivePanelTab } from "../features/shell/hooks/useActivePanelTab";
+import { useCreatingIndicator } from "../features/shell/hooks/useCreatingIndicator";
 import {
   DEFAULT_CHAT_PANE_PERCENT,
   MAX_CHAT_PANE_PERCENT,
   MIN_CHAT_PANE_PERCENT,
   usePaneSplit,
-} from "./usePaneSplit";
-import { useProjectFile } from "./useProjectFile";
-import { type SidecarDevLogEntry, useSidecarDevLog } from "./useSidecarDevLog";
-import {
-  type ActiveProject,
-  type McpAuthStatusEvent,
-  useSidecarSession,
-} from "./useSidecarSession";
+} from "../features/shell/hooks/usePaneSplit";
+import { useAutoScroll } from "../hooks/useAutoScroll";
 
 type BugReportSnapshot = {
   messages: ChatMessage[];
