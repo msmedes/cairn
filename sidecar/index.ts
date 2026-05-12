@@ -41,11 +41,16 @@ import {
 } from "./project/recents-registry";
 import {
   type HydrateEvent,
-  translateSessionEntriesToDevLogMessages,
   translateSessionEntriesToHydrateEvent,
 } from "./protocol/hydrate";
 import { emitHydrateAndMaybeResumeRecap } from "./protocol/init-recap";
 import { recoverDanglingToolCallInDir } from "./recovery/dangling-tool-recovery";
+import {
+  type AgentThread,
+  emitPersistedSessionDevLogs,
+  emitSessionLocation,
+  type SessionLocationDevLog,
+} from "./runtime/agent-threads";
 import {
   getFakeProtocolModel,
   getFakeSpawnSubagentResultFromEnv,
@@ -102,12 +107,7 @@ type DevLogMsg =
       type: "agent_threads";
       threads: AgentThread[];
     }
-  | {
-      type: "session_location";
-      sessionFile: string;
-      sessionDir: string;
-      projectPath: string;
-    }
+  | SessionLocationDevLog
   | { type: "tool_start"; name: string }
   | { type: "tool_end"; name: string; ok: boolean }
   | { type: "assistant_error"; message: string }
@@ -119,29 +119,6 @@ type DevLogMsg =
       issues: string[];
       phase: ProjectPhase;
     };
-
-type SessionEntryLike = {
-  type?: string;
-  timestamp?: string;
-  message?: {
-    role?: string;
-    content?: unknown;
-  };
-};
-
-type SpawnCall = {
-  parentAgentId: string;
-  timestampMs: number;
-  label: string;
-};
-
-type AgentThread = {
-  id: string;
-  parentId: string | null;
-  label: string;
-  kind: "cairn" | "subagent";
-  sessionFile?: string;
-};
 
 let session: AgentSession | null = null;
 let sessionManager: SessionManager | null = null;
@@ -171,178 +148,6 @@ function hasExistingSession(sessionDir: string) {
   } catch {
     return false;
   }
-}
-
-function readSessionEntriesFromFile(sessionFile: string) {
-  return readFileSync(sessionFile, "utf8")
-    .split("\n")
-    .flatMap((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return [];
-      try {
-        return [JSON.parse(trimmed)];
-      } catch {
-        return [];
-      }
-    });
-}
-
-function timestampMs(value: unknown) {
-  if (typeof value !== "string") return 0;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function extractSpawnCallLabel(content: unknown) {
-  if (!Array.isArray(content)) return null;
-
-  for (const part of content) {
-    if (!isRecord(part) || part.type !== "toolCall") continue;
-    if (part.name !== "spawn_subagent") continue;
-    const args = isRecord(part.arguments) ? part.arguments : {};
-    const skillName =
-      typeof args.skill_name === "string" ? args.skill_name : "subagent";
-    const handoffArgs = isRecord(args.args) ? args.args : {};
-    const issuePath =
-      typeof handoffArgs.issue_path === "string"
-        ? handoffArgs.issue_path.split("/").pop()
-        : null;
-    return issuePath ? `${skillName}: ${issuePath}` : skillName;
-  }
-
-  return null;
-}
-
-function collectSpawnCalls(agentId: string, entries: SessionEntryLike[]) {
-  return entries.flatMap((entry): SpawnCall[] => {
-    if (entry.type !== "message" || entry.message?.role !== "assistant") {
-      return [];
-    }
-    const label = extractSpawnCallLabel(entry.message.content);
-    if (!label) return [];
-    return [
-      {
-        parentAgentId: agentId,
-        timestampMs: timestampMs(entry.timestamp),
-        label,
-      },
-    ];
-  });
-}
-
-function listSubagentSessionFiles(project: Project) {
-  const subagentDir = join(getSessionDir(project), "subagents");
-  try {
-    return readdirSync(subagentDir)
-      .filter((name) => name.endsWith(".jsonl"))
-      .sort()
-      .map((name) => join(subagentDir, name));
-  } catch {
-    return [];
-  }
-}
-
-function agentIdForSessionFile(sessionFile: string) {
-  return `subagent:${sessionFile}`;
-}
-
-function buildAgentThreads(
-  parentEntries: SessionEntryLike[],
-  subagentSessions: Array<{ sessionFile: string; entries: SessionEntryLike[] }>,
-  parentSessionFile?: string,
-) {
-  const spawnCalls = [
-    ...collectSpawnCalls("cairn", parentEntries),
-    ...subagentSessions.flatMap((session) =>
-      collectSpawnCalls(
-        agentIdForSessionFile(session.sessionFile),
-        session.entries,
-      ),
-    ),
-  ].sort((a, b) => a.timestampMs - b.timestampMs);
-
-  const threads: AgentThread[] = [
-    {
-      id: "cairn",
-      parentId: null,
-      label: "Cairn",
-      kind: "cairn",
-      sessionFile: parentSessionFile,
-    },
-  ];
-
-  for (const session of subagentSessions) {
-    const startedAt = timestampMs(session.entries[0]?.timestamp);
-    const spawnCall = spawnCalls
-      .filter((call) => call.timestampMs <= startedAt)
-      .at(-1);
-    threads.push({
-      id: agentIdForSessionFile(session.sessionFile),
-      parentId: spawnCall?.parentAgentId ?? "cairn",
-      label: spawnCall?.label ?? "subagent",
-      kind: "subagent",
-      sessionFile: session.sessionFile,
-    });
-  }
-
-  return threads;
-}
-
-function emitPersistedSessionDevLogs(
-  manager: Pick<SessionManager, "getEntries" | "getSessionFile">,
-  project: Project,
-) {
-  const parentEntries = manager.getEntries() as SessionEntryLike[];
-  const subagentSessions = listSubagentSessionFiles(project).map(
-    (sessionFile) => ({
-      sessionFile,
-      entries: readSessionEntriesFromFile(sessionFile) as SessionEntryLike[],
-    }),
-  );
-  const threads = buildAgentThreads(
-    parentEntries,
-    subagentSessions,
-    manager.getSessionFile(),
-  );
-  const parentByAgentId = new Map(
-    threads.map((thread) => [thread.id, thread.parentId]),
-  );
-
-  emitDevLog({ type: "agent_threads", threads });
-
-  for (const message of translateSessionEntriesToDevLogMessages(parentEntries, {
-    kind: "parent",
-    agentId: "cairn",
-  })) {
-    emitDevLog(message);
-  }
-
-  for (const { sessionFile, entries } of subagentSessions) {
-    const agentId = agentIdForSessionFile(sessionFile);
-    for (const message of translateSessionEntriesToDevLogMessages(entries, {
-      kind: "subagent",
-      agentId,
-      parentAgentId: parentByAgentId.get(agentId) ?? undefined,
-      sessionFile,
-    })) {
-      emitDevLog(message);
-    }
-  }
-}
-
-function emitSessionLocation(manager: SessionManager, project: Project) {
-  const sessionFile = manager.getSessionFile();
-  if (!sessionFile) return;
-  emitDevLog({
-    type: "session_location",
-    sessionFile,
-    sessionDir: getSessionDir(project),
-    projectPath: project.path,
-  });
 }
 
 function emit(msg: OutMsg) {
@@ -630,10 +435,10 @@ async function openProject(
   session = nextSession;
   sessionManager = nextSessionManager;
   wireSessionEvents(nextSession);
-  emitSessionLocation(nextSessionManager, project);
+  emitSessionLocation(nextSessionManager, project, emitDevLog);
 
   if (options.emitHydrate) {
-    emitPersistedSessionDevLogs(nextSessionManager, project);
+    emitPersistedSessionDevLogs(nextSessionManager, project, emitDevLog);
 
     suppressAssistantError = true;
     await emitHydrateAndMaybeResumeRecap(nextSession, nextSessionManager, {
