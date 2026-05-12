@@ -37,6 +37,72 @@ export type AskUserQuestionParams = z.infer<
 
 export type AskUserQuestionBundle = AskUserQuestionParams["questions"];
 
+export type AskUserQuestionValidationError =
+  | "duplicate_question"
+  | "duplicate_option_label"
+  | "reserved_label";
+
+export type AskUserQuestionValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: AskUserQuestionValidationError;
+      message: string;
+    };
+
+const RESERVED_OPTION_LABELS = ["Other", "Type something."] as const;
+
+function comparableText(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function validateQuestionnaire(
+  params: AskUserQuestionParams,
+): AskUserQuestionValidationResult {
+  const seenQuestions = new Set<string>();
+
+  for (const question of params.questions) {
+    const questionText = comparableText(question.question);
+    if (seenQuestions.has(questionText)) {
+      return {
+        ok: false,
+        error: "duplicate_question",
+        message:
+          "Question text must be unique within one ask_user_question bundle.",
+      };
+    }
+    seenQuestions.add(questionText);
+  }
+
+  const reservedLabels = new Set(RESERVED_OPTION_LABELS.map(comparableText));
+
+  for (const question of params.questions) {
+    const seenOptionLabels = new Set<string>();
+    for (const option of question.options) {
+      const optionLabel = comparableText(option.label);
+      if (reservedLabels.has(optionLabel)) {
+        return {
+          ok: false,
+          error: "reserved_label",
+          message:
+            'Option labels must not use reserved UI sentinel labels like "Other" or "Type something.".',
+        };
+      }
+      if (seenOptionLabels.has(optionLabel)) {
+        return {
+          ok: false,
+          error: "duplicate_option_label",
+          message:
+            "Option labels must be unique within each ask_user_question question.",
+        };
+      }
+      seenOptionLabels.add(optionLabel);
+    }
+  }
+
+  return { ok: true };
+}
+
 export type AskUserQuestionAnswer = {
   questionIndex: number;
   header: string;

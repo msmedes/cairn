@@ -1,4 +1,5 @@
 import {
+  type AgentToolResult,
   defineTool,
   type Skill,
   type ToolDefinition,
@@ -47,6 +48,8 @@ import {
   type AskUserQuestionBundle,
   type AskUserQuestionResult,
   AskUserQuestionToolParamsSchema,
+  type AskUserQuestionValidationResult,
+  validateQuestionnaire,
 } from "../questions/ask-user-question-schema";
 import {
   SPAWN_SUBAGENT_RESPONSE_SCHEMAS,
@@ -110,6 +113,10 @@ export type CairnToolsOptions = {
     questions: AskUserQuestionBundle;
   }) => Promise<AskUserQuestionResult>;
 };
+
+type AskUserQuestionToolDetails =
+  | AskUserQuestionResult
+  | AskUserQuestionValidationResult;
 
 const setProjectNameParamsSchema = z.object({
   name: z.string().describe("The project name exactly as the user gave it."),
@@ -197,13 +204,24 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
         "Use ask_user_question when the user needs to make a real decision and clear choices will move Scoping, Slicing, or implementation forward.",
         "Prefer one grouped question card over several single-question chat turns when the decisions are related and the user should see the trade-offs together.",
         "Write short option labels and concrete descriptions that explain what choosing that option means.",
+        'Do not author reserved option labels such as "Other" or "Type something."; the React question card owns those sentinel labels.',
         "Do not use this for casual clarifications, simple yes/no checks, or questions where freeform conversation is more natural.",
         "If the result is cancelled, acknowledge that and continue in chat without re-asking the same card.",
       ],
       parameters: toolSchemaFromZod(AskUserQuestionToolParamsSchema),
       executionMode: "sequential",
-      async execute(toolCallId, params) {
+      async execute(
+        toolCallId,
+        params,
+      ): Promise<AgentToolResult<AskUserQuestionToolDetails>> {
         const parsed = AskUserQuestionToolParamsSchema.parse(params);
+        const validation = validateQuestionnaire(parsed);
+        if (!validation.ok) {
+          return {
+            content: [{ type: "text", text: JSON.stringify(validation) }],
+            details: validation,
+          };
+        }
         const result = options.askUserQuestion
           ? await options.askUserQuestion({
               toolCallId,
