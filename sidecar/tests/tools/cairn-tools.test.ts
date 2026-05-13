@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CairnDir } from "../../project/cairn-dir";
@@ -18,6 +25,292 @@ function toolText(result: { content: Array<{ type: string; text?: string }> }) {
     .flatMap((part) => (part.text ? [part.text] : []))
     .join("");
 }
+
+function createActiveProjectTools(project: Project) {
+  return createCairnTools({
+    getActiveProject: () => project,
+    renameProject: () => {
+      throw new Error("should not rename while using file tools");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while using file tools");
+    },
+    onProjectUpdate: () => {
+      throw new Error("should not emit project updates while using file tools");
+    },
+    onCreatingStart: () => {
+      throw new Error("should not emit creating state while using file tools");
+    },
+  });
+}
+
+test("edit tool replaces a unique substring inside the active project", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  mkdirSync(join(activeProject.path, "src", "lib"), { recursive: true });
+  writeFileSync(
+    join(activeProject.path, "src", "lib", "matchMeals.ts"),
+    "export const matches = meals.every((meal) => meal.ready);\n",
+    "utf8",
+  );
+  const edit = createActiveProjectTools(activeProject).find(
+    (tool) => tool.name === "edit",
+  );
+
+  expect(edit).toBeDefined();
+  if (!edit) {
+    throw new Error("edit tool was not registered");
+  }
+
+  const result = await edit.execute(
+    "tool-call-1",
+    {
+      path: "src/lib/matchMeals.ts",
+      oldText: "meals.every",
+      newText: "meals.some",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: true,
+    path: "src/lib/matchMeals.ts",
+  });
+  expect(
+    readFileSync(
+      join(activeProject.path, "src", "lib", "matchMeals.ts"),
+      "utf8",
+    ),
+  ).toContain("meals.some");
+});
+
+test("edit tool rejects missing substrings without rewriting", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const path = join(activeProject.path, "matchMeals.ts");
+  writeFileSync(path, "const predicate = 'every';\n", "utf8");
+  const edit = createActiveProjectTools(activeProject).find(
+    (tool) => tool.name === "edit",
+  );
+
+  if (!edit) {
+    throw new Error("edit tool was not registered");
+  }
+
+  const result = await edit.execute(
+    "tool-call-1",
+    {
+      path: "matchMeals.ts",
+      oldText: "some",
+      newText: "every",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: false,
+    code: "no_match",
+  });
+  expect(readFileSync(path, "utf8")).toBe("const predicate = 'every';\n");
+});
+
+test("edit tool rejects ambiguous substrings without rewriting", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const path = join(activeProject.path, "matchMeals.ts");
+  writeFileSync(path, "every(() => true);\nevery(() => false);\n", "utf8");
+  const edit = createActiveProjectTools(activeProject).find(
+    (tool) => tool.name === "edit",
+  );
+
+  if (!edit) {
+    throw new Error("edit tool was not registered");
+  }
+
+  const result = await edit.execute(
+    "tool-call-1",
+    {
+      path: "matchMeals.ts",
+      oldText: "every",
+      newText: "some",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: false,
+    code: "ambiguous_match",
+  });
+  expect(readFileSync(path, "utf8")).toBe(
+    "every(() => true);\nevery(() => false);\n",
+  );
+});
+
+test("file tools reject paths that escape the active project", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const read = createActiveProjectTools(activeProject).find(
+    (tool) => tool.name === "read",
+  );
+
+  if (!read) {
+    throw new Error("read tool was not registered");
+  }
+
+  const result = await read.execute(
+    "tool-call-1",
+    { path: "../outside.txt" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: false,
+    code: "path_escape",
+  });
+});
+
+test("write tool rejects direct writes under .cairn and points at artifact tools", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const write = createActiveProjectTools(activeProject).find(
+    (tool) => tool.name === "write",
+  );
+
+  if (!write) {
+    throw new Error("write tool was not registered");
+  }
+
+  const result = await write.execute(
+    "tool-call-1",
+    { path: ".cairn/brief.json", content: "{}" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(result.details).toMatchObject({
+    ok: false,
+    code: "cairn_path",
+    message: expect.stringContaining("artifact tools"),
+  });
+  expect(existsSync(CairnDir.briefPath(activeProject.path))).toBe(false);
+});
+
+test("read and edit tools also reject direct access under .cairn", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const [read, edit] = createActiveProjectTools(activeProject).filter((tool) =>
+    ["read", "edit"].includes(tool.name),
+  );
+
+  if (!read || !edit) {
+    throw new Error("read and edit tools were not registered");
+  }
+
+  const readResult = await read.execute(
+    "tool-call-1",
+    { path: ".cairn/tasks.json" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+  const editResult = await edit.execute(
+    "tool-call-2",
+    {
+      path: ".cairn/tasks.json",
+      oldText: "todo",
+      newText: "done",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(readResult.details).toMatchObject({
+    ok: false,
+    code: "cairn_path",
+  });
+  expect(editResult.details).toMatchObject({
+    ok: false,
+    code: "cairn_path",
+  });
+});
+
+test("file tools reject symlink escapes from the active project", async () => {
+  const store = new ProjectStore();
+  const activeProject = store.create(
+    tempProjectPath(),
+    "Dinner Picker",
+    new Date("2026-05-12T10:00:00.000Z"),
+  );
+  const outsidePath = join(tempProjectPath(), "outside.txt");
+  writeFileSync(outsidePath, "outside\n", "utf8");
+  symlinkSync(outsidePath, join(activeProject.path, "linked-outside.txt"));
+  const [read, write] = createActiveProjectTools(activeProject).filter((tool) =>
+    ["read", "write"].includes(tool.name),
+  );
+
+  if (!read || !write) {
+    throw new Error("read and write tools were not registered");
+  }
+
+  const readResult = await read.execute(
+    "tool-call-1",
+    { path: "linked-outside.txt" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+  const writeResult = await write.execute(
+    "tool-call-2",
+    { path: "linked-outside.txt", content: "mutated\n" },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(readResult.details).toMatchObject({
+    ok: false,
+    code: "path_escape",
+  });
+  expect(writeResult.details).toMatchObject({
+    ok: false,
+    code: "path_escape",
+  });
+  expect(readFileSync(outsidePath, "utf8")).toBe("outside\n");
+});
 
 test("set_project_name tool renames the active project and reports the updated project", async () => {
   const store = new ProjectStore();

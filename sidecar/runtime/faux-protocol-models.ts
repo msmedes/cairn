@@ -445,6 +445,37 @@ function getFakeProtocolAskUserQuestionModel():
   return { model, authStorage };
 }
 
+function getFakeProtocolWriteCairnPathModel():
+  | { model: Model<string>; authStorage: AuthStorage }
+  | undefined {
+  if (process.env.CAIRN_FAKE_PROTOCOL_WRITE_CAIRN_PATH !== "1") {
+    return undefined;
+  }
+
+  const registration = registerFauxProvider({
+    provider: "cairn-protocol-test",
+    models: [{ id: "cairn-protocol-test-model" }],
+  });
+  registration.setResponses([
+    fauxAssistantMessage([
+      fauxToolCall(
+        "write",
+        {
+          path: ".cairn/brief.json",
+          content: "{}",
+        },
+        { id: "tool-write-cairn-path" },
+      ),
+    ]),
+    (context) =>
+      fauxAssistantMessage(`write result: ${findLastToolResultText(context)}`),
+  ]);
+  const model = registration.getModel();
+  const authStorage = AuthStorage.inMemory();
+  authStorage.setRuntimeApiKey(model.provider, "cairn-protocol-test-key");
+  return { model, authStorage };
+}
+
 function getFakeProtocolTextModel():
   | { model: Model<string>; authStorage: AuthStorage }
   | undefined {
@@ -476,6 +507,7 @@ export function getFakeProtocolModel():
     getFakeProtocolUpdateProjectContextModel() ??
     getFakeProtocolSetProjectNameModel() ??
     getFakeProtocolAskUserQuestionModel() ??
+    getFakeProtocolWriteCairnPathModel() ??
     getFakeProtocolTextModel()
   );
 }

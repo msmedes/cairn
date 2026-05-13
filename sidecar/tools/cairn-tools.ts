@@ -1,4 +1,12 @@
 import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import {
   type AgentToolResult,
   defineTool,
   type Skill,
@@ -147,6 +155,55 @@ const spawnSubagentParamsSchema = z.object({
     ),
 });
 
+const readFileParamsSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .describe("File path to read, resolved relative to the active project."),
+});
+
+const writeFileParamsSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .describe(
+      "File path to create or fully replace, resolved relative to the active project.",
+    ),
+  content: z.string().describe("Complete file contents to write."),
+});
+
+const editFileParamsSchema = z.object({
+  path: z
+    .string()
+    .min(1)
+    .describe("File path to edit, resolved relative to the active project."),
+  oldText: z
+    .string()
+    .min(1)
+    .describe("Exact unique substring to replace in the file."),
+  newText: z.string().describe("Replacement text."),
+});
+
+type FileToolResult =
+  | {
+      ok: true;
+      path: string;
+      bytes?: number;
+      replacements?: number;
+    }
+  | {
+      ok: false;
+      code:
+        | "no_active_project"
+        | "path_escape"
+        | "cairn_path"
+        | "file_not_found"
+        | "no_match"
+        | "ambiguous_match";
+      message: string;
+      path?: string;
+    };
+
 function noActiveProjectBriefResult(): BriefArtifactResult {
   return {
     ok: false,
@@ -187,6 +244,151 @@ function noActiveProjectContextResult(): ProjectContextResult {
   };
 }
 
+function noActiveProjectFileResult(): Extract<FileToolResult, { ok: false }> {
+  return {
+    ok: false,
+    code: "no_active_project",
+    message: "No active project is open.",
+  };
+}
+
+function fileToolFailure(
+  code: Extract<FileToolResult, { ok: false }>["code"],
+  message: string,
+  path?: string,
+): Extract<FileToolResult, { ok: false }> {
+  return { ok: false, code, message, path };
+}
+
+function fileToolResponse(result: FileToolResult) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    details: result,
+  };
+}
+
+function isInsideRoot(root: string, path: string) {
+  const relativePath = relative(root, path);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith(`..${sep}`) &&
+      relativePath !== ".." &&
+      !isAbsolute(relativePath))
+  );
+}
+
+function isCairnPath(relativePath: string) {
+  return relativePath.split(sep)[0] === ".cairn";
+}
+
+function artifactToolMessage() {
+  return "Paths under .cairn are managed by Cairn artifact tools. Use create_brief_artifact, update_brief_artifact, create_plan_artifact, update_plan_artifact, create_tasks_artifact, update_task_status, update_project_context, or spawn_subagent instead of direct file tools.";
+}
+
+function nearestExistingAncestor(path: string, projectRoot: string) {
+  let current = path;
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current || !isInsideRoot(projectRoot, parent)) {
+      return null;
+    }
+    current = parent;
+  }
+  return current;
+}
+
+function validateProjectPath(
+  projectRoot: string,
+  inputPath: string,
+  options: { mustExist: boolean },
+):
+  | { ok: true; absolutePath: string; relativePath: string }
+  | Extract<FileToolResult, { ok: false }> {
+  const absolutePath = isAbsolute(inputPath)
+    ? resolve(inputPath)
+    : resolve(projectRoot, inputPath);
+  const relativePath = relative(projectRoot, absolutePath);
+
+  if (relativePath === "") {
+    return fileToolFailure(
+      "path_escape",
+      `Path "${inputPath}" must point at a file inside the active project.`,
+      inputPath,
+    );
+  }
+  if (!isInsideRoot(projectRoot, absolutePath)) {
+    return fileToolFailure(
+      "path_escape",
+      `Path "${inputPath}" escapes the active project root.`,
+      inputPath,
+    );
+  }
+
+  if (isCairnPath(relativePath)) {
+    return fileToolFailure("cairn_path", artifactToolMessage(), relativePath);
+  }
+
+  const projectRealRoot = realpathSync(projectRoot);
+  if (options.mustExist) {
+    if (!existsSync(absolutePath)) {
+      return fileToolFailure(
+        "file_not_found",
+        `File not found: ${relativePath}.`,
+        relativePath,
+      );
+    }
+    const realPath = realpathSync(absolutePath);
+    const realRelativePath = relative(projectRealRoot, realPath);
+    if (!isInsideRoot(projectRealRoot, realPath)) {
+      return fileToolFailure(
+        "path_escape",
+        `Path "${inputPath}" escapes the active project root.`,
+        relativePath,
+      );
+    }
+    if (isCairnPath(realRelativePath)) {
+      return fileToolFailure("cairn_path", artifactToolMessage(), relativePath);
+    }
+    return { ok: true, absolutePath: realPath, relativePath };
+  }
+
+  const existingPath = existsSync(absolutePath)
+    ? absolutePath
+    : nearestExistingAncestor(dirname(absolutePath), projectRoot);
+  if (!existingPath || !existsSync(existingPath)) {
+    return fileToolFailure(
+      "path_escape",
+      `Path "${inputPath}" escapes the active project root.`,
+      inputPath,
+    );
+  }
+  const realExistingPath = realpathSync(existingPath);
+  const realExistingRelativePath = relative(projectRealRoot, realExistingPath);
+  if (!isInsideRoot(projectRealRoot, realExistingPath)) {
+    return fileToolFailure(
+      "path_escape",
+      `Path "${inputPath}" escapes the active project root.`,
+      relativePath,
+    );
+  }
+  if (isCairnPath(realExistingRelativePath)) {
+    return fileToolFailure("cairn_path", artifactToolMessage(), relativePath);
+  }
+
+  return { ok: true, absolutePath, relativePath };
+}
+
+function countSubstringMatches(content: string, needle: string) {
+  let count = 0;
+  let cursor = 0;
+  while (true) {
+    const index = content.indexOf(needle, cursor);
+    if (index === -1) return count;
+    count += 1;
+    cursor = index + needle.length;
+  }
+}
+
 export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
   // Cairn-specific tools live beside pi's filesystem tools via `customTools`.
   // Keep each tool thin: validate/write domain state in deep modules, update
@@ -194,6 +396,162 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
   // the persona can fold into its own voice. Artifact-writing work such as PRDs
   // and issues ships as skills; tools stay reserved for declared side effects.
   return [
+    defineTool({
+      name: "read",
+      label: "Read",
+      description:
+        "Read a file from the active project. The path is resolved relative to the active project's root and cannot escape it or enter .cairn.",
+      promptSnippet: "Read a file from the active project",
+      promptGuidelines: [
+        "Use read for direct inspection of project files when the change is small enough to handle in the main Cairn context.",
+        "Paths are relative to the active project. Do not use this for .cairn artifact data; use the artifact tools instead.",
+      ],
+      parameters: toolSchemaFromZod(readFileParamsSchema),
+      executionMode: "sequential",
+      async execute(
+        _toolCallId,
+        params,
+      ): Promise<AgentToolResult<FileToolResult>> {
+        const project = options.getActiveProject();
+        if (!project) {
+          return fileToolResponse(noActiveProjectFileResult());
+        }
+
+        const pathResult = validateProjectPath(project.path, params.path, {
+          mustExist: true,
+        });
+        if (!pathResult.ok) {
+          return fileToolResponse(pathResult);
+        }
+
+        const { absolutePath, relativePath } = pathResult;
+        const content = readFileSync(absolutePath, "utf8");
+        return {
+          content: [{ type: "text", text: content }],
+          details: {
+            ok: true,
+            path: relativePath,
+            bytes: Buffer.byteLength(content, "utf8"),
+          },
+        };
+      },
+    }),
+    defineTool({
+      name: "write",
+      label: "Write",
+      description:
+        "Create or fully replace a file in the active project. The path is resolved relative to the active project's root and cannot escape it or enter .cairn.",
+      promptSnippet: "Create or overwrite an active-project file",
+      promptGuidelines: [
+        "Use write only for new files or complete rewrites in the active project.",
+        "Paths are relative to the active project. Do not use this for .cairn artifact data; use the artifact tools instead.",
+      ],
+      parameters: toolSchemaFromZod(writeFileParamsSchema),
+      executionMode: "sequential",
+      async execute(
+        _toolCallId,
+        params,
+      ): Promise<AgentToolResult<FileToolResult>> {
+        const project = options.getActiveProject();
+        if (!project) {
+          return fileToolResponse(noActiveProjectFileResult());
+        }
+
+        const pathResult = validateProjectPath(project.path, params.path, {
+          mustExist: false,
+        });
+        if (!pathResult.ok) {
+          return fileToolResponse(pathResult);
+        }
+
+        const { absolutePath, relativePath } = pathResult;
+        mkdirSync(dirname(absolutePath), { recursive: true });
+        writeFileSync(absolutePath, params.content, "utf8");
+        const result: FileToolResult = {
+          ok: true,
+          path: relativePath,
+          bytes: Buffer.byteLength(params.content, "utf8"),
+        };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Wrote ${result.bytes} bytes to ${relativePath}.`,
+            },
+          ],
+          details: result,
+        };
+      },
+    }),
+    defineTool({
+      name: "edit",
+      label: "Edit",
+      description:
+        "Replace one exact unique substring in a file in the active project. The path is resolved relative to the active project's root and cannot escape it or enter .cairn.",
+      promptSnippet: "Edit a file with one exact substring replacement",
+      promptGuidelines: [
+        "Use edit for small direct changes in project files when oldText is unique.",
+        "If the change spans multiple files, is uncertain, or needs broader verification, prefer spawn_subagent.",
+        "Paths are relative to the active project. Do not use this for .cairn artifact data; use the artifact tools instead.",
+      ],
+      parameters: toolSchemaFromZod(editFileParamsSchema),
+      executionMode: "sequential",
+      async execute(
+        _toolCallId,
+        params,
+      ): Promise<AgentToolResult<FileToolResult>> {
+        const project = options.getActiveProject();
+        if (!project) {
+          return fileToolResponse(noActiveProjectFileResult());
+        }
+
+        const pathResult = validateProjectPath(project.path, params.path, {
+          mustExist: true,
+        });
+        if (!pathResult.ok) {
+          return fileToolResponse(pathResult);
+        }
+
+        const { absolutePath, relativePath } = pathResult;
+        const content = readFileSync(absolutePath, "utf8");
+        const matches = countSubstringMatches(content, params.oldText);
+        if (matches === 0) {
+          return fileToolResponse(
+            fileToolFailure(
+              "no_match",
+              `No match found for oldText in ${relativePath}.`,
+              relativePath,
+            ),
+          );
+        }
+        if (matches > 1) {
+          return fileToolResponse(
+            fileToolFailure(
+              "ambiguous_match",
+              `Ambiguous match for oldText in ${relativePath}; found ${matches} matches.`,
+              relativePath,
+            ),
+          );
+        }
+
+        const nextContent = content.replace(params.oldText, params.newText);
+        writeFileSync(absolutePath, nextContent, "utf8");
+        const result: FileToolResult = {
+          ok: true,
+          path: relativePath,
+          replacements: 1,
+        };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Replaced 1 match in ${relativePath}.`,
+            },
+          ],
+          details: result,
+        };
+      },
+    }),
     defineTool({
       name: "ask_user_question",
       label: "Ask User Question",
