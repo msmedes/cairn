@@ -670,6 +670,51 @@ test(
 );
 
 test(
+  "main session uses Cairn-safe file tools for active project paths",
+  async () => {
+    const cairnHome = createCairnHome();
+    const projectPath = createTempDir("cairn-file-tools-project-");
+    const proc = spawnSidecar(cairnHome, {
+      CAIRN_FAKE_PROTOCOL_WRITE_CAIRN_PATH: "1",
+    });
+    const personaPath = createPersonaFile("You are Cairn.");
+
+    writeJsonToSidecar(proc, { type: "init", personaPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "ready",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, { type: "open_project", path: projectPath });
+    await collectEvents(
+      proc,
+      (event) => event.type === "active_project",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    writeJsonToSidecar(proc, {
+      type: "prompt",
+      text: "Try a direct artifact write.",
+    });
+    const events = await collectEvents(
+      proc,
+      (event) => event.type === "agent_end",
+      DEFAULT_TIMEOUT_MS,
+    );
+
+    const text = events
+      .filter((event) => event.type === "text_delta")
+      .map((event) => event.delta)
+      .join("");
+    expect(text).toContain('"code":"cairn_path"');
+    expect(text).toContain("artifact tools");
+    expect(existsSync(CairnDir.briefPath(projectPath))).toBe(false);
+  },
+  DEFAULT_TIMEOUT_MS,
+);
+
+test(
   "ask_user_question parks, emits a question bundle, and resumes from an out-of-band answer",
   async () => {
     const cairnHome = createCairnHome();

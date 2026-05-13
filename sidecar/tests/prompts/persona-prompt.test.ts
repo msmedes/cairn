@@ -11,7 +11,7 @@ test("persona prompt uses slug-based task status transitions for Implementing", 
   expect(personaPrompt).toContain("create_tasks_artifact");
   expect(personaPrompt).toContain("starting as `todo`");
   expect(personaPrompt).toContain(
-    'call `update_task_status(task_slug, "in_progress")`',
+    'Call `update_task_status(task_slug, "in_progress")`',
   );
   expect(personaPrompt).toContain(
     'call `update_task_status(task_slug, "done")`',
@@ -20,7 +20,7 @@ test("persona prompt uses slug-based task status transitions for Implementing", 
     'call `update_task_status(task_slug, "blocked")`',
   );
   expect(personaPrompt).toContain("When every task is `done`");
-  expect(personaPrompt).toContain("dispatch the next `todo` piece");
+  expect(personaPrompt).toContain("dispatch the next `todo`");
   expect(personaPrompt).not.toContain("tick_task(piece_index)");
   expect(personaPrompt).not.toContain("unticked");
   expect(personaPrompt).not.toContain("has ticked");
@@ -28,7 +28,7 @@ test("persona prompt uses slug-based task status transitions for Implementing", 
 
 test("persona prompt keeps Project context hidden and explicitly tool-owned", () => {
   expect(personaPrompt).toContain("update_project_context");
-  expect(personaPrompt).toContain("Never show raw `<project>/CONTEXT.md`");
+  expect(personaPrompt).toContain("raw `<project>/CONTEXT.md`");
   expect(personaPrompt).toContain("<project>/.cairn/CONTEXT.md");
   expect(personaPrompt).toContain(
     "Artifact tools do not update Project context automatically",
@@ -39,7 +39,7 @@ test("persona prompt routes visible artifact creation through tool-owned JSON da
   expect(personaPrompt).toContain("create_brief_artifact");
   expect(personaPrompt).toContain("create_plan_artifact");
   expect(personaPrompt).toContain("create_tasks_artifact");
-  expect(personaPrompt).toContain("schema-validated artifact data");
+  expect(personaPrompt).toContain("Project tab");
   expect(personaPrompt).toContain(
     "Never use raw `Write` or `Edit` against `<project>/.cairn/brief.json`, `<project>/.cairn/plan.json`, `<project>/.cairn/tasks.json`, or `<project>/.cairn/CONTEXT.md`.",
   );
@@ -49,12 +49,25 @@ test("persona prompt routes visible artifact creation through tool-owned JSON da
 });
 
 test("persona prompt frames creating indicators around artifacts, not files", () => {
+  expect(personaPrompt).toContain("When you make something the user can see");
   expect(personaPrompt).toContain(
-    "The message appears in the project panel until the visible artifact or planning moment finishes",
-  );
-  expect(personaPrompt).toContain(
-    "The rule is only for artifacts and planning moments the user will see",
+    "Reads, lookups, and other invisible work don't need bracketing",
   );
   expect(personaPrompt).not.toContain("generated HTML");
   expect(personaPrompt).not.toContain("target file");
+});
+
+test("persona prompt lets redirect fixes use direct edits or sub-agent dispatch", () => {
+  expect(personaPrompt).toContain(
+    "either edit the file directly or dispatch `spawn_subagent(implement-issue)`",
+  );
+  expect(personaPrompt).toContain("When in doubt, dispatch");
+});
+
+test("persona prompt asks Cairn to surface underspecified major scope before the brief", () => {
+  expect(personaPrompt).toContain(
+    "gut-check whether the agreed scope actually fits a single slice",
+  );
+  expect(personaPrompt).toContain("offer a thinner version");
+  expect(personaPrompt).toContain("naming the cost, not blocking it");
 });
