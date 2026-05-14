@@ -56,44 +56,44 @@ const chevronClass =
 const fieldClass = "dev-field grid min-w-0 grid-rows-[auto_auto] gap-1.5";
 
 const fieldLabelClass =
-  "text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-kanagawa-text-soft";
+  "text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
 const fieldControlClass =
-  "min-h-[38px] w-full min-w-0 cursor-pointer rounded-md border-0 bg-[rgba(22,22,29,0.72)] px-3 py-0 font-[inherit] text-sm font-medium text-kanagawa-text outline outline-1 outline-[var(--line)] transition-[background-color,outline-color,box-shadow] duration-180 ease-in placeholder:text-kanagawa-text-soft hover:bg-[rgba(31,31,40,0.85)] focus:bg-[rgba(31,31,40,0.95)] focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.46),0_0_0_3px_rgba(126,156,216,0.18)] focus:outline-none";
+  "min-h-[38px] w-full min-w-0 cursor-pointer rounded-md border-0 bg-[color-mix(in_srgb,var(--background)_72%,transparent)] px-3 py-0 font-[inherit] text-sm font-medium text-foreground outline outline-1 outline-[var(--border)] transition-[background-color,outline-color,box-shadow] duration-180 ease-in placeholder:text-muted-foreground hover:bg-[color-mix(in_srgb,var(--card)_85%,transparent)] focus:bg-[color-mix(in_srgb,var(--card)_95%,transparent)] focus:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_46%,transparent),0_0_0_3px_color-mix(in_srgb,var(--primary)_18%,transparent)] focus:outline-none";
 
 const selectWrapClass = "relative min-w-0";
 
 const selectClass = `${fieldControlClass} appearance-none truncate pr-10 [-webkit-appearance:none]`;
 
 const selectChevronClass =
-  "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-kanagawa-text-soft";
+  "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground";
 
 const devLayerClass =
-  "dev-layer fixed inset-0 z-20 grid min-h-0 text-kanagawa-text antialiased [--dev-pad-x:clamp(20px,4vw,48px)] [grid-template-rows:auto_auto_auto_auto_auto_minmax(0,1fr)] bg-[radial-gradient(circle_at_12%_-10%,rgba(126,156,216,0.14),transparent_38%),radial-gradient(circle_at_92%_6%,rgba(255,160,102,0.08),transparent_32%),linear-gradient(180deg,#181821_0%,#101016_100%)] [-moz-osx-font-smoothing:grayscale] animate-[dev-layer-in_220ms_cubic-bezier(0.2,0,0,1)_both] max-[980px]:[--dev-pad-x:18px] max-[640px]:[--dev-pad-x:14px]";
+  "dev-layer fixed inset-0 z-20 grid min-h-0 text-foreground antialiased [--dev-pad-x:clamp(20px,4vw,48px)] [grid-template-rows:auto_auto_auto_auto_auto_minmax(0,1fr)] bg-[radial-gradient(circle_at_12%_-10%,color-mix(in_srgb,var(--primary)_var(--wash-primary),transparent),transparent_38%),radial-gradient(circle_at_92%_6%,color-mix(in_srgb,var(--warm)_var(--wash-warm),transparent),transparent_32%),linear-gradient(180deg,var(--card)_0%,var(--background)_100%)] [-moz-osx-font-smoothing:grayscale] animate-[dev-layer-in_220ms_cubic-bezier(0.2,0,0,1)_both] max-[980px]:[--dev-pad-x:18px] max-[640px]:[--dev-pad-x:14px]";
 
 const devHeaderClass =
   "dev-layer-header flex items-center justify-between gap-6 px-[var(--dev-pad-x)] pb-[18px] pt-[22px] animate-[dev-section-rise_320ms_cubic-bezier(0.2,0,0,1)_both] max-[640px]:flex-col max-[640px]:items-stretch max-[640px]:gap-3.5";
 
 const devKickerClass =
-  "dev-layer-kicker mb-1.5 mt-0 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-kanagawa-accent";
+  "dev-layer-kicker mb-1.5 mt-0 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-primary";
 
 const devTitleClass =
-  "m-0 text-balance font-serif text-2xl font-semibold leading-[1.05] tracking-[-0.025em] text-kanagawa-text";
+  "m-0 text-balance font-serif text-2xl font-semibold leading-[1.05] tracking-[-0.025em] text-foreground";
 
 const devActionsClass =
   "dev-layer-actions inline-flex items-center gap-2 max-[640px]:items-stretch";
 
 const devActionButtonClass =
-  "min-h-9 min-w-[72px] cursor-pointer rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold text-kanagawa-text-muted transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[rgba(50,50,66,0.96)] hover:text-kanagawa-text focus-visible:bg-[rgba(50,50,66,0.96)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none max-[640px]:flex-1";
+  "min-h-9 min-w-[72px] cursor-pointer rounded-md border-0 bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold text-secondary-foreground transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[color-mix(in_srgb,var(--muted)_96%,transparent)] hover:text-foreground focus-visible:bg-[color-mix(in_srgb,var(--muted)_96%,transparent)] focus-visible:text-foreground focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)] focus-visible:outline-none max-[640px]:flex-1";
 
 const metricsClass =
   "dev-metrics m-0 grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-2.5 px-[var(--dev-pad-x)] pb-3.5 pt-1.5 animate-[dev-section-rise_360ms_cubic-bezier(0.2,0,0,1)_60ms_both] max-[640px]:grid-cols-1";
 
 const metricCardClass =
-  "min-w-0 rounded-md bg-[rgba(31,31,40,0.62)] px-3.5 py-3 outline outline-1 outline-[var(--line)]";
+  "min-w-0 rounded-md bg-[color-mix(in_srgb,var(--card)_62%,transparent)] px-3.5 py-3 outline outline-1 outline-[var(--border)]";
 
 const metricValueClass =
-  "mt-1 mb-0 overflow-hidden text-ellipsis whitespace-nowrap font-serif text-[1.45rem] font-semibold leading-none tracking-[-0.02em] text-kanagawa-text tabular-nums";
+  "mt-1 mb-0 overflow-hidden text-ellipsis whitespace-nowrap font-serif text-[1.45rem] font-semibold leading-none tracking-[-0.02em] text-foreground tabular-nums";
 
 const sessionLocationClass =
   "dev-session-location grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5 px-[var(--dev-pad-x)] pb-3.5 pt-0 animate-[dev-section-rise_370ms_cubic-bezier(0.2,0,0,1)_90ms_both] max-[640px]:grid-cols-1";
@@ -101,10 +101,10 @@ const sessionLocationClass =
 const sessionLocationCopyClass = "grid min-w-0 gap-1.5";
 
 const sessionFileClass =
-  "block min-h-[38px] min-w-0 overflow-x-auto whitespace-nowrap rounded-md bg-[rgba(22,22,29,0.72)] px-3 py-2.5 font-mono text-[0.78rem] leading-[1.35] text-kanagawa-text outline outline-1 outline-[var(--line)]";
+  "block min-h-[38px] min-w-0 overflow-x-auto whitespace-nowrap rounded-md bg-[color-mix(in_srgb,var(--background)_72%,transparent)] px-3 py-2.5 font-mono text-[0.78rem] leading-[1.35] text-foreground outline outline-1 outline-[var(--border)]";
 
 const sessionCopyButtonClass =
-  "min-h-[38px] cursor-pointer rounded-md border-0 bg-[rgba(31,31,40,0.78)] px-3.5 py-0 font-[inherit] text-[0.82rem] font-bold text-kanagawa-text outline outline-1 outline-[var(--line)] transition-[background-color,outline-color,transform] duration-160 ease-in hover:bg-[rgba(42,42,54,0.92)] focus-visible:bg-[rgba(42,42,54,0.92)] active:scale-[0.96]";
+  "min-h-[38px] cursor-pointer rounded-md border-0 bg-[color-mix(in_srgb,var(--card)_78%,transparent)] px-3.5 py-0 font-[inherit] text-[0.82rem] font-bold text-foreground outline outline-1 outline-[var(--border)] transition-[background-color,outline-color,transform] duration-160 ease-in hover:bg-[color-mix(in_srgb,var(--muted)_92%,transparent)] focus-visible:bg-[color-mix(in_srgb,var(--muted)_92%,transparent)] active:scale-[0.96]";
 
 const controlsClass =
   "dev-controls grid grid-cols-[minmax(220px,1fr)_minmax(280px,1fr)] gap-3 px-[var(--dev-pad-x)] pb-3.5 pt-1 animate-[dev-section-rise_380ms_cubic-bezier(0.2,0,0,1)_120ms_both] max-[640px]:grid-cols-1";
@@ -113,10 +113,10 @@ const tabsClass =
   "dev-tabs flex gap-1 px-[var(--dev-pad-x)] pb-3.5 pt-0 animate-[dev-section-rise_400ms_cubic-bezier(0.2,0,0,1)_180ms_both]";
 
 const tabClass =
-  "dev-tab relative min-h-9 cursor-pointer rounded-md border-0 bg-transparent px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold tracking-[-0.005em] text-kanagawa-text-soft transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[rgba(42,42,55,0.6)] hover:text-kanagawa-text focus-visible:bg-[rgba(42,42,55,0.6)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none";
+  "dev-tab relative min-h-9 cursor-pointer rounded-md border-0 bg-transparent px-3.5 py-0 font-[inherit] text-[0.86rem] font-semibold tracking-[-0.005em] text-muted-foreground transition-[background-color,color,transform,box-shadow] duration-[180ms,180ms,120ms,180ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1),ease] hover:bg-[color-mix(in_srgb,var(--muted)_60%,transparent)] hover:text-foreground focus-visible:bg-[color-mix(in_srgb,var(--muted)_60%,transparent)] focus-visible:text-foreground focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)] focus-visible:outline-none";
 
 const activeTabClass =
-  "dev-tab-active bg-[rgba(126,156,216,0.18)] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(126,156,216,0.32),0_1px_0_rgba(255,255,255,0.04)] hover:bg-[rgba(126,156,216,0.18)] hover:text-kanagawa-text";
+  "dev-tab-active bg-[color-mix(in_srgb,var(--primary)_18%,transparent)] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_32%,transparent),0_1px_0_rgb(255_255_255/0.04)] hover:bg-[color-mix(in_srgb,var(--primary)_18%,transparent)] hover:text-foreground";
 
 const devBodyClass =
   "dev-layer-body min-h-0 overflow-auto px-[var(--dev-pad-x)] pb-8 pt-1 animate-[dev-section-rise_460ms_cubic-bezier(0.2,0,0,1)_240ms_both]";
@@ -124,22 +124,22 @@ const devBodyClass =
 const listClass = "m-0 grid list-none gap-2 p-0";
 
 const emptyClass =
-  "dev-empty rounded-md bg-[rgba(31,31,40,0.62)] p-[22px] text-center text-[0.92rem] text-kanagawa-text-soft shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+  "dev-empty rounded-md bg-[color-mix(in_srgb,var(--card)_62%,transparent)] p-[22px] text-center text-[0.92rem] text-muted-foreground shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.18)]";
 
 const eventRowClass =
-  "dev-event relative grid grid-cols-[78px_minmax(0,1fr)] gap-3.5 overflow-hidden rounded-md bg-[rgba(31,31,40,0.62)] py-3 pr-3.5 pl-4 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)] max-[640px]:grid-cols-1";
+  "dev-event relative grid grid-cols-[78px_minmax(0,1fr)] gap-3.5 overflow-hidden rounded-md bg-[color-mix(in_srgb,var(--card)_62%,transparent)] py-3 pr-3.5 pl-4 shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.18)] max-[640px]:grid-cols-1";
 
 const eventAccentClass: Record<DevEventKind, string> = {
-  assistant: "bg-kanagawa-accent",
-  user: "bg-kanagawa-yellow",
-  tool: "bg-kanagawa-green",
-  subagent: "bg-kanagawa-warm",
-  project: "bg-kanagawa-magenta",
-  system: "bg-kanagawa-text-soft",
+  assistant: "bg-primary",
+  user: "bg-warning",
+  tool: "bg-success",
+  subagent: "bg-warm",
+  project: "bg-info",
+  system: "bg-muted-foreground",
 };
 
 const eventTimeClass =
-  "font-mono text-[0.74rem] tracking-[-0.01em] text-kanagawa-text-soft tabular-nums";
+  "font-mono text-[0.74rem] tracking-[-0.01em] text-muted-foreground tabular-nums";
 
 const eventContentClass = "dev-event-content min-w-0";
 
@@ -149,47 +149,47 @@ const eventHeaderClass =
 const eventSummaryClass = "dev-event-summary min-w-0";
 
 const eventTitleClass =
-  "block text-[0.92rem] font-semibold leading-[1.3] tracking-[-0.005em] text-kanagawa-text";
+  "block text-[0.92rem] font-semibold leading-[1.3] tracking-[-0.005em] text-foreground";
 
 const tokenChipClass =
-  "dev-token-chip mt-1.5 inline-block rounded-full bg-[rgba(22,22,29,0.72)] px-2 py-0.5 font-mono text-[0.72rem] leading-[1.35] text-kanagawa-text-soft tabular-nums";
+  "dev-token-chip mt-1.5 inline-block rounded-full bg-[color-mix(in_srgb,var(--background)_72%,transparent)] px-2 py-0.5 font-mono text-[0.72rem] leading-[1.35] text-muted-foreground tabular-nums";
 
 const eventTextClass =
-  "mt-1 mb-0 [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-kanagawa-text-muted [text-wrap:pretty]";
+  "mt-1 mb-0 [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-secondary-foreground [text-wrap:pretty]";
 
 const eventToggleClass =
-  "dev-event-toggle relative grid min-h-8 w-8 min-w-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-kanagawa-text-soft transition-[background-color,color,transform] duration-[180ms,180ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] before:absolute before:-inset-1 before:content-[''] hover:bg-[rgba(50,50,66,0.72)] hover:text-kanagawa-text focus-visible:bg-[rgba(50,50,66,0.72)] focus-visible:text-kanagawa-text focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.22)] focus-visible:outline-none";
+  "dev-event-toggle relative grid min-h-8 w-8 min-w-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-muted-foreground transition-[background-color,color,transform] duration-[180ms,180ms,120ms] ease-[ease,ease,cubic-bezier(0.2,0,0,1)] before:absolute before:-inset-1 before:content-[''] hover:bg-[color-mix(in_srgb,var(--muted)_72%,transparent)] hover:text-foreground focus-visible:bg-[color-mix(in_srgb,var(--muted)_72%,transparent)] focus-visible:text-foreground focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)] focus-visible:outline-none";
 
 const eventDetailsClass =
-  "dev-event-details mt-3.5 grid gap-3 border-t border-[rgba(220,215,186,0.08)] pt-3.5";
+  "dev-event-details mt-3.5 grid gap-3 border-t border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] pt-3.5";
 
 const detailClass = "dev-detail min-w-0";
 
 const detailHeadingClass =
-  "mb-1.5 mt-0 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-kanagawa-text-soft";
+  "mb-1.5 mt-0 text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
 
 const detailTextClass =
-  "m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted";
+  "m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-[0.78rem] leading-[1.5] text-secondary-foreground";
 
 const detailPreClass =
-  "m-0 max-h-[280px] overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(12,12,17,0.7)] p-3 font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)] [overflow-wrap:anywhere]";
+  "m-0 max-h-[280px] overflow-auto whitespace-pre-wrap rounded-md bg-[color-mix(in_srgb,var(--background)_70%,transparent)] p-3 font-mono text-[0.78rem] leading-[1.5] text-secondary-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_6%,transparent)] [overflow-wrap:anywhere]";
 
 const messageClass =
-  "dev-message rounded-md bg-[rgba(31,31,40,0.62)] px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+  "dev-message rounded-md bg-[color-mix(in_srgb,var(--card)_62%,transparent)] px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.18)]";
 
 const messageRoleClass = {
-  user: "bg-[rgba(45,79,103,0.36)]",
-  assistant: "bg-[rgba(42,42,55,0.74)]",
+  user: "bg-[color-mix(in_srgb,var(--user)_36%,transparent)]",
+  assistant: "bg-[color-mix(in_srgb,var(--muted)_74%,transparent)]",
 } as const;
 
 const messageTextClass =
-  "mt-1 mb-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-kanagawa-text-muted [text-wrap:pretty]";
+  "mt-1 mb-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-[0.86rem] leading-[1.45] text-secondary-foreground [text-wrap:pretty]";
 
 const rawItemClass =
-  "grid gap-2.5 rounded-md bg-[rgba(31,31,40,0.62)] p-3.5 shadow-[inset_0_0_0_1px_var(--line),0_1px_2px_rgba(0,0,0,0.18)]";
+  "grid gap-2.5 rounded-md bg-[color-mix(in_srgb,var(--card)_62%,transparent)] p-3.5 shadow-[inset_0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.18)]";
 
 const rawPreClass =
-  "m-0 max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[0.78rem] leading-[1.5] text-kanagawa-text-muted [overflow-wrap:anywhere]";
+  "m-0 max-h-80 overflow-auto whitespace-pre-wrap font-mono text-[0.78rem] leading-[1.5] text-secondary-foreground [overflow-wrap:anywhere]";
 
 function isObject(value: JsonValue | undefined): value is {
   [key: string]: JsonValue;

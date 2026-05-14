@@ -161,17 +161,39 @@ struct RecentsEvent {
     entries: Vec<RecentProjectEntry>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ThemePreference {
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
+impl ThemePreference {
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Signature is required by serde's skip_serializing_if."
+    )]
+    fn is_default(value: &Self) -> bool {
+        *value == Self::default()
+    }
+}
+
 #[derive(Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CairnSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     anthropic_api_key: Option<String>,
+    #[serde(default, skip_serializing_if = "ThemePreference::is_default")]
+    theme_preference: ThemePreference,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CairnSettingsStatus {
     has_anthropic_api_key: bool,
+    theme_preference: ThemePreference,
 }
 
 #[derive(Serialize)]
@@ -356,6 +378,7 @@ fn cairn_settings_status(settings: &CairnSettings) -> CairnSettingsStatus {
             .anthropic_api_key
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty()),
+        theme_preference: settings.theme_preference,
     }
 }
 
@@ -1255,9 +1278,8 @@ async fn set_anthropic_api_key(
         return Err("API key cannot be empty".into());
     }
 
-    let settings = CairnSettings {
-        anthropic_api_key: Some(trimmed.clone()),
-    };
+    let mut settings = read_cairn_settings().map_err(command_error)?;
+    settings.anthropic_api_key = Some(trimmed.clone());
     write_cairn_settings(&settings).map_err(command_error)?;
 
     let payload = serde_json::json!({
@@ -1267,6 +1289,14 @@ async fn set_anthropic_api_key(
     });
     write_line(&state.stdin, &payload).await?;
 
+    Ok(cairn_settings_status(&settings))
+}
+
+#[tauri::command]
+fn set_theme_preference(preference: ThemePreference) -> Result<CairnSettingsStatus, String> {
+    let mut settings = read_cairn_settings().map_err(command_error)?;
+    settings.theme_preference = preference;
+    write_cairn_settings(&settings).map_err(command_error)?;
     Ok(cairn_settings_status(&settings))
 }
 
@@ -2008,6 +2038,7 @@ pub fn run() {
             set_mcp_server_enabled,
             authenticate_mcp_server,
             set_anthropic_api_key,
+            set_theme_preference,
             get_sidecar_status,
             get_sidecar_dev_logs,
             start_diagnostics,
@@ -2035,6 +2066,7 @@ pub fn run() {
             set_mcp_server_enabled,
             authenticate_mcp_server,
             set_anthropic_api_key,
+            set_theme_preference,
             get_sidecar_status,
             get_sidecar_dev_logs,
             read_project_file,

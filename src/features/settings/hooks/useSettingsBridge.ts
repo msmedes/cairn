@@ -1,9 +1,10 @@
 import { useCallback } from "react";
 import type { McpServerKey } from "../components/SettingsPanel";
-import { useApiKeySettings } from "./internal/useApiKeySettings";
 import { useAppVersion } from "./internal/useAppVersion";
+import { useCairnSettings } from "./internal/useCairnSettings";
 import { useMcpSettings } from "./internal/useMcpSettings";
 import { useSettingsPanel } from "./internal/useSettingsPanel";
+import { useThemePreference } from "./internal/useThemePreference";
 
 type UseSettingsBridgeArgs = {
   activeProjectPath: string | null;
@@ -16,7 +17,11 @@ export function useSettingsBridge({
 }: UseSettingsBridgeArgs) {
   const mcp = useMcpSettings({ activeProjectPath, authenticateMcpServer });
   const panel = useSettingsPanel();
-  const apiKey = useApiKeySettings({ onApiKeyMissing: panel.open });
+  const apiKey = useCairnSettings({ onApiKeyMissing: panel.open });
+  const theme = useThemePreference({
+    settingsStatus: apiKey.settingsStatus,
+    onStatusUpdated: apiKey.setSettingsStatus,
+  });
   const appVersion = useAppVersion();
   const openSettingsPanel = useCallback(() => {
     panel.open();
@@ -32,6 +37,8 @@ export function useSettingsBridge({
     mcpStatus: mcp.mcpStatus,
     mcpMessage: mcp.mcpMessage,
     updatingMcpServer: mcp.updatingMcpServer,
+    themePreference: theme.themePreference,
+    savingTheme: theme.savingTheme,
     appVersion,
     settingsPanelOpen: panel.isOpen,
     setApiKeyInput: apiKey.setApiKeyInput,
@@ -39,6 +46,7 @@ export function useSettingsBridge({
     openSettingsPanel,
     closeSettingsPanel: panel.close,
     saveApiKey: apiKey.saveApiKey,
+    saveThemePreference: theme.saveThemePreference,
     setMcpServerEnabled: mcp.setMcpServerEnabled,
     requestMcpAuth: mcp.requestMcpAuth,
   };

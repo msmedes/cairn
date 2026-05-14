@@ -22,21 +22,21 @@ const attachmentListClass =
   "composer-attachment-list m-0 flex min-w-0 list-none flex-wrap gap-2 p-0";
 
 const attachmentChipClass =
-  "composer-attachment-chip relative grid h-[54px] w-[70px] place-items-center overflow-hidden rounded-md bg-kanagawa-surface-strong shadow-[inset_0_0_0_1px_rgba(220,215,186,0.1),0_8px_18px_rgba(0,0,0,0.16)]";
+  "composer-attachment-chip relative grid h-[54px] w-[70px] place-items-center overflow-hidden rounded-md bg-input shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_10%,transparent),0_8px_18px_rgb(0_0_0/0.16)]";
 
 const attachmentImageClass = "h-full w-full object-cover";
 
 const attachmentRemoveButtonClass =
-  "absolute right-1 top-1 grid h-5 min-h-5 w-5 min-w-5 place-items-center rounded-full bg-[rgba(22,22,29,0.78)] p-0 text-[0.86rem] leading-none text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.18)] hover:not-disabled:bg-[rgba(195,64,67,0.9)] hover:not-disabled:text-white focus-visible:not-disabled:bg-[rgba(195,64,67,0.9)] focus-visible:not-disabled:text-white";
+  "absolute right-1 top-1 grid h-5 min-h-5 w-5 min-w-5 place-items-center rounded-full bg-[color-mix(in_srgb,var(--background)_78%,transparent)] p-0 text-[0.86rem] leading-none text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_18%,transparent)] hover:not-disabled:bg-[color-mix(in_srgb,var(--destructive)_90%,transparent)] hover:not-disabled:text-white focus-visible:not-disabled:bg-[color-mix(in_srgb,var(--destructive)_90%,transparent)] focus-visible:not-disabled:text-white";
 
 const attachmentRejectionClass =
-  "composer-attachment-rejection m-0 text-[0.82rem] leading-[1.35] text-[#e46876]";
+  "composer-attachment-rejection m-0 text-[0.82rem] leading-[1.35] text-[var(--destructive)]";
 
 const composerTextareaClass =
-  "min-h-11 w-full rounded-md border-0 bg-kanagawa-surface-strong px-3.5 py-[11px] font-[inherit] leading-[1.45] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.08),0_1px_1px_rgba(0,0,0,0.28)] outline-none transition-[box-shadow,background-color] duration-180 ease-in placeholder:text-kanagawa-text-soft focus:bg-[rgb(42,42,55)] focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.46),0_0_0_4px_rgba(126,156,216,0.12)] disabled:opacity-65 block resize-none overflow-y-auto";
+  "min-h-11 w-full rounded-md border-0 bg-input px-3.5 py-[11px] font-[inherit] leading-[1.45] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_8%,transparent),0_1px_1px_rgb(0_0_0/0.28)] outline-none transition-[box-shadow,background-color] duration-180 ease-in placeholder:text-muted-foreground focus:bg-[var(--muted)] focus:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_46%,transparent),0_0_0_4px_color-mix(in_srgb,var(--primary)_12%,transparent)] disabled:opacity-65 block resize-none overflow-y-auto";
 
 const composerButtonClass =
-  "min-h-11 rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-[18px] py-0 font-[inherit] font-semibold tracking-[-0.01em] text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)] transition-[transform,box-shadow,opacity,background] duration-[120ms,180ms,180ms,180ms] ease-[cubic-bezier(0.2,0,0,1),ease,ease,ease] enabled:cursor-pointer enabled:bg-[linear-gradient(180deg,#7e9cd8,#658594)] enabled:text-kanagawa-bg enabled:shadow-[0_1px_1px_rgba(255,255,255,0.12)_inset,0_10px_20px_rgba(101,133,148,0.22)] hover:enabled:shadow-[0_1px_1px_rgba(255,255,255,0.16)_inset,0_14px_26px_rgba(101,133,148,0.28)] focus-visible:enabled:shadow-[0_1px_1px_rgba(255,255,255,0.16)_inset,0_0_0_3px_rgba(126,156,216,0.32),0_10px_20px_rgba(101,133,148,0.22)] focus-visible:enabled:outline-none active:enabled:scale-[0.96] disabled:cursor-not-allowed disabled:[background:rgba(42,42,55,0.7)]";
+  "min-h-11 rounded-md border border-[color-mix(in_srgb,var(--primary)_28%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] px-[18px] py-0 font-[inherit] font-semibold tracking-[-0.01em] text-primary transition-[background-color,border-color,box-shadow,transform] duration-[140ms,140ms,180ms,120ms] ease-[ease,ease,ease,cubic-bezier(0.2,0,0,1)] enabled:cursor-pointer hover:not-disabled:bg-[color-mix(in_srgb,var(--primary)_20%,transparent)] hover:not-disabled:border-[color-mix(in_srgb,var(--primary)_44%,transparent)] focus-visible:not-disabled:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_22%,transparent)] focus-visible:not-disabled:outline-none active:not-disabled:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-50";
 
 function attachmentRejectionLabel(reason: ImageAttachmentRejectionReason) {
   switch (reason) {

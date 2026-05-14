@@ -323,8 +323,13 @@ function App() {
         mcpStatus={settings.mcpStatus}
         mcpMessage={settings.mcpMessage}
         updatingMcpServer={settings.updatingMcpServer}
+        themePreference={settings.themePreference}
+        savingTheme={settings.savingTheme}
         onApiKeyInputChanged={settings.setApiKeyInput}
         onApiKeySaved={() => void settings.saveApiKey()}
+        onThemePreferenceChanged={(preference) =>
+          void settings.saveThemePreference(preference)
+        }
         onMcpServerToggled={(server, enabled) =>
           void settings.setMcpServerEnabled(server, enabled)
         }

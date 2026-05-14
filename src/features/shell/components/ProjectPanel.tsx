@@ -30,7 +30,7 @@ type ProjectPanelProps = {
 };
 
 const panelClass =
-  "panel min-h-0 min-w-0 overflow-hidden rounded-shell bg-[var(--surface)] shadow-kanagawa-lg outline outline-1 outline-[var(--line)] backdrop-blur-[18px] flex flex-col max-[980px]:min-h-[280px]";
+  "panel min-h-0 min-w-0 overflow-hidden rounded-lg bg-[var(--card)] shadow-lg outline outline-1 outline-[var(--border)] backdrop-blur-[18px] flex flex-col max-[980px]:min-h-[280px]";
 
 const panelBodyClass =
   "panel-body flex min-h-0 flex-1 flex-col px-[18px] pb-[18px] pt-0 max-[640px]:px-4 max-[640px]:pb-4 max-[640px]:pt-0";
@@ -39,10 +39,10 @@ const artifactShellClass =
   "relative min-h-0 flex-1 overflow-auto rounded-none bg-transparent";
 
 const panelCreatingOverlayClass =
-  "panel-creating-overlay absolute bottom-6 left-6 right-6 max-w-lg rounded-card bg-[rgba(31,31,40,0.92)] px-6 py-[22px] shadow-kanagawa-md outline outline-1 outline-[var(--line)] animate-[panel-creating-text-in_320ms_cubic-bezier(0.2,0,0,1)_both]";
+  "panel-creating-overlay absolute bottom-6 left-6 right-6 max-w-lg rounded-sm bg-[color-mix(in_srgb,var(--card)_92%,transparent)] px-6 py-[22px] shadow-md outline outline-1 outline-[var(--border)] animate-[panel-creating-text-in_320ms_cubic-bezier(0.2,0,0,1)_both]";
 
 const panelKickerClass =
-  "panel-kicker mb-2 mt-0 text-[0.78rem] font-bold uppercase tracking-[0.16em] text-kanagawa-text-soft";
+  "panel-kicker mb-2 mt-0 text-[0.78rem] font-bold uppercase tracking-[0.16em] text-muted-foreground";
 
 const panelOverlayTitleClass =
   "m-0 max-w-[24ch] text-balance font-serif text-[clamp(1.25rem,1.06rem+0.58vw,1.58rem)] font-semibold leading-[1.12] tracking-[-0.03em]";
@@ -57,16 +57,16 @@ const panelPlaceholderCreatingTitleClass =
   "animate-[panel-creating-text-in_320ms_cubic-bezier(0.2,0,0,1)_both]";
 
 const panelEmptyClass =
-  "panel-empty mt-3.5 mb-0 max-w-[34ch] text-base leading-[1.6] text-kanagawa-text-muted [text-wrap:pretty]";
+  "panel-empty mt-3.5 mb-0 max-w-[34ch] text-base leading-[1.6] text-secondary-foreground [text-wrap:pretty]";
 
 const panelGhostClass =
-  "panel-ghost mt-7 grid gap-3 rounded-card bg-[rgba(45,79,103,0.18)] p-[22px] shadow-[inset_0_0_0_1px_rgba(220,215,186,0.05)]";
+  "panel-ghost mt-7 grid gap-3 rounded-sm bg-[color-mix(in_srgb,var(--user)_18%,transparent)] p-[22px] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_5%,transparent)]";
 
 const panelGhostCreatingClass =
   "animate-[panel-creating-pulse_2.4s_ease-in-out_infinite]";
 
 const ghostLineClass =
-  "ghost-line h-[11px] rounded-card bg-[linear-gradient(90deg,rgba(126,156,216,0.12),rgba(220,215,186,0.34),rgba(126,156,216,0.12))] bg-[length:220%_100%] animate-[shimmer_2.8s_linear_infinite]";
+  "ghost-line h-[11px] rounded-sm bg-[linear-gradient(90deg,color-mix(in_srgb,var(--primary)_12%,transparent),color-mix(in_srgb,var(--foreground)_34%,transparent),color-mix(in_srgb,var(--primary)_12%,transparent))] bg-[length:220%_100%] animate-[shimmer_2.8s_linear_infinite]";
 
 const ghostLineCreatingClass = "animate-[shimmer_1.6s_linear_infinite]";
 

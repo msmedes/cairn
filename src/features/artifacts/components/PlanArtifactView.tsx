@@ -5,28 +5,28 @@ type PlanArtifactViewProps = {
 };
 
 const panelKickerClass =
-  "panel-kicker mb-2 mt-0 text-[0.78rem] font-bold uppercase tracking-[0.16em] text-kanagawa-text-soft";
+  "panel-kicker mb-1.5 mt-0 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground";
 
 const artifactClass =
-  "plan-artifact grid min-h-full gap-3.5 bg-[linear-gradient(135deg,rgba(152,187,108,0.12),transparent_34%),linear-gradient(180deg,rgba(31,31,40,0.98),rgba(22,22,29,0.98))] p-[30px] text-kanagawa-text max-[640px]:p-[22px]";
+  "plan-artifact grid min-h-full gap-3.5 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--success)_12%,transparent),transparent_34%),linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--background)_98%,transparent))] p-6 text-foreground max-[640px]:p-[18px]";
 
 const artifactHeaderClass =
-  "plan-artifact-header max-w-[46rem] border-b border-[var(--line)] pb-6";
+  "plan-artifact-header max-w-[46rem] border-b border-[var(--border)] pb-4";
 
 const artifactTitleClass =
-  "mt-2 mb-0 text-kanagawa-text text-[clamp(2rem,1.6rem+1.1vw,3rem)] leading-[1.02]";
+  "m-0 text-foreground text-[1.5rem] font-semibold leading-tight tracking-[-0.01em]";
 
 const artifactSummaryClass =
-  "mt-3.5 mb-0 max-w-[58ch] text-[1.05rem] leading-[1.6] text-kanagawa-text-soft";
+  "mt-2 mb-0 max-w-[58ch] text-sm leading-[1.55] text-muted-foreground";
 
 const sectionClass =
-  "plan-artifact-section max-w-[58rem] rounded-card border border-[var(--line)] bg-[rgba(42,42,55,0.7)] p-[18px]";
+  "plan-artifact-section max-w-[58rem] rounded-sm border border-border-strong bg-card p-[18px]";
 
 const sectionTitleClass = "m-0 text-base leading-tight";
 
-const sectionBodyClass = "mt-2.5 mb-0 leading-[1.6] text-kanagawa-text-soft";
+const sectionBodyClass = "mt-2.5 mb-0 leading-[1.6] text-muted-foreground";
 
-const listClass = "mt-3 mb-0 pl-[1.35rem] text-kanagawa-text-soft";
+const listClass = "mt-3 mb-0 pl-[1.35rem] text-muted-foreground";
 
 const listItemClass = "mt-2 first:mt-0";
 

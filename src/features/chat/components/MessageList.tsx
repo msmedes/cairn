@@ -26,9 +26,9 @@ const messageBaseClass =
   "msg whitespace-pre-wrap break-words [text-wrap:pretty]";
 
 const messageRoleClass = {
-  user: "msg-user max-w-[min(54rem,80%)] rounded-[6px_6px_2px_6px] bg-[linear-gradient(180deg,var(--user-bg-soft),var(--user-bg))] px-[18px] py-4 text-kanagawa-user-text shadow-[0_1px_1px_rgba(255,255,255,0.04)_inset,0_20px_34px_rgba(18,13,11,0.2)] max-[980px]:max-w-[92%]",
+  user: "msg-user max-w-[min(54rem,80%)] rounded-[6px_6px_2px_6px] bg-[linear-gradient(180deg,var(--user-soft),var(--user))] px-[18px] py-4 text-user-foreground shadow-[0_1px_1px_rgb(255_255_255/0.04)_inset,0_20px_34px_color-mix(in_srgb,var(--background)_20%,transparent)] max-[980px]:max-w-[92%]",
   assistant:
-    "msg-assistant max-w-[min(52rem,88%)] rounded-[2px_6px_6px_6px] bg-[var(--assistant-wash)] px-5 py-[18px] text-[1.02rem] leading-[1.6] shadow-kanagawa-sm max-[980px]:max-w-[92%]",
+    "msg-assistant max-w-[min(52rem,88%)] rounded-[2px_6px_6px_6px] bg-[var(--assistant)] px-5 py-[18px] text-[1.02rem] leading-[1.6] shadow-sm max-[980px]:max-w-[92%]",
 } as const;
 
 const pendingMessageClass =
@@ -37,7 +37,7 @@ const pendingMessageClass =
 const messageImageStripClass = "msg-image-strip mb-2.5 flex flex-wrap gap-2";
 
 const messageImageClass =
-  "max-h-20 max-w-[min(180px,100%)] rounded-card bg-[rgba(22,22,29,0.4)] object-contain shadow-[inset_0_0_0_1px_rgba(220,215,186,0.1)]";
+  "max-h-20 max-w-[min(180px,100%)] rounded-sm bg-[color-mix(in_srgb,var(--background)_40%,transparent)] object-contain shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_10%,transparent)]";
 
 const typingDotsClass = "typing-dots inline-flex items-center gap-[5px]";
 

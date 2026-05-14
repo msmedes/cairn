@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { hasTauriRuntime } from "../../../../lib/tauri";
 import type { CairnSettingsStatus } from "../../components/SettingsPanel";
 
-type UseApiKeySettingsArgs = {
+type UseCairnSettingsArgs = {
   onApiKeyMissing: () => void;
 };
 
-export function useApiKeySettings({ onApiKeyMissing }: UseApiKeySettingsArgs) {
+export function useCairnSettings({ onApiKeyMissing }: UseCairnSettingsArgs) {
   const [settingsStatus, setSettingsStatus] =
     useState<CairnSettingsStatus | null>(null);
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -60,6 +60,7 @@ export function useApiKeySettings({ onApiKeyMissing }: UseApiKeySettingsArgs) {
     apiKeyInput,
     settingsMessage,
     savingApiKey,
+    setSettingsStatus,
     setApiKeyInput,
     setSettingsMessage,
     saveApiKey,

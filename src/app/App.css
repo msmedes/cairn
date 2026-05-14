@@ -1,58 +1,193 @@
 @import "tailwindcss";
 
-@theme {
+@theme inline {
   --font-sans:
     "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-serif:
     "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  --color-kanagawa-bg: #16161d;
-  --color-kanagawa-bg-accent: #1f1f28;
-  --color-kanagawa-surface-strong: #223249;
-  --color-kanagawa-text: #dcd7ba;
-  --color-kanagawa-text-muted: #c8c093;
-  --color-kanagawa-text-soft: #938aa9;
-  --color-kanagawa-user-bg: #2d4f67;
-  --color-kanagawa-user-text: #f2ecbc;
-  --color-kanagawa-accent: #7e9cd8;
-  --color-kanagawa-warm: #ffa066;
-  --color-kanagawa-green: #98bb6c;
-  --color-kanagawa-yellow: #dca561;
-  --color-kanagawa-red: #c34043;
-  --color-kanagawa-magenta: #957fb8;
-  --shadow-kanagawa-sm:
-    0 1px 2px rgba(0, 0, 0, 0.16), 0 12px 30px rgba(0, 0, 0, 0.18);
-  --shadow-kanagawa-md:
-    0 2px 6px rgba(0, 0, 0, 0.2), 0 20px 48px rgba(0, 0, 0, 0.24);
-  --shadow-kanagawa-lg:
-    0 2px 8px rgba(0, 0, 0, 0.22), 0 28px 60px rgba(0, 0, 0, 0.28);
-  --radius-shell: 8px;
-  --radius-card: 4px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-warm: var(--warm);
+  --color-warm-highlight: var(--warm-highlight);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  --color-user: var(--user);
+  --color-user-soft: var(--user-soft);
+  --color-user-foreground: var(--user-foreground);
+  --color-assistant: var(--assistant);
+  --color-assistant-foreground: var(--assistant-foreground);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
 }
 
+/* Dark theme (Kanagawa Wave) — default. */
 :root {
-  --bg: #16161d;
-  --bg-accent: #1f1f28;
-  --surface: rgba(31, 31, 40, 0.88);
-  --surface-strong: #223249;
-  --surface-soft: rgba(42, 42, 55, 0.92);
-  --text: #dcd7ba;
-  --text-muted: #c8c093;
-  --text-soft: #938aa9;
+  --background: #16161d;
+  --foreground: #dcd7ba;
+  --card: #1f1f28;
+  --card-foreground: #dcd7ba;
+  --popover: #1f1f28;
+  --popover-foreground: #dcd7ba;
+  --primary: #7e9cd8;
+  --primary-foreground: #16161d;
+  --secondary: #2a2a37;
+  --secondary-foreground: #c8c093;
+  --muted: #2a2a37;
+  --muted-foreground: #938aa9;
+  --accent: #223249;
+  --accent-foreground: #dcd7ba;
+  --destructive: #c34043;
+  --destructive-foreground: #dcd7ba;
+  --border: rgba(220, 215, 186, 0.08);
+  --border-strong: rgba(220, 215, 186, 0.18);
+  --input: #16161d;
+  --ring: #7e9cd8;
+
+  --warm: #ffa066;
+  --warm-highlight: #ffe8bc;
+  --success: #98bb6c;
+  --warning: #dca561;
+  --info: #957fb8;
+
+  --user: #2d4f67;
+  --user-soft: #223249;
+  --user-foreground: #f2ecbc;
+  --assistant: rgba(42, 42, 55, 0.94);
+  --assistant-foreground: #dcd7ba;
+
+  --wash-primary: 22%;
+  --wash-warm: 12%;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.16), 0 12px 30px rgba(0, 0, 0, 0.18);
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.2), 0 20px 48px rgba(0, 0, 0, 0.24);
   --shadow-lg: 0 2px 8px rgba(0, 0, 0, 0.22), 0 28px 60px rgba(0, 0, 0, 0.28);
-  --user-bg: #2d4f67;
-  --user-bg-soft: #223249;
-  --user-text: #f2ecbc;
-  --assistant-wash: rgba(42, 42, 55, 0.94);
-  --accent: #7e9cd8;
-  --accent-soft: rgba(126, 156, 216, 0.16);
-  --accent-warm: #ffa066;
-  --line: rgba(220, 215, 186, 0.08);
-  --radius-shell: 8px;
-  --radius-card: 4px;
-  --radius-pill: 999px;
+}
+
+/* Light theme (Catppuccin Latte) — used when explicitly picked, or when no
+   preference is stored and the OS reports prefers-color-scheme: light. */
+:root[data-theme="light"] {
+  --background: #eff1f5;
+  --foreground: #4c4f69;
+  --card: #e6e9ef;
+  --card-foreground: #4c4f69;
+  --popover: #e6e9ef;
+  --popover-foreground: #4c4f69;
+  --primary: #1e66f5;
+  --primary-foreground: #eff1f5;
+  --secondary: #bcc0cc;
+  --secondary-foreground: #5c5f77;
+  --muted: #bcc0cc;
+  --muted-foreground: #6c6f85;
+  --accent: #ccd0da;
+  --accent-foreground: #4c4f69;
+  --destructive: #d20f39;
+  --destructive-foreground: #eff1f5;
+  --border: rgba(76, 79, 105, 0.1);
+  --border-strong: rgba(76, 79, 105, 0.18);
+  --input: #ccd0da;
+  --ring: #1e66f5;
+
+  --warm: #fe640b;
+  --warm-highlight: #dc8a78;
+  --success: #40a02b;
+  --warning: #df8e1d;
+  --info: #8839ef;
+
+  --user: color-mix(in oklab, var(--primary), white 60%);
+  --user-soft: color-mix(in oklab, var(--primary), white 75%);
+  --user-foreground: #4c4f69;
+  --assistant: rgba(204, 208, 218, 0.6);
+  --assistant-foreground: #4c4f69;
+
+  --wash-primary: 8%;
+  --wash-warm: 5%;
+
+  --shadow-sm:
+    0 1px 2px rgba(76, 79, 105, 0.06), 0 8px 24px rgba(76, 79, 105, 0.08);
+  --shadow-md:
+    0 2px 6px rgba(76, 79, 105, 0.08), 0 16px 40px rgba(76, 79, 105, 0.1);
+  --shadow-lg:
+    0 2px 8px rgba(76, 79, 105, 0.1), 0 24px 56px rgba(76, 79, 105, 0.14);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --background: #eff1f5;
+    --foreground: #4c4f69;
+    --card: #e6e9ef;
+    --card-foreground: #4c4f69;
+    --popover: #e6e9ef;
+    --popover-foreground: #4c4f69;
+    --primary: #1e66f5;
+    --primary-foreground: #eff1f5;
+    --secondary: #bcc0cc;
+    --secondary-foreground: #5c5f77;
+    --muted: #acb0be;
+    --muted-foreground: #6c6f85;
+    --accent: #ccd0da;
+    --accent-foreground: #4c4f69;
+    --destructive: #d20f39;
+    --destructive-foreground: #eff1f5;
+    --border: rgba(76, 79, 105, 0.1);
+    --border-strong: rgba(76, 79, 105, 0.18);
+    --input: #ccd0da;
+    --ring: #1e66f5;
+
+    --warm: #fe640b;
+    --warm-highlight: #dc8a78;
+    --success: #40a02b;
+    --warning: #df8e1d;
+    --info: #8839ef;
+
+    --user: color-mix(in oklab, var(--primary), white 80%);
+    --user-soft: color-mix(in oklab, var(--primary), white 88%);
+    --user-foreground: #4c4f69;
+    --assistant: rgba(204, 208, 218, 0.6);
+    --assistant-foreground: #4c4f69;
+
+    --wash-primary: 8%;
+    --wash-warm: 5%;
+
+    --shadow-sm:
+      0 1px 2px rgba(76, 79, 105, 0.06), 0 8px 24px rgba(76, 79, 105, 0.08);
+    --shadow-md:
+      0 2px 6px rgba(76, 79, 105, 0.08), 0 16px 40px rgba(76, 79, 105, 0.1);
+    --shadow-lg:
+      0 2px 8px rgba(76, 79, 105, 0.1), 0 24px 56px rgba(76, 79, 105, 0.14);
+  }
 }
 
 * {
@@ -65,22 +200,21 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
-  color: #dcd7ba;
-  font-family:
-    "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: var(--foreground);
+  font-family: var(--font-sans);
   font-size: 16px;
   background:
     radial-gradient(
       circle at top left,
-      rgba(126, 156, 216, 0.22),
+      color-mix(in srgb, var(--primary) var(--wash-primary), transparent),
       transparent 28%
     ),
     radial-gradient(
       circle at 86% 18%,
-      rgba(255, 160, 102, 0.12),
+      color-mix(in srgb, var(--warm) var(--wash-warm), transparent),
       transparent 24%
     ),
-    linear-gradient(180deg, #1f1f28 0%, var(--bg) 100%);
+    linear-gradient(180deg, var(--card) 0%, var(--background) 100%);
   line-height: 1.55;
   -moz-osx-font-smoothing: grayscale;
   -webkit-font-smoothing: antialiased;
@@ -108,9 +242,9 @@ body {
 .pane-divider-grip {
   background: linear-gradient(
     180deg,
-    rgba(220, 215, 186, 0.1),
-    rgba(220, 215, 186, 0.16),
-    rgba(220, 215, 186, 0.1)
+    color-mix(in srgb, var(--foreground) 10%, transparent),
+    color-mix(in srgb, var(--foreground) 16%, transparent),
+    color-mix(in srgb, var(--foreground) 10%, transparent)
   );
   opacity: 0.45;
   transition:
@@ -129,24 +263,24 @@ body {
   opacity: 1;
   background: linear-gradient(
     180deg,
-    rgba(126, 156, 216, 0.2),
-    rgba(255, 160, 102, 0.18),
-    rgba(126, 156, 216, 0.2)
+    color-mix(in srgb, var(--primary) 20%, transparent),
+    color-mix(in srgb, var(--warm) 18%, transparent),
+    color-mix(in srgb, var(--primary) 20%, transparent)
   );
   box-shadow:
-    inset 0 0 0 1px rgba(220, 215, 186, 0.12),
-    0 0 0 1px rgba(126, 156, 216, 0.18),
+    inset 0 0 0 1px color-mix(in srgb, var(--foreground) 12%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent),
     0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
 @keyframes status-dot-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 4px rgba(220, 165, 97, 0.18);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 18%, transparent);
   }
 
   50% {
-    box-shadow: 0 0 0 7px rgba(220, 165, 97, 0.32);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--warning) 32%, transparent);
   }
 }
 
@@ -199,11 +333,11 @@ body {
   padding: 2px;
   background: linear-gradient(
     115deg,
-    rgba(255, 160, 102, 0.32) 0%,
-    rgba(255, 160, 102, 0.32) 30%,
-    rgba(255, 232, 188, 1) 50%,
-    rgba(255, 160, 102, 0.32) 70%,
-    rgba(255, 160, 102, 0.32) 100%
+    color-mix(in srgb, var(--warm) 32%, transparent) 0%,
+    color-mix(in srgb, var(--warm) 32%, transparent) 30%,
+    var(--warm-highlight) 50%,
+    color-mix(in srgb, var(--warm) 32%, transparent) 70%,
+    color-mix(in srgb, var(--warm) 32%, transparent) 100%
   );
   background-size: 220% 100%;
   -webkit-mask:
@@ -220,15 +354,15 @@ body {
   animation: none;
   box-shadow:
     var(--shadow-sm),
-    0 0 14px -8px rgba(255, 160, 102, 0.22);
+    0 0 14px -8px color-mix(in srgb, var(--warm) 22%, transparent);
 }
 
 .msg-recap-faded::before {
   animation-play-state: paused;
   background: linear-gradient(
     0deg,
-    rgba(255, 160, 102, 0.22),
-    rgba(255, 160, 102, 0.22)
+    color-mix(in srgb, var(--warm) 22%, transparent),
+    color-mix(in srgb, var(--warm) 22%, transparent)
   );
 }
 
@@ -237,13 +371,13 @@ body {
   100% {
     box-shadow:
       var(--shadow-sm),
-      0 0 12px -2px rgba(255, 160, 102, 0.22);
+      0 0 12px -2px color-mix(in srgb, var(--warm) 22%, transparent);
   }
 
   50% {
     box-shadow:
       var(--shadow-sm),
-      0 0 30px -2px rgba(255, 180, 120, 0.6);
+      0 0 30px -2px color-mix(in srgb, var(--warm-highlight) 60%, transparent);
   }
 }
 
@@ -322,14 +456,14 @@ body {
   0%,
   100% {
     box-shadow:
-      inset 0 0 0 1px rgba(220, 215, 186, 0.05),
-      inset 0 0 24px rgba(126, 156, 216, 0.02);
+      inset 0 0 0 1px color-mix(in srgb, var(--foreground) 5%, transparent),
+      inset 0 0 24px color-mix(in srgb, var(--primary) 2%, transparent);
   }
 
   50% {
     box-shadow:
-      inset 0 0 0 1px rgba(220, 215, 186, 0.09),
-      inset 0 0 34px rgba(126, 156, 216, 0.08);
+      inset 0 0 0 1px color-mix(in srgb, var(--foreground) 9%, transparent),
+      inset 0 0 34px color-mix(in srgb, var(--primary) 8%, transparent);
   }
 }
 
@@ -385,8 +519,8 @@ body {
 
 @media (max-width: 640px) {
   :root {
-    --radius-shell: 6px;
-    --radius-card: 3px;
+    --radius-lg: 6px;
+    --radius-sm: 3px;
   }
 
   #root {

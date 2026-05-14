@@ -23,58 +23,58 @@ const cardClass =
   "question-card grid gap-4 px-7 pb-[22px] pt-3.5 max-[640px]:mx-3 max-[640px]:mb-3 max-[640px]:mt-0 max-[640px]:p-3";
 
 const panelClass =
-  "grid gap-4 rounded-md bg-kanagawa-surface-strong p-4 shadow-[inset_0_0_0_1px_rgba(220,215,186,0.1),0_14px_28px_rgba(0,0,0,0.18)]";
+  "grid gap-4 rounded-md bg-input p-4 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_10%,transparent),0_14px_28px_rgb(0_0_0/0.18)]";
 
 const tabsClass =
-  "flex min-w-0 gap-2 overflow-x-auto border-b border-[rgba(220,215,186,0.08)] pb-2";
+  "flex min-w-0 gap-2 overflow-x-auto border-b border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] pb-2";
 
 const tabClass =
-  "grid min-w-[118px] gap-1 rounded-t-md border-0 bg-transparent px-3 py-2 text-left font-[inherit] text-kanagawa-text-soft transition-[background,color,box-shadow] duration-150 enabled:cursor-pointer hover:bg-[rgba(220,215,186,0.06)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(126,156,216,0.26)]";
+  "grid min-w-[118px] gap-1 rounded-t-md border-0 bg-transparent px-3 py-2 text-left font-[inherit] text-muted-foreground transition-[background,color,box-shadow] duration-150 enabled:cursor-pointer hover:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_26%,transparent)]";
 
 const activeTabClass =
-  "text-kanagawa-text shadow-[inset_0_-2px_0_0_rgba(126,156,216,0.9)]";
+  "text-foreground shadow-[inset_0_-2px_0_0_color-mix(in_srgb,var(--primary)_90%,transparent)]";
 
 const tabHeaderClass = "text-[0.82rem] font-semibold leading-tight";
 
 const tabStatusClass =
-  "text-[0.72rem] font-medium leading-tight text-kanagawa-text-soft";
+  "text-[0.72rem] font-medium leading-tight text-muted-foreground";
 
 const questionHeaderClass =
-  "m-0 text-[0.78rem] font-semibold uppercase leading-none tracking-[0.08em] text-kanagawa-text-soft";
+  "m-0 text-[0.78rem] font-semibold uppercase leading-none tracking-[0.08em] text-muted-foreground";
 
 const questionTextClass =
-  "m-0 text-[1.02rem] font-semibold leading-snug text-kanagawa-text";
+  "m-0 text-[1.02rem] font-semibold leading-snug text-foreground";
 
 const optionsClass = "m-0 grid list-none gap-2 p-0";
 
 const optionClass =
-  "grid cursor-pointer gap-1 rounded-md bg-[rgba(22,22,29,0.32)] px-3.5 py-3 shadow-[inset_0_0_0_1px_rgba(220,215,186,0.08)] transition-[background,box-shadow] duration-150 has-[:checked]:bg-[rgba(126,156,216,0.14)] has-[:checked]:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.42)]";
+  "grid cursor-pointer gap-1 rounded-md bg-[color-mix(in_srgb,var(--background)_32%,transparent)] px-3.5 py-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_8%,transparent)] transition-[background,box-shadow] duration-150 has-[:checked]:bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] has-[:checked]:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_42%,transparent)]";
 
 const optionTopClass = "flex min-w-0 items-center gap-2";
 
-const optionLabelClass = "font-semibold leading-tight text-kanagawa-text";
+const optionLabelClass = "font-semibold leading-tight text-foreground";
 
 const optionDescriptionClass =
-  "m-0 pl-6 text-[0.84rem] leading-snug text-kanagawa-text-soft";
+  "m-0 pl-6 text-[0.84rem] leading-snug text-muted-foreground";
 
 const customAnswerInputClass =
-  "ml-6 min-h-10 rounded-md border-0 bg-[rgba(22,22,29,0.5)] px-3 font-[inherit] text-kanagawa-text shadow-[inset_0_0_0_1px_rgba(220,215,186,0.14)] outline-none transition-shadow duration-150 placeholder:text-kanagawa-text-soft focus:shadow-[inset_0_0_0_1px_rgba(126,156,216,0.5),0_0_0_3px_rgba(126,156,216,0.18)] disabled:cursor-not-allowed disabled:opacity-70";
+  "ml-6 min-h-10 rounded-md border-0 bg-[color-mix(in_srgb,var(--background)_50%,transparent)] px-3 font-[inherit] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_14%,transparent)] outline-none transition-shadow duration-150 placeholder:text-muted-foreground focus:shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_50%,transparent),0_0_0_3px_color-mix(in_srgb,var(--primary)_18%,transparent)] disabled:cursor-not-allowed disabled:opacity-70";
 
 const footerClass = "flex items-center justify-between gap-2";
 
 const footerRightClass = "flex items-center gap-2";
 
 const progressClass =
-  "text-[0.78rem] font-medium leading-tight text-kanagawa-text-soft";
+  "text-[0.78rem] font-medium leading-tight text-muted-foreground";
 
 const skipButtonClass =
-  "min-h-10 rounded-md border-0 bg-transparent px-4 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.12)] transition-[background,color] duration-150 enabled:cursor-pointer hover:enabled:bg-[rgba(220,215,186,0.06)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_rgba(126,156,216,0.26)]";
+  "min-h-10 rounded-md border-0 bg-transparent px-4 font-[inherit] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] transition-[background,color] duration-150 enabled:cursor-pointer hover:enabled:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_26%,transparent)]";
 
 const navButtonClass =
-  "min-h-10 rounded-md border-0 bg-transparent px-3 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.12)] transition-[background,color,opacity] duration-150 enabled:cursor-pointer hover:enabled:bg-[rgba(220,215,186,0.06)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_rgba(126,156,216,0.26)] disabled:cursor-not-allowed disabled:opacity-40";
+  "min-h-10 rounded-md border-0 bg-transparent px-3 font-[inherit] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] transition-[background,color,opacity] duration-150 enabled:cursor-pointer hover:enabled:bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] focus-visible:enabled:outline-none focus-visible:enabled:shadow-[0_0_0_3px_color-mix(in_srgb,var(--primary)_26%,transparent)] disabled:cursor-not-allowed disabled:opacity-40";
 
 const submitButtonClass =
-  "min-h-10 rounded-md border-0 bg-[rgba(42,42,55,0.7)] px-4 font-[inherit] font-semibold text-kanagawa-text-soft shadow-[inset_0_0_0_1px_rgba(220,215,186,0.06)] transition-[transform,box-shadow,opacity,background] duration-[120ms,180ms,180ms,180ms] enabled:cursor-pointer enabled:bg-[linear-gradient(180deg,#7e9cd8,#658594)] enabled:text-kanagawa-bg enabled:shadow-[0_1px_1px_rgba(255,255,255,0.12)_inset,0_10px_20px_rgba(101,133,148,0.22)] active:enabled:scale-[0.96] disabled:cursor-not-allowed disabled:[background:rgba(42,42,55,0.7)]";
+  "min-h-10 rounded-md border-0 bg-[color-mix(in_srgb,var(--muted)_70%,transparent)] px-4 font-[inherit] font-semibold text-muted-foreground shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--foreground)_6%,transparent)] transition-[transform,box-shadow,opacity,background] duration-[120ms,180ms,180ms,180ms] enabled:cursor-pointer enabled:bg-[linear-gradient(180deg,var(--primary),color-mix(in_oklab,var(--primary),black_18%))] enabled:text-background enabled:shadow-[0_1px_1px_rgb(255_255_255/0.12)_inset,0_10px_20px_color-mix(in_srgb,color-mix(in_oklab,var(--primary),black_18%)_22%,transparent)] active:enabled:scale-[0.96] disabled:cursor-not-allowed disabled:[background:color-mix(in_srgb,var(--muted)_70%,transparent)]";
 
 export function QuestionCard({
   pendingQuestion,
