@@ -4,6 +4,8 @@
 
 mod bug_report;
 mod dev_log;
+#[cfg(debug_assertions)]
+mod diagnostics;
 mod error;
 
 use std::collections::BTreeMap;
@@ -27,6 +29,11 @@ use bug_report::bug_report_bundler;
 #[cfg(test)]
 use bug_report::{create_bug_report_bundle, create_bug_report_bundle_in_dir, UNZIP_COMMAND_PATH};
 use dev_log::format_sidecar_dev_log;
+#[cfg(debug_assertions)]
+use diagnostics::{
+    now_ms, DiagnosticLevel, DiagnosticReadOptions, DiagnosticReadResponse, DiagnosticRecord,
+    DiagnosticSource, DiagnosticStartOptions, DiagnosticStatus, Diagnostics,
+};
 use error::{app_error, command_error, CairnResult};
 
 #[derive(Default)]
@@ -66,6 +73,8 @@ struct SidecarState {
     // Recent raw sidecar dev events. The frontend pulls this after subscribing
     // so events emitted during startup/hydration are not lost.
     last_dev_logs: StdMutex<Vec<Value>>,
+    #[cfg(debug_assertions)]
+    diagnostics: StdMutex<Diagnostics>,
     startup_project_path: StdMutex<Option<PathBuf>>,
 }
 
@@ -133,6 +142,18 @@ struct RecentProjectEntry {
 struct ImagePayload {
     data: String,
     mime_type: String,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FrontendDiagnosticPayload {
+    level: DiagnosticLevel,
+    event_name: String,
+    #[serde(default)]
+    message: Option<String>,
+    #[serde(default)]
+    metadata: BTreeMap<String, Value>,
 }
 
 #[derive(Deserialize)]
@@ -720,15 +741,60 @@ fn project_file_path(name: &str, active_project: &ActiveProject) -> Result<PathB
         .join(relative))
 }
 
+#[cfg(debug_assertions)]
+fn record_diagnostic(state: &SidecarState, record: DiagnosticRecord) -> bool {
+    lock_state(&state.diagnostics).record(record, now_ms())
+}
+
+#[cfg(debug_assertions)]
+fn record_emit_failure(
+    state: &SidecarState,
+    channel: &'static str,
+    payload_type: Option<&str>,
+    err: &tauri::Error,
+) {
+    let record = DiagnosticRecord::new(
+        DiagnosticSource::Backend,
+        DiagnosticLevel::Error,
+        "backend.emit_failed",
+    )
+    .with_safe_string("channel", channel)
+    .with_text(err.to_string());
+    let record = if let Some(payload_type) = payload_type {
+        record.with_safe_string("payloadType", payload_type)
+    } else {
+        record
+    };
+    record_diagnostic(state, record);
+}
+
 fn record_error(state: &SidecarState, message: impl Into<String>, app: &AppHandle) {
     let message = message.into();
     log::error!(target: "cairn::sidecar", "{message}");
+    #[cfg(debug_assertions)]
+    {
+        record_diagnostic(
+            state,
+            DiagnosticRecord::new(
+                DiagnosticSource::Backend,
+                DiagnosticLevel::Error,
+                "backend.sidecar_error",
+            )
+            .with_text(message.clone()),
+        );
+    }
     state.ready.store(false, Ordering::Release);
     *lock_state(&state.last_error) = Some(message.clone());
-    let _ = app.emit(
-        SIDECAR_EVENT,
-        serde_json::json!({ "type": "error", "message": message }),
-    );
+    let payload = serde_json::json!({ "type": "error", "message": message });
+    let emit_result = app.emit(SIDECAR_EVENT, payload);
+    #[cfg(debug_assertions)]
+    {
+        if let Err(err) = emit_result {
+            record_emit_failure(state, SIDECAR_EVENT, Some("error"), &err);
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = emit_result;
 }
 
 async fn write_json_line<W: AsyncWrite + Unpin>(
@@ -972,6 +1038,151 @@ fn get_sidecar_dev_logs(state: State<'_, Arc<SidecarState>>) -> Vec<Value> {
     lock_state(&state.last_dev_logs).clone()
 }
 
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn start_diagnostics(
+    options: Option<DiagnosticStartOptions>,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<DiagnosticStatus, String> {
+    lock_state(&state.diagnostics).start(options, now_ms())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn stop_diagnostics(state: State<'_, Arc<SidecarState>>) -> DiagnosticStatus {
+    lock_state(&state.diagnostics).stop(now_ms())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn clear_diagnostics(state: State<'_, Arc<SidecarState>>) -> DiagnosticStatus {
+    let mut diagnostics = lock_state(&state.diagnostics);
+    diagnostics.clear();
+    diagnostics.status(now_ms())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn read_diagnostics(
+    options: Option<DiagnosticReadOptions>,
+    state: State<'_, Arc<SidecarState>>,
+) -> Result<DiagnosticReadResponse, String> {
+    lock_state(&state.diagnostics).read(options, now_ms())
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn get_diagnostics_status(state: State<'_, Arc<SidecarState>>) -> DiagnosticStatus {
+    lock_state(&state.diagnostics).status(now_ms())
+}
+
+#[cfg(debug_assertions)]
+fn sanitize_frontend_metadata(metadata: BTreeMap<String, Value>) -> serde_json::Map<String, Value> {
+    let mut sanitized = serde_json::Map::new();
+    for (key, value) in metadata {
+        let Some(key) = safe_frontend_metadata_key(&key) else {
+            continue;
+        };
+        match value {
+            Value::Bool(value) => {
+                sanitized.insert(key.into(), Value::from(value));
+            }
+            Value::Number(value) => {
+                sanitized.insert(key.into(), Value::Number(value));
+            }
+            Value::String(value) => {
+                sanitized.insert(format!("{key}Length"), Value::from(value.chars().count()));
+            }
+            Value::Array(value) => {
+                sanitized.insert(format!("{key}Count"), Value::from(value.len() as u64));
+            }
+            Value::Object(value) => {
+                sanitized.insert(format!("{key}KeyCount"), Value::from(value.len() as u64));
+            }
+            Value::Null => {
+                sanitized.insert(key.into(), Value::Null);
+            }
+        }
+    }
+    sanitized
+}
+
+#[cfg(debug_assertions)]
+fn safe_frontend_metadata_key(key: &str) -> Option<&'static str> {
+    match key {
+        "argumentCount" => Some("argumentCount"),
+        "firstArgumentType" => Some("firstArgumentType"),
+        "messageLength" => Some("messageLength"),
+        "signature" => Some("signature"),
+        _ => None,
+    }
+}
+
+#[cfg(debug_assertions)]
+fn sanitize_frontend_event_name(event_name: &str) -> String {
+    let sanitized = event_name
+        .trim()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+        .take(80)
+        .collect::<String>();
+    if sanitized.is_empty() {
+        "event".into()
+    } else {
+        sanitized
+    }
+}
+
+#[cfg(debug_assertions)]
+fn frontend_diagnostic_record(payload: FrontendDiagnosticPayload) -> DiagnosticRecord {
+    let event_name = format!(
+        "frontend.{}",
+        sanitize_frontend_event_name(&payload.event_name)
+    );
+    let mut record = DiagnosticRecord::new(DiagnosticSource::Frontend, payload.level, event_name);
+    for (key, value) in sanitize_frontend_metadata(payload.metadata) {
+        record = record.with_value(key, value);
+    }
+    if let Some(message) = payload.message {
+        record.with_text(message)
+    } else {
+        record
+    }
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri command handlers receive framework-owned State values."
+)]
+fn record_frontend_diagnostic(
+    payload: FrontendDiagnosticPayload,
+    state: State<'_, Arc<SidecarState>>,
+) -> bool {
+    record_diagnostic(&state, frontend_diagnostic_record(payload))
+}
+
 #[tauri::command]
 fn get_cairn_settings() -> Result<CairnSettingsStatus, String> {
     read_cairn_settings()
@@ -1152,7 +1363,286 @@ async fn handle_ready_event(app: &AppHandle, state: &Arc<SidecarState>) {
     }
 }
 
+#[cfg(debug_assertions)]
+fn message_count(value: &Value) -> u64 {
+    value
+        .get("messages")
+        .and_then(Value::as_array)
+        .map_or(0, |messages| messages.len() as u64)
+}
+
+#[cfg(debug_assertions)]
+fn sidecar_stdout_diagnostic_record(value: &Value) -> Option<DiagnosticRecord> {
+    let event_type = value.get("type").and_then(Value::as_str)?;
+    let record = match event_type {
+        "ready" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stdout.ready",
+        ),
+        "error" => {
+            let recoverable = value
+                .get("recoverable")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let level = if recoverable {
+                DiagnosticLevel::Warn
+            } else {
+                DiagnosticLevel::Error
+            };
+            let record =
+                DiagnosticRecord::new(DiagnosticSource::Sidecar, level, "sidecar.stdout.error")
+                    .with_bool("recoverable", recoverable);
+            if let Some(message) = value.get("message").and_then(Value::as_str) {
+                record.with_text(message)
+            } else {
+                record
+            }
+        }
+        "hydrate" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stdout.hydrate",
+        )
+        .with_u64("messageCount", message_count(value)),
+        "text_delta" => {
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stdout.text_delta",
+            );
+            if let Some(delta) = value.get("delta").and_then(Value::as_str) {
+                record.with_text(delta)
+            } else {
+                record
+            }
+        }
+        "text_done" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stdout.text_done",
+        ),
+        "active_project" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stdout.active_project",
+        ),
+        "recents" => {
+            let entry_count = value
+                .get("entries")
+                .and_then(Value::as_array)
+                .map_or(0, |entries| entries.len() as u64);
+            DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stdout.recents",
+            )
+            .with_u64("entryCount", entry_count)
+        }
+        "ask_user_question" => {
+            let question_count = value
+                .get("questions")
+                .and_then(Value::as_array)
+                .map_or(0, |questions| questions.len() as u64);
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stdout.ask_user_question",
+            )
+            .with_u64("questionCount", question_count);
+            if let Some(tool_call_id) = value.get("toolCallId").and_then(Value::as_str) {
+                record.with_safe_string("toolCallId", tool_call_id)
+            } else {
+                record
+            }
+        }
+        "agent_end" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stdout.agent_end",
+        ),
+        other => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Debug,
+            "sidecar.stdout.unknown",
+        )
+        .with_safe_string("eventType", other),
+    };
+    Some(record)
+}
+
+#[cfg(debug_assertions)]
+fn record_sidecar_stdout_diagnostic(value: &Value, state: &SidecarState) -> bool {
+    sidecar_stdout_diagnostic_record(value).is_some_and(|record| record_diagnostic(state, record))
+}
+
+#[cfg(debug_assertions)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Sidecar diagnostic mapping intentionally keeps the event vocabulary in one place."
+)]
+fn sidecar_stderr_diagnostic_record(value: &Value) -> Option<DiagnosticRecord> {
+    match value.get("type").and_then(Value::as_str)? {
+        "session_event" => {
+            let event = value.get("event")?;
+            let event_type = event
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stderr.session_event",
+            )
+            .with_safe_string("eventType", event_type);
+            let record = if let Some(id) = event
+                .get("message")
+                .and_then(|message| message.get("id"))
+                .and_then(Value::as_str)
+            {
+                record.with_safe_string("messageId", id)
+            } else {
+                record
+            };
+            match event_type {
+                "message_update" => {
+                    let assistant_event = event.get("assistantMessageEvent");
+                    let assistant_event_type = assistant_event
+                        .and_then(|event| event.get("type"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown");
+                    let record =
+                        record.with_safe_string("assistantEventType", assistant_event_type);
+                    if let Some(delta) = assistant_event
+                        .and_then(|event| event.get("delta"))
+                        .and_then(Value::as_str)
+                    {
+                        record.with_text(delta)
+                    } else {
+                        record
+                    }
+                }
+                "message_end" => {
+                    let role = event
+                        .get("message")
+                        .and_then(|message| message.get("role"))
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown");
+                    record.with_safe_string("role", role)
+                }
+                "tool_execution_start" | "tool_execution_update" | "tool_execution_end" => {
+                    let record = if let Some(tool) = event.get("toolName").and_then(Value::as_str) {
+                        record.with_safe_string("toolName", tool)
+                    } else {
+                        record
+                    };
+                    let record = if let Some(tool_call_id) =
+                        event.get("toolCallId").and_then(Value::as_str)
+                    {
+                        record.with_safe_string("toolCallId", tool_call_id)
+                    } else {
+                        record
+                    };
+                    if let Some(is_error) = event.get("isError").and_then(Value::as_bool) {
+                        record.with_bool("isError", is_error)
+                    } else {
+                        record
+                    }
+                }
+                "agent_end" => record.with_u64("messageCount", message_count(event)),
+                _ => record,
+            }
+        }
+        "project_state" => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Info,
+            "sidecar.stderr.project_state",
+        )
+        .with_safe_string(
+            "phase",
+            value
+                .get("phase")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown"),
+        )
+        .with_bool(
+            "brief",
+            value.get("brief").and_then(Value::as_bool).unwrap_or(false),
+        )
+        .with_u64(
+            "prdCount",
+            value
+                .get("prds")
+                .and_then(Value::as_array)
+                .map_or(0, |prds| prds.len() as u64),
+        )
+        .with_u64(
+            "issueCount",
+            value
+                .get("issues")
+                .and_then(Value::as_array)
+                .map_or(0, |issues| issues.len() as u64),
+        ),
+        "tool_start" => {
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stderr.tool_start",
+            );
+            if let Some(name) = value.get("name").and_then(Value::as_str) {
+                record.with_safe_string("toolName", name)
+            } else {
+                record
+            }
+        }
+        "tool_end" => {
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Info,
+                "sidecar.stderr.tool_end",
+            )
+            .with_bool(
+                "ok",
+                value.get("ok").and_then(Value::as_bool).unwrap_or(false),
+            );
+            if let Some(name) = value.get("name").and_then(Value::as_str) {
+                record.with_safe_string("toolName", name)
+            } else {
+                record
+            }
+        }
+        "assistant_error" => {
+            let record = DiagnosticRecord::new(
+                DiagnosticSource::Sidecar,
+                DiagnosticLevel::Error,
+                "sidecar.stderr.assistant_error",
+            );
+            if let Some(message) = value.get("message").and_then(Value::as_str) {
+                record.with_text(message)
+            } else {
+                record
+            }
+        }
+        other => DiagnosticRecord::new(
+            DiagnosticSource::Sidecar,
+            DiagnosticLevel::Debug,
+            "sidecar.stderr.event",
+        )
+        .with_safe_string("eventType", other),
+    }
+    .into()
+}
+
+#[cfg(debug_assertions)]
+fn record_sidecar_stderr_diagnostic(value: &Value, state: &SidecarState) -> bool {
+    sidecar_stderr_diagnostic_record(value).is_some_and(|record| record_diagnostic(state, record))
+}
+
 async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<SidecarState>) {
+    #[cfg(debug_assertions)]
+    {
+        record_sidecar_stdout_diagnostic(&value, state);
+    }
     match value.get("type").and_then(Value::as_str) {
         Some("ready") => {
             handle_ready_event(app, state).await;
@@ -1214,7 +1704,20 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
         }
         _ => {}
     }
-    let _ = app.emit(SIDECAR_EVENT, value);
+    #[cfg(debug_assertions)]
+    let payload_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let emit_result = app.emit(SIDECAR_EVENT, value);
+    #[cfg(debug_assertions)]
+    {
+        if let Err(err) = emit_result {
+            record_emit_failure(state, SIDECAR_EVENT, payload_type.as_deref(), &err);
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = emit_result;
 }
 
 fn spawn_stdout_forwarder(app: AppHandle, state: Arc<SidecarState>, stdout: ChildStdout) {
@@ -1227,10 +1730,21 @@ fn spawn_stdout_forwarder(app: AppHandle, state: Arc<SidecarState>, stdout: Chil
                     if trimmed.is_empty() {
                         continue;
                     }
-                    match serde_json::from_str::<Value>(trimmed) {
-                        Ok(value) => handle_sidecar_stdout_value(value, &app, &state).await,
-                        Err(_) => {
-                            log::warn!(target: "cairn::sidecar", "non-json stdout: {trimmed}");
+                    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                        handle_sidecar_stdout_value(value, &app, &state).await;
+                    } else {
+                        log::warn!(target: "cairn::sidecar", "non-json stdout: {trimmed}");
+                        #[cfg(debug_assertions)]
+                        {
+                            record_diagnostic(
+                                &state,
+                                DiagnosticRecord::new(
+                                    DiagnosticSource::Backend,
+                                    DiagnosticLevel::Warn,
+                                    "backend.sidecar_stdout_non_json",
+                                )
+                                .with_text(trimmed),
+                            );
                         }
                     }
                 }
@@ -1250,28 +1764,77 @@ fn spawn_stdout_forwarder(app: AppHandle, state: Arc<SidecarState>, stdout: Chil
 fn handle_sidecar_stderr_value(value: Value, app: &AppHandle, state: &SidecarState) {
     let log_line = format_sidecar_dev_log(&value).unwrap_or_else(|| value.to_string());
     log::info!(target: "cairn::sidecar", "{log_line}");
+    #[cfg(debug_assertions)]
+    {
+        record_sidecar_stderr_diagnostic(&value, state);
+    }
     let mut logs = lock_state(&state.last_dev_logs);
     logs.push(value.clone());
     if logs.len() > MAX_DEV_LOG_EVENTS {
         let drain_count = logs.len() - MAX_DEV_LOG_EVENTS;
         logs.drain(0..drain_count);
     }
-    let _ = app.emit(SIDECAR_DEV_EVENT, value);
+    #[cfg(debug_assertions)]
+    let payload_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    let emit_result = app.emit(SIDECAR_DEV_EVENT, value);
+    #[cfg(debug_assertions)]
+    {
+        if let Err(err) = emit_result {
+            record_emit_failure(state, SIDECAR_DEV_EVENT, payload_type.as_deref(), &err);
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = emit_result;
 }
 
 fn spawn_stderr_forwarder(app: AppHandle, state: Arc<SidecarState>, stderr: ChildStderr) {
     tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
 
-            match serde_json::from_str::<Value>(trimmed) {
-                Ok(value) => handle_sidecar_stderr_value(value, &app, &state),
-                Err(_) => {
-                    log::warn!(target: "cairn::sidecar", "stderr: {trimmed}");
+                    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                        handle_sidecar_stderr_value(value, &app, &state);
+                    } else {
+                        log::warn!(target: "cairn::sidecar", "stderr: {trimmed}");
+                        #[cfg(debug_assertions)]
+                        {
+                            record_diagnostic(
+                                &state,
+                                DiagnosticRecord::new(
+                                    DiagnosticSource::Sidecar,
+                                    DiagnosticLevel::Warn,
+                                    "sidecar.stderr.non_json",
+                                )
+                                .with_text(trimmed),
+                            );
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    log::warn!(target: "cairn::sidecar", "stderr read error: {err}");
+                    #[cfg(debug_assertions)]
+                    {
+                        record_diagnostic(
+                            &state,
+                            DiagnosticRecord::new(
+                                DiagnosticSource::Backend,
+                                DiagnosticLevel::Warn,
+                                "backend.sidecar_stderr_read_error",
+                            )
+                            .with_text(err.to_string()),
+                        );
+                    }
+                    break;
                 }
             }
         }
@@ -1429,7 +1992,35 @@ pub fn run() {
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
-    let app = builder
+    #[cfg(debug_assertions)]
+    let builder = builder
+        .manage(sidecar_state.clone())
+        .invoke_handler(tauri::generate_handler![
+            send_prompt,
+            submit_question_answer,
+            new_project,
+            open_project,
+            open_project_dialog,
+            list_recents,
+            get_active_project,
+            get_cairn_settings,
+            get_mcp_settings,
+            set_mcp_server_enabled,
+            authenticate_mcp_server,
+            set_anthropic_api_key,
+            get_sidecar_status,
+            get_sidecar_dev_logs,
+            start_diagnostics,
+            stop_diagnostics,
+            clear_diagnostics,
+            read_diagnostics,
+            get_diagnostics_status,
+            record_frontend_diagnostic,
+            read_project_file,
+            bug_report_bundler
+        ]);
+    #[cfg(not(debug_assertions))]
+    let builder = builder
         .manage(sidecar_state.clone())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
@@ -1448,7 +2039,9 @@ pub fn run() {
             get_sidecar_dev_logs,
             read_project_file,
             bug_report_bundler
-        ])
+        ]);
+
+    let app = builder
         .on_window_event({
             let state = sidecar_state.clone();
             move |_window, event| {
@@ -1544,6 +2137,290 @@ mod tests {
         assert_eq!(
             format_sidecar_dev_log(&value).as_deref(),
             Some("project_state phase=scoping brief=false prds=2 issues=1")
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn sidecar_stdout_diagnostics_collect_only_when_enabled() {
+        let state = SidecarState::default();
+        let value = json!({ "type": "text_delta", "delta": "hidden assistant text" });
+
+        assert!(!record_sidecar_stdout_diagnostic(&value, &state));
+        assert_eq!(
+            lock_state(&state.diagnostics)
+                .read(None, now_ms())
+                .unwrap()
+                .events
+                .len(),
+            0
+        );
+
+        lock_state(&state.diagnostics)
+            .start(None, now_ms())
+            .unwrap();
+        assert!(record_sidecar_stdout_diagnostic(&value, &state));
+        let events = lock_state(&state.diagnostics)
+            .read(None, now_ms())
+            .unwrap()
+            .events;
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].name, "sidecar.stdout.text_delta");
+        assert_eq!(events[0].metadata.get("textLength"), Some(&json!(21)));
+        assert_eq!(events[0].metadata.get("textSnippet"), None);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn sidecar_stderr_diagnostics_collect_sanitized_tool_and_text_events() {
+        let state = SidecarState::default();
+        lock_state(&state.diagnostics)
+            .start(
+                Some(DiagnosticStartOptions {
+                    sources: vec![DiagnosticSource::Sidecar],
+                    max_events: Some(10),
+                    ttl_seconds: Some(60),
+                    include_text: false,
+                }),
+                now_ms(),
+            )
+            .unwrap();
+
+        assert!(record_sidecar_stderr_diagnostic(
+            &json!({
+                "type": "session_event",
+                "event": {
+                    "type": "message_update",
+                    "message": {
+                        "id": "msg_123"
+                    },
+                    "assistantMessageEvent": {
+                        "type": "text_delta",
+                        "delta": "do not retain this"
+                    }
+                }
+            }),
+            &state
+        ));
+        assert!(record_sidecar_stderr_diagnostic(
+            &json!({
+                "type": "session_event",
+                "event": {
+                    "type": "tool_execution_end",
+                    "toolCallId": "tool_123",
+                    "toolName": "update_task_status",
+                    "isError": false
+                }
+            }),
+            &state
+        ));
+
+        let events = lock_state(&state.diagnostics)
+            .read(None, now_ms())
+            .unwrap()
+            .events;
+
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "sidecar.stderr.session_event",
+                "sidecar.stderr.session_event"
+            ]
+        );
+        assert_eq!(events[0].metadata.get("textLength"), Some(&json!(18)));
+        assert_eq!(events[0].metadata.get("textSnippet"), None);
+        assert_eq!(events[0].metadata.get("messageId"), Some(&json!("msg_123")));
+        assert_eq!(
+            events[1].metadata.get("toolName"),
+            Some(&json!("update_task_status"))
+        );
+        assert_eq!(
+            events[1].metadata.get("toolCallId"),
+            Some(&json!("tool_123"))
+        );
+        assert_eq!(events[1].metadata.get("isError"), Some(&json!(false)));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn diagnostics_runtime_events_use_collector_retention() {
+        let state = SidecarState::default();
+        lock_state(&state.diagnostics)
+            .start(
+                Some(DiagnosticStartOptions {
+                    sources: vec![DiagnosticSource::Sidecar],
+                    max_events: Some(2),
+                    ttl_seconds: Some(60),
+                    include_text: false,
+                }),
+                now_ms(),
+            )
+            .unwrap();
+
+        for index in 0..3 {
+            assert!(record_sidecar_stdout_diagnostic(
+                &json!({ "type": "hydrate", "messages": vec![json!({ "id": index })] }),
+                &state
+            ));
+        }
+
+        let response = lock_state(&state.diagnostics).read(None, now_ms()).unwrap();
+
+        assert_eq!(response.events.len(), 2);
+        assert_eq!(response.dropped_events, 1);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn backend_and_sidecar_events_share_collector_ordering() {
+        let state = SidecarState::default();
+        lock_state(&state.diagnostics)
+            .start(
+                Some(DiagnosticStartOptions {
+                    sources: vec![DiagnosticSource::Sidecar, DiagnosticSource::Backend],
+                    max_events: Some(10),
+                    ttl_seconds: Some(60),
+                    include_text: false,
+                }),
+                now_ms(),
+            )
+            .unwrap();
+
+        assert!(record_sidecar_stdout_diagnostic(
+            &json!({ "type": "hydrate", "messages": [] }),
+            &state
+        ));
+        assert!(record_diagnostic(
+            &state,
+            DiagnosticRecord::new(
+                DiagnosticSource::Backend,
+                DiagnosticLevel::Error,
+                "backend.emit_failed",
+            )
+            .with_safe_string("channel", SIDECAR_EVENT)
+            .with_text("frontend listener unavailable")
+        ));
+        assert!(record_sidecar_stderr_diagnostic(
+            &json!({
+                "type": "tool_end",
+                "name": "update_task_status",
+                "ok": true
+            }),
+            &state
+        ));
+
+        let events = lock_state(&state.diagnostics)
+            .read(None, now_ms())
+            .unwrap()
+            .events;
+
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "sidecar.stdout.hydrate",
+                "backend.emit_failed",
+                "sidecar.stderr.tool_end"
+            ]
+        );
+        assert_eq!(
+            events.iter().map(|event| event.cursor).collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(events[1].metadata.get("textSnippet"), None);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn frontend_diagnostic_record_sanitizes_metadata_and_redacts_message() {
+        let payload = FrontendDiagnosticPayload {
+            level: DiagnosticLevel::Warn,
+            event_name: "console.warn".into(),
+            message: Some("raw frontend warning".into()),
+            metadata: BTreeMap::from([
+                ("argumentCount".into(), json!(2)),
+                ("firstArgument".into(), json!("secret value")),
+                ("secret key name".into(), json!("hidden")),
+                ("userSecretToken123".into(), json!("hidden")),
+                ("component".into(), json!({ "name": "Composer" })),
+            ]),
+        };
+        let state = SidecarState::default();
+        lock_state(&state.diagnostics)
+            .start(
+                Some(DiagnosticStartOptions {
+                    sources: vec![DiagnosticSource::Frontend],
+                    max_events: Some(10),
+                    ttl_seconds: Some(60),
+                    include_text: false,
+                }),
+                now_ms(),
+            )
+            .unwrap();
+
+        assert!(record_diagnostic(
+            &state,
+            frontend_diagnostic_record(payload)
+        ));
+        let event = lock_state(&state.diagnostics)
+            .read(None, now_ms())
+            .unwrap()
+            .events
+            .remove(0);
+
+        assert_eq!(event.name, "frontend.console.warn");
+        assert_eq!(event.metadata.get("argumentCount"), Some(&json!(2)));
+        assert_eq!(event.metadata.get("firstArgumentLength"), None);
+        assert_eq!(event.metadata.get("secretkeynameLength"), None);
+        assert_eq!(event.metadata.get("userSecretToken123Length"), None);
+        assert_eq!(event.metadata.get("componentKeyCount"), None);
+        assert_eq!(event.metadata.get("firstArgument"), None);
+        assert_eq!(event.metadata.get("secret key nameLength"), None);
+        assert_eq!(event.metadata.get("textLength"), Some(&json!(20)));
+        assert_eq!(event.metadata.get("textSnippet"), None);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn frontend_diagnostic_record_includes_text_only_when_collector_allows_it() {
+        let payload = FrontendDiagnosticPayload {
+            level: DiagnosticLevel::Error,
+            event_name: "console.error.sidecar.listen_failed".into(),
+            message: Some("listener failed details".into()),
+            metadata: BTreeMap::from([("messageLength".into(), json!(23))]),
+        };
+        let state = SidecarState::default();
+        lock_state(&state.diagnostics)
+            .start(
+                Some(DiagnosticStartOptions {
+                    sources: vec![DiagnosticSource::Frontend],
+                    max_events: Some(10),
+                    ttl_seconds: Some(60),
+                    include_text: true,
+                }),
+                now_ms(),
+            )
+            .unwrap();
+
+        assert!(record_diagnostic(
+            &state,
+            frontend_diagnostic_record(payload)
+        ));
+        let event = lock_state(&state.diagnostics)
+            .read(None, now_ms())
+            .unwrap()
+            .events
+            .remove(0);
+
+        assert_eq!(
+            event.metadata.get("textSnippet"),
+            Some(&json!("listener failed details"))
         );
     }
 

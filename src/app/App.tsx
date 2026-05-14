@@ -34,6 +34,7 @@ import {
   useSidecarSession,
 } from "../features/chat/hooks/useSidecarSession";
 import { DevModeLayer } from "../features/dev-mode/components/DevModeLayer";
+import { useFrontendDiagnostics } from "../features/dev-mode/useFrontendDiagnostics";
 import {
   type SidecarDevLogEntry,
   useSidecarDevLog,
@@ -62,6 +63,7 @@ const appClass =
   "app grid h-[calc(100vh-36px)] items-stretch gap-0 [grid-template-columns:minmax(320px,var(--chat-pane,41%))_14px_minmax(360px,calc(var(--project-pane,59%)-14px))] max-[980px]:h-auto max-[980px]:min-h-[calc(100vh-24px)] max-[980px]:grid-cols-1 max-[980px]:gap-3";
 
 function App() {
+  useFrontendDiagnostics();
   const [recapInteracted, setRecapInteracted] = useState(false);
   const [bugReportSnapshot, setBugReportSnapshot] =
     useState<BugReportSnapshot | null>(null);
