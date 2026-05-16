@@ -34,6 +34,15 @@ That's the whole loop. The sections below cover architecture, build output, and 
 
 Active. v0 proved the **scoping** experience works for non-technical users. The **Plan** (slicing) and **Tasks** (implementing) tabs are now in and iterating. See `_meta/project-brief.md` for the original v0 scope and non-goals.
 
+## Features
+
+- **Guides you through a workflow you didn't know existed.** One persona — the Cairn — walks non-technical users from rough idea → scoped project → sliced plan → built tasks. Each stage has its own tab (**Project**, **Plan**, **Tasks**), and the Cairn decides when you're ready to move on.
+- **Headless sub-agents do the actual building.** When it's time to implement a task, the Cairn spawns a [pi-coding-agent](https://www.npmjs.com/package/@mariozechner/pi-coding-agent) sub-agent under the hood and streams progress back to the chat. You never see code, diffs, errors, or a terminal.
+- **MCP integrations.** Connect external tools over the Model Context Protocol so the agent can reach beyond the project directory. **Notion** is the only server wired up at the moment (pages, docs, databases). Slack is stubbed in the settings UI but not actually plumbed through yet — don't read too much into it being there.
+- **Image attachments.** Drop screenshots into chat — mocks, reference UIs, error states — and the Cairn reasons about them alongside the conversation.
+- **On-demand diagnostics + bug reporting.** When a sub-agent gets stuck or something feels off, there's a built-in flow for capturing what happened without making the user dig through logs.
+- **Local-first, per-project state.** Each Project lives at `~/.cairn/projects/<name>/`, outside the repo. Your API key and settings stay on your machine.
+
 ## Architecture
 
 Three processes, talking over stdio:
