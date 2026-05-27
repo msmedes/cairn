@@ -40,6 +40,10 @@ _Avoid_: roadmap, slice doc, plan-doc
 The Implementing-phase user-visible artifact. A plain-language checklist with one entry per piece of the current Slice, keyed by issue-derived task slugs and updated as each piece moves through implementation. Backed by schema-validated **Artifact data** and rendered in the Tasks tab of the project panel. Shares its plain-language descriptions with the Plan's "pieces I'll work through" section — the Plan describes what will be built, the Tasks tab shows what has been built. Distinguished from the PRD and issues, which are **Engineering scaffolding**.
 _Avoid_: progress, status, todos, implementation tab
 
+**Live preview**:
+A pointer to where the user's running Project can be reached. Set by the Cairn when there is evidence the URL is responding; click-through opens the user's default browser. Single-slot, ephemeral, write-only — clearing happens on project switch, never via tool call.
+_Avoid_: running app (Cairn-voice only), preview (ambiguous with artifact snapshots), localhost link
+
 **User-visible artifact**:
 Anything the user sees rendered in the Cairn's panel: the Brief, the Plan, the Tasks tab, and eventually the app itself. The Cairn or a Sub-agent may supply the content, but the app owns the visual presentation. Distinguished from **Engineering scaffolding**, which the Cairn handles silently.
 _Avoid_: deliverable, output
@@ -74,6 +78,7 @@ The Cairn's opening turn when the user returns after a meaningful gap, summarizi
 - **Project context** is created when the **Brief** is created and then updated explicitly when durable Project knowledge changes.
 - The **Cairn** is the only voice the user hears; **Sub-agents** are silent and invisible.
 - A **Recap greeting** opens a returning **Session** when enough time has elapsed.
+- A **Live preview** is a write-only pointer to the running Project. Distinguished from **User-visible artifacts** in that it points outward to a live process rather than rendering content inside the Cairn panel.
 
 ## Example dialogue
 
