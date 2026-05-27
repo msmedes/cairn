@@ -76,6 +76,7 @@ export type CairnToolsOptions = {
   onRenameSuccess: (previousProject: Project, nextProject: Project) => void;
   onProjectUpdate: (project: Project) => void;
   onCreatingStart: (target: CreatingTarget, message: string) => void;
+  onLivePreviewSet?: (url: string, label: string) => void;
   getLoadedSkills?: () => Skill[];
   spawnSubagent?: (input: {
     projectRoot: string;
@@ -140,6 +141,24 @@ const setCreatingParamsSchema = z.object({
       "Short Cairn-voice text to show while the artifact is being created.",
     ),
 });
+
+const setLivePreviewParamsSchema = z.object({
+  url: z.string().url().describe("The reachable URL to open in the browser."),
+  label: z
+    .string()
+    .min(1)
+    .max(80)
+    .describe("Plain Cairn-voice label for the preview pill."),
+});
+
+type LivePreviewToolResult =
+  | { ok: true; url: string; label: string }
+  | {
+      ok: false;
+      code: "validation_error" | "not_configured";
+      message: string;
+      issues?: Array<{ path: string; message: string }>;
+    };
 
 const spawnSubagentParamsSchema = z.object({
   skill_name: z
@@ -261,6 +280,13 @@ function fileToolFailure(
 }
 
 function fileToolResponse(result: FileToolResult) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    details: result,
+  };
+}
+
+function livePreviewToolResponse(result: LivePreviewToolResult) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(result) }],
     details: result,
@@ -873,6 +899,59 @@ export function createCairnTools(options: CairnToolsOptions): ToolDefinition[] {
             },
           ],
           details: { ok: true, target: params.target },
+        };
+      },
+    }),
+    defineTool({
+      name: "set_live_preview",
+      label: "Set Live Preview",
+      description:
+        "Show a single clickable live-preview pill for the user's running project.",
+      promptSnippet: "Show the user where their running project can be opened",
+      promptGuidelines: [
+        "Call set_live_preview only when you have evidence the URL responds, usually from a sub-agent task_outcome.message.",
+        'Use a short Cairn-voice label with no technical leak: avoid "dev server", "localhost", "frontend", "app", ports, or framework names.',
+        "Re-call set_live_preview to replace the current preview when the URL or label changes.",
+        "There is no clear_live_preview tool. The preview clears on project switch or app restart.",
+        "If a stale preview fails when clicked, treat it as a useful conversational signal and re-declare after restarting or finding the current URL.",
+      ],
+      parameters: toolSchemaFromZod(setLivePreviewParamsSchema),
+      executionMode: "sequential",
+      async execute(
+        _toolCallId,
+        params,
+      ): Promise<AgentToolResult<LivePreviewToolResult>> {
+        const parsed = setLivePreviewParamsSchema.safeParse(params);
+        if (!parsed.success) {
+          return livePreviewToolResponse({
+            ok: false,
+            code: "validation_error",
+            message:
+              "Live preview needs a valid URL and a label from 1 to 80 characters.",
+            issues: parsed.error.issues.map((issue) => ({
+              path: issue.path.join("."),
+              message: issue.message,
+            })),
+          });
+        }
+        if (!options.onLivePreviewSet) {
+          return livePreviewToolResponse({
+            ok: false,
+            code: "not_configured",
+            message: "Live preview is not available in this runtime.",
+          });
+        }
+
+        options.onLivePreviewSet(parsed.data.url, parsed.data.label);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Live preview is showing.",
+            },
+          ],
+          details: { ok: true, ...parsed.data },
         };
       },
     }),

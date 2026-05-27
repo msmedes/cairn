@@ -10,7 +10,15 @@ const tabs: PanelTab[] = [
 
 describe("PanelTabs", () => {
   test("renders the active tab distinctly", () => {
-    render(<PanelTabs tabs={tabs} activeKey="plan" onSelect={() => {}} />);
+    render(
+      <PanelTabs
+        tabs={tabs}
+        activeKey="plan"
+        onSelect={() => {}}
+        livePreview={null}
+        onLivePreviewClicked={() => {}}
+      />,
+    );
 
     expect(screen.getByRole("tab", { name: "Plan" })).toHaveAttribute(
       "aria-selected",
@@ -25,7 +33,15 @@ describe("PanelTabs", () => {
 
   test("onSelect fires with the clicked tab key", () => {
     const onSelect = vi.fn();
-    render(<PanelTabs tabs={tabs} activeKey="project" onSelect={onSelect} />);
+    render(
+      <PanelTabs
+        tabs={tabs}
+        activeKey="project"
+        onSelect={onSelect}
+        livePreview={null}
+        onLivePreviewClicked={() => {}}
+      />,
+    );
 
     fireEvent.click(screen.getByRole("tab", { name: "Plan" }));
 
@@ -34,7 +50,15 @@ describe("PanelTabs", () => {
 
   test("unavailable tabs render disabled", () => {
     const onSelect = vi.fn();
-    render(<PanelTabs tabs={tabs} activeKey="project" onSelect={onSelect} />);
+    render(
+      <PanelTabs
+        tabs={tabs}
+        activeKey="project"
+        onSelect={onSelect}
+        livePreview={null}
+        onLivePreviewClicked={() => {}}
+      />,
+    );
 
     const buildingTab = screen.getByRole("tab", { name: "Building" });
     expect(buildingTab).toBeDisabled();
@@ -42,5 +66,28 @@ describe("PanelTabs", () => {
     fireEvent.click(buildingTab);
 
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  test("renders the live preview chip at the end of the tabs row", () => {
+    const onLivePreviewClicked = vi.fn();
+    render(
+      <PanelTabs
+        tabs={tabs}
+        activeKey="project"
+        onSelect={() => {}}
+        livePreview={{
+          url: "http://localhost:5173",
+          label: "Your recipe finder",
+        }}
+        onLivePreviewClicked={onLivePreviewClicked}
+      />,
+    );
+
+    const chip = screen.getByRole("button", { name: "Your recipe finder" });
+    expect(chip).toHaveAttribute("title", "http://localhost:5173");
+
+    fireEvent.click(chip);
+
+    expect(onLivePreviewClicked).toHaveBeenCalledWith("http://localhost:5173");
   });
 });

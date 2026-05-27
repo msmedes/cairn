@@ -51,6 +51,7 @@ type SessionStatus =
 
 type SidecarSessionHandlers = {
   onCreatingStarted: (target: CreatingTarget, message: string) => void;
+  onLivePreviewSet: (url: string, label: string) => void;
   onAgentEnd: () => void;
   onHydrate: () => void;
   onError: () => void;
@@ -77,6 +78,7 @@ function formatAnswerSummary(answers: QuestionAnswer[]): string {
 
 export function useSidecarSession({
   onCreatingStarted,
+  onLivePreviewSet,
   onAgentEnd,
   onHydrate,
   onError,
@@ -184,6 +186,9 @@ export function useSidecarSession({
         case "creating_started":
           onCreatingStarted(payload.target, payload.message);
           break;
+        case "live_preview_set":
+          onLivePreviewSet(payload.url, payload.label);
+          break;
         case "mcp_auth_status":
           onMcpAuthStatus?.(payload);
           break;
@@ -260,7 +265,14 @@ export function useSidecarSession({
       cancelled = true;
       unlisten?.();
     };
-  }, [onAgentEnd, onCreatingStarted, onError, onHydrate, onMcpAuthStatus]);
+  }, [
+    onAgentEnd,
+    onCreatingStarted,
+    onError,
+    onHydrate,
+    onLivePreviewSet,
+    onMcpAuthStatus,
+  ]);
 
   async function sendPrompt(text: string, images: PromptImage[] = []) {
     if (

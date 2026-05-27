@@ -453,6 +453,125 @@ test.each([
   expect(toolText(result)).toBe("Creating indicator is showing.");
 });
 
+test("set_live_preview tool accepts valid params and emits once", async () => {
+  const livePreviewEvents: Array<{ url: string; label: string }> = [];
+  const setLivePreview = createCairnTools({
+    getActiveProject: () => null,
+    renameProject: () => {
+      throw new Error("should not rename while setting live preview");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while setting live preview");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while setting live preview",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while setting live preview",
+      );
+    },
+    onLivePreviewSet: (url, label) => {
+      livePreviewEvents.push({ url, label });
+    },
+  }).find((tool) => tool.name === "set_live_preview");
+
+  expect(setLivePreview).toBeDefined();
+  if (!setLivePreview) {
+    throw new Error("set_live_preview tool was not registered");
+  }
+
+  const result = await setLivePreview.execute(
+    "tool-call-1",
+    {
+      url: "http://localhost:5173",
+      label: "Your recipe finder",
+    },
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(livePreviewEvents).toEqual([
+    {
+      url: "http://localhost:5173",
+      label: "Your recipe finder",
+    },
+  ]);
+  expect(toolText(result)).toBe("Live preview is showing.");
+  expect(result.details).toEqual({
+    ok: true,
+    url: "http://localhost:5173",
+    label: "Your recipe finder",
+  });
+});
+
+test.each([
+  {
+    name: "malformed URL",
+    params: { url: "not a url", label: "Your recipe finder" },
+    path: "url",
+  },
+  {
+    name: "empty label",
+    params: { url: "http://localhost:5173", label: "" },
+    path: "label",
+  },
+  {
+    name: "label longer than 80 chars",
+    params: { url: "http://localhost:5173", label: "a".repeat(81) },
+    path: "label",
+  },
+])("set_live_preview rejects $name before emitting", async ({
+  params,
+  path,
+}) => {
+  const livePreviewEvents: Array<{ url: string; label: string }> = [];
+  const setLivePreview = createCairnTools({
+    getActiveProject: () => null,
+    renameProject: () => {
+      throw new Error("should not rename while setting live preview");
+    },
+    onRenameSuccess: () => {
+      throw new Error("should not retarget while setting live preview");
+    },
+    onProjectUpdate: () => {
+      throw new Error(
+        "should not emit project updates while setting live preview",
+      );
+    },
+    onCreatingStart: () => {
+      throw new Error(
+        "should not emit creating state while setting live preview",
+      );
+    },
+    onLivePreviewSet: (url, label) => {
+      livePreviewEvents.push({ url, label });
+    },
+  }).find((tool) => tool.name === "set_live_preview");
+
+  if (!setLivePreview) {
+    throw new Error("set_live_preview tool was not registered");
+  }
+
+  const result = await setLivePreview.execute(
+    "tool-call-1",
+    params as never,
+    undefined,
+    undefined,
+    {} as never,
+  );
+
+  expect(livePreviewEvents).toEqual([]);
+  expect(result.details).toMatchObject({
+    ok: false,
+    code: "validation_error",
+    issues: [expect.objectContaining({ path })],
+  });
+});
+
 test("cairn tool registry does not surface retired task dispatcher tools", () => {
   const tools = createCairnTools({
     getActiveProject: () => null,
