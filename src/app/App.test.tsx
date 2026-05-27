@@ -20,6 +20,7 @@ const devLogMock = vi.hoisted(() => ({
 }));
 const invokeMock = vi.hoisted(() => vi.fn());
 const getVersionMock = vi.hoisted(() => vi.fn());
+const openUrlMock = vi.hoisted(() => vi.fn());
 const sendPromptMock = vi.hoisted(() => vi.fn());
 const authenticateMcpServerMock = vi.hoisted(() => vi.fn());
 const menuEventHandlers = vi.hoisted(
@@ -32,6 +33,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: getVersionMock,
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: openUrlMock,
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -61,6 +66,7 @@ function bootstrapTauriRuntime() {
   ).__TAURI_INTERNALS__ = {};
   invokeMock.mockImplementation(() => Promise.resolve(null));
   getVersionMock.mockResolvedValue("test");
+  openUrlMock.mockResolvedValue(undefined);
 }
 
 async function openDevPanelViaMenu() {
@@ -619,6 +625,20 @@ describe("App panel tabs", () => {
     expect(
       screen.getByRole("dialog", { name: "Report a bug" }),
     ).toBeInTheDocument();
+  });
+
+  test("native Cairn repo menu event opens the repository URL", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+    await act(async () => {});
+
+    act(() => {
+      fireMenuEvent("cairn-repo");
+    });
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      "https://github.com/msmedes/cairn",
+    );
   });
 
   test("bug report submission uses the current menu-event snapshot", async () => {

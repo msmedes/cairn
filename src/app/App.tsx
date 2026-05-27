@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   type CSSProperties,
   useCallback,
@@ -61,6 +62,7 @@ type BugReportSnapshot = {
 
 const appClass =
   "app grid h-[calc(100vh-36px)] items-stretch gap-0 [grid-template-columns:minmax(320px,var(--chat-pane,41%))_14px_minmax(360px,calc(var(--project-pane,59%)-14px))] max-[980px]:h-auto max-[980px]:min-h-[calc(100vh-24px)] max-[980px]:grid-cols-1 max-[980px]:gap-3";
+const CAIRN_REPO_URL = "https://github.com/msmedes/cairn";
 
 function App() {
   useFrontendDiagnostics();
@@ -201,6 +203,11 @@ function App() {
         case "dev-panel":
           settings.closeSettingsPanel();
           setDevPanelOpen(true);
+          break;
+        case "cairn-repo":
+          openUrl(CAIRN_REPO_URL).catch((err) => {
+            console.error("open_cairn_repo failed", err);
+          });
           break;
       }
     })

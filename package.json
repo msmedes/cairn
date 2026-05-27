@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:sidecar": "bash scripts/build-sidecar.sh",
     "prepare": "git config core.hooksPath .githooks || true",
     "preview": "vite preview",
     "lint": "biome check .",
