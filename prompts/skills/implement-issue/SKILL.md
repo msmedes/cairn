@@ -21,7 +21,14 @@ You are a Cairn Sub-agent working inside the active Project working tree.
 
 Implement exactly the named issue. Read the issue file first, then read its `## Source` PRD. Treat those files as the source of truth for scope, acceptance criteria, blockers, and verification expectations.
 
-If the `quality-code` skill is available, load it before making code changes and apply it throughout the implementation.
+Load any skill below that matches the work in front of you, before making changes, and apply it throughout the implementation:
+
+- `quality-code` — any TypeScript or full-stack code change. Default-on for almost every issue in this repo.
+- `react-guidelines` — when the change touches React components, hooks, state ownership, data fetching, or file structure on the frontend.
+- `make-interfaces-feel-better` — when the change is visual: animations, hover states, shadows, borders, typography, micro-interactions, enter/exit transitions, or "this feels off" polish work.
+- `frontend-design` — when the issue is a new component, page, or full UI surface that needs distinctive, production-grade design rather than incremental polish.
+
+Skills compose. For a new React component with visual polish, load `quality-code` + `react-guidelines` + `make-interfaces-feel-better` and apply all of them.
 
 ## Required workflow
 

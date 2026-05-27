@@ -1,57 +1,110 @@
 ---
 name: quality-code
-description: Use when writing or reviewing TypeScript/full-stack code. Encodes principles for type safety, real tests over mocks, schema-first tool boundaries, observability, and choosing practical abstractions.
+description: Use when writing or reviewing TypeScript/full-stack code. Encodes principles for type safety (branded types, discriminated unions, end-to-end types), real tests over mocks, OpenTelemetry observability, and picking the right abstractions instead of premature ones.
 ---
 
-# Writing Quality Full-Stack TypeScript
+# Writing quality full-stack TypeScript
 
 Apply these principles when writing or reviewing TypeScript code.
 
-## Make Impossible States Unrepresentable
+## Make impossible states unrepresentable
 
-Use the type system to make invalid states fail at compile time. Fewer reachable states means easier code to read and change.
+Use the type system to make invalid states fail at compile time. Fewer reachable states = easier code to read and change.
 
-Prefer discriminated unions over flag bags:
+### Branded types
+
+Brand primitives so they can't be mixed up. Validate once at the boundary; downstream code trusts the type.
 
 ```ts
+type PhoneNumber = string & { __brand: "PhoneNumber" };
+
+function parsePhone(input: string): PhoneNumber {
+  if (!/^\+?\d{10,15}$/.test(input)) throw new Error(`Invalid: ${input}`);
+  return input as PhoneNumber;
+}
+
+function sendSMS(to: PhoneNumber, body: string) {
+  /* input is trusted */
+}
+```
+
+If the project already uses a library with native branded-type support (e.g. Effect), use their primitives instead of rolling your own.
+
+### Discriminated unions over flag bags
+
+```ts
+// Don't — invalid combos representable
+type State = { loading: boolean; user?: User; error?: string };
+
+// Do — only valid states exist
 type State =
   | { status: "loading" }
   | { status: "success"; user: User }
   | { status: "error"; error: string };
 ```
 
-Brand primitives when two plain strings or numbers are easy to mix up. Validate once at the boundary; downstream code should trust the branded type.
+## Let the types flow end-to-end
 
-## Let Types Flow End-To-End
+DB schema → server → client should share types without manual duplication. Use whatever end-to-end type tool the project already has (tRPC, oRPC, Elysia, TanStack Start). A `users.email` branded as `Email` should arrive on the client still branded.
 
-Derive types from the source of truth instead of restating shapes by hand. Reach for `Pick`, `Omit`, `Parameters`, `ReturnType`, `Awaited`, and `typeof` before creating duplicate interfaces.
+Don't restate types you can derive. Reach for `Pick`, `Omit`, `Parameters`, `ReturnType`, `Awaited`, `typeof` etc. before writing a new interface. For function arguments, infer from the source instead of typing them by hand:
 
-For function arguments, pass objects rather than positional primitives unless the path is truly performance-critical.
+```ts
+// Don't — duplicate shape, drifts when the row changes
+type UserSummary = { id: string; email: Email };
+function renderUser(u: UserSummary) {
+  /* ... */
+}
 
-## Schema-First Boundaries
+// Do — derive from the source of truth
+type User = Awaited<ReturnType<typeof db.query.users.findFirst>>;
+function renderUser(u: Pick<User, "id" | "email">) {
+  /* ... */
+}
+```
 
-For tool parameters, artifact data, config files, and runtime-validated inputs:
+## Pass objects, not positional args
 
-- Define the runtime shape once as a Zod schema.
+```ts
+// Don't — swap two args, still compiles
+sendEmail("Welcome!", "Hi there");
+// Do — order-independent, self-documenting
+sendEmail({ to: "alice@x.com", body: "Hi there" });
+```
+
+Skip on hot perf-critical paths; use elsewhere by default.
+
+## Standard Schema for shared validation
+
+For libraries or code that doesn't want to pick a validator, accept `StandardSchemaV1<unknown, T>`.
+
+## Schema-first tool and artifact boundaries
+
+When adding tool parameters, artifact data, or other runtime-validated boundary
+objects, make the validator the source of truth:
+
+- Define the shape once as a Zod schema.
 - Infer TypeScript types from that schema with `z.infer`.
-- Generate tool/runtime JSON Schema from the same Zod schema instead of hand-maintaining TypeBox or raw JSON Schema duplicates.
-- Keep hand-written checks for domain behavior that is not just shape validation, such as file existence, unknown task slugs, authorization, or state transitions.
-- Do not add unit tests that merely retest Zod required fields, enum values, or min/max lengths. Test persistence, normalization, side effects, routing, and domain failures.
+- Generate tool/runtime JSON Schema from that same Zod schema instead of
+  hand-maintaining TypeBox or raw JSON Schema duplicates.
+- Keep hand-written checks for domain behavior that is not just shape
+  validation, such as "file already exists", "unknown task slug", authorization,
+  or state transitions.
+- Do not add unit tests that merely retest Zod's required fields, enum values,
+  or min/max lengths. Test the app-owned behavior around the boundary instead:
+  persistence, normalization, side effects, routing, and meaningful domain
+  failures.
 
-## Tests As Real As Possible
+## Tests as real as possible
 
-Do not mock things you can run locally. Use real test environments where practical:
+Don't mock things you can run. Spin up real services:
 
 - LocalStack for AWS
 - Miniflare for Cloudflare Workers
-- Real Postgres or SQLite instead of a mock DB
+- Real Postgres/SQLite (e.g. `bun:sqlite`), not a mock DB
 
 Mock only third-party services that have no test environment.
 
-## Observability
+## OpenTelemetry, not print logging
 
-For durable observability, prefer OpenTelemetry spans over ad hoc print logging. Logs are fine for local development, but product debugging should leave a traceable request path.
-
-## Abstractions
-
-Add an abstraction only when it removes real complexity, reduces meaningful duplication, or matches an established project pattern. Keep narrow changes narrow.
+When adding observability, instrument with OTel spans. The setup cost pays back the first time a user sends a request ID and you can answer instead of guess.
