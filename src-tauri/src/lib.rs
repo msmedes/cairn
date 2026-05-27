@@ -2,7 +2,9 @@
 // Rust-to-frontend event fan-out. Frontend talks to us via Tauri commands;
 // we forward to the sidecar; sidecar events come back over `sidecar-event`.
 
+mod app_menu;
 mod bug_report;
+#[cfg(debug_assertions)]
 mod dev_log;
 #[cfg(debug_assertions)]
 mod diagnostics;
@@ -19,15 +21,16 @@ use std::sync::{Arc, Mutex as StdMutex, MutexGuard as StdMutexGuard};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex as AsyncMutex;
 
+use app_menu::install_app_menu;
 use bug_report::bug_report_bundler;
 #[cfg(test)]
 use bug_report::{create_bug_report_bundle, create_bug_report_bundle_in_dir, UNZIP_COMMAND_PATH};
+#[cfg(debug_assertions)]
 use dev_log::format_sidecar_dev_log;
 #[cfg(debug_assertions)]
 use diagnostics::{
@@ -72,6 +75,7 @@ struct SidecarState {
     last_pending_question: StdMutex<Option<Value>>,
     // Recent raw sidecar dev events. The frontend pulls this after subscribing
     // so events emitted during startup/hydration are not lost.
+    #[cfg(debug_assertions)]
     last_dev_logs: StdMutex<Vec<Value>>,
     #[cfg(debug_assertions)]
     diagnostics: StdMutex<Diagnostics>,
@@ -213,9 +217,10 @@ struct McpSettingsStatus {
 }
 
 const SIDECAR_EVENT: &str = "sidecar-event";
+#[cfg(debug_assertions)]
 const SIDECAR_DEV_EVENT: &str = "sidecar-dev-log";
-const MENU_EVENT: &str = "menu-event";
 const SIDECAR_BIN_NAME: &str = "cairn-sidecar";
+#[cfg(debug_assertions)]
 const MAX_DEV_LOG_EVENTS: usize = 1000;
 const CAIRN_MCP_META_KEY: &str = "_cairn";
 const SLACK_MCP_CLIENT_ID: &str = "3660753192626.8903469228982";
@@ -897,6 +902,7 @@ async fn new_project(state: State<'_, Arc<SidecarState>>) -> Result<(), String> 
     clear_pending_user_prompt(state.inner().as_ref());
     clear_live_assistant_text(state.inner().as_ref());
     *lock_state(&state.last_pending_question) = None;
+    #[cfg(debug_assertions)]
     lock_state(&state.last_dev_logs).clear();
     let payload = serde_json::json!({ "type": "new_project" });
     write_line(&state.stdin, &payload).await
@@ -1052,6 +1058,7 @@ fn get_active_project(state: State<'_, Arc<SidecarState>>) -> Option<ActiveProje
     lock_state(&state.active_project).clone()
 }
 
+#[cfg(debug_assertions)]
 #[tauri::command]
 #[expect(
     clippy::needless_pass_by_value,
@@ -1342,6 +1349,7 @@ fn reset_sidecar_state(state: &SidecarState) {
     lock_state(&state.last_recents).clear();
     *lock_state(&state.last_project_open_error) = None;
     *lock_state(&state.last_pending_question) = None;
+    #[cfg(debug_assertions)]
     lock_state(&state.last_dev_logs).clear();
 }
 
@@ -1791,37 +1799,31 @@ fn spawn_stdout_forwarder(app: AppHandle, state: Arc<SidecarState>, stdout: Chil
     });
 }
 
+#[cfg(debug_assertions)]
 fn handle_sidecar_stderr_value(value: Value, app: &AppHandle, state: &SidecarState) {
     let log_line = format_sidecar_dev_log(&value).unwrap_or_else(|| value.to_string());
     log::info!(target: "cairn::sidecar", "{log_line}");
-    #[cfg(debug_assertions)]
-    {
-        record_sidecar_stderr_diagnostic(&value, state);
-    }
+    record_sidecar_stderr_diagnostic(&value, state);
     let mut logs = lock_state(&state.last_dev_logs);
     logs.push(value.clone());
     if logs.len() > MAX_DEV_LOG_EVENTS {
         let drain_count = logs.len() - MAX_DEV_LOG_EVENTS;
         logs.drain(0..drain_count);
     }
-    #[cfg(debug_assertions)]
     let payload_type = value
         .get("type")
         .and_then(Value::as_str)
         .map(str::to_string);
     let emit_result = app.emit(SIDECAR_DEV_EVENT, value);
-    #[cfg(debug_assertions)]
-    {
-        if let Err(err) = emit_result {
-            record_emit_failure(state, SIDECAR_DEV_EVENT, payload_type.as_deref(), &err);
-        }
+    if let Err(err) = emit_result {
+        record_emit_failure(state, SIDECAR_DEV_EVENT, payload_type.as_deref(), &err);
     }
-    #[cfg(not(debug_assertions))]
-    let _ = emit_result;
 }
 
 fn spawn_stderr_forwarder(app: AppHandle, state: Arc<SidecarState>, stderr: ChildStderr) {
     tokio::spawn(async move {
+        #[cfg(not(debug_assertions))]
+        let _ = (&app, &state);
         let mut lines = BufReader::new(stderr).lines();
         loop {
             match lines.next_line().await {
@@ -1832,11 +1834,14 @@ fn spawn_stderr_forwarder(app: AppHandle, state: Arc<SidecarState>, stderr: Chil
                     }
 
                     if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                        #[cfg(debug_assertions)]
                         handle_sidecar_stderr_value(value, &app, &state);
+                        #[cfg(not(debug_assertions))]
+                        let _ = value;
                     } else {
-                        log::warn!(target: "cairn::sidecar", "stderr: {trimmed}");
                         #[cfg(debug_assertions)]
                         {
+                            log::warn!(target: "cairn::sidecar", "stderr: {trimmed}");
                             record_diagnostic(
                                 &state,
                                 DiagnosticRecord::new(
@@ -1851,9 +1856,11 @@ fn spawn_stderr_forwarder(app: AppHandle, state: Arc<SidecarState>, stderr: Chil
                 }
                 Ok(None) => break,
                 Err(err) => {
-                    log::warn!(target: "cairn::sidecar", "stderr read error: {err}");
+                    #[cfg(not(debug_assertions))]
+                    let _ = &err;
                     #[cfg(debug_assertions)]
                     {
+                        log::warn!(target: "cairn::sidecar", "stderr read error: {err}");
                         record_diagnostic(
                             &state,
                             DiagnosticRecord::new(
@@ -1912,77 +1919,6 @@ async fn spawn_sidecar(app: AppHandle, state: Arc<SidecarState>) -> Result<(), S
 
     spawn_stdout_forwarder(app.clone(), state.clone(), stdout);
     spawn_stderr_forwarder(app, state, stderr);
-
-    Ok(())
-}
-
-fn install_app_menu(app: &AppHandle) -> tauri::Result<()> {
-    let settings_item = MenuItemBuilder::with_id("menu:settings", "Settings…")
-        .accelerator("CmdOrCtrl+,")
-        .build(app)?;
-    let dev_panel_item = MenuItemBuilder::with_id("menu:dev-panel", "Show Dev Panel")
-        .accelerator("CmdOrCtrl+Shift+D")
-        .build(app)?;
-    let report_bug_item = MenuItemBuilder::with_id("menu:report-bug", "Report a Bug…")
-        .accelerator("CmdOrCtrl+Shift+B")
-        .build(app)?;
-
-    let app_submenu = SubmenuBuilder::new(app, "Cairn")
-        .item(&PredefinedMenuItem::about(app, Some("About Cairn"), None)?)
-        .separator()
-        .item(&settings_item)
-        .item(&report_bug_item)
-        .separator()
-        .item(&PredefinedMenuItem::hide(app, None)?)
-        .item(&PredefinedMenuItem::hide_others(app, None)?)
-        .item(&PredefinedMenuItem::show_all(app, None)?)
-        .separator()
-        .item(&PredefinedMenuItem::quit(app, None)?)
-        .build()?;
-
-    let edit_submenu = SubmenuBuilder::new(app, "Edit")
-        .undo()
-        .redo()
-        .separator()
-        .cut()
-        .copy()
-        .paste()
-        .select_all()
-        .build()?;
-
-    let view_submenu = SubmenuBuilder::new(app, "View")
-        .item(&PredefinedMenuItem::fullscreen(app, None)?)
-        .build()?;
-
-    let window_submenu = SubmenuBuilder::new(app, "Window")
-        .item(&PredefinedMenuItem::minimize(app, None)?)
-        .item(&PredefinedMenuItem::close_window(app, None)?)
-        .build()?;
-
-    let dev_submenu = SubmenuBuilder::new(app, "Developer")
-        .item(&dev_panel_item)
-        .build()?;
-
-    let menu = MenuBuilder::new(app)
-        .items(&[
-            &app_submenu,
-            &edit_submenu,
-            &view_submenu,
-            &window_submenu,
-            &dev_submenu,
-        ])
-        .build()?;
-
-    app.set_menu(menu)?;
-    app.on_menu_event(|app, event| {
-        let payload = match event.id().as_ref() {
-            "menu:settings" => "settings",
-            "menu:report-bug" => "report-bug",
-            "menu:dev-panel" => "dev-panel",
-            _ => return,
-        };
-        let _ = app.emit(MENU_EVENT, payload);
-    });
 
     Ok(())
 }
@@ -2068,7 +2004,6 @@ pub fn run() {
             set_anthropic_api_key,
             set_theme_preference,
             get_sidecar_status,
-            get_sidecar_dev_logs,
             read_project_file,
             bug_report_bundler
         ]);

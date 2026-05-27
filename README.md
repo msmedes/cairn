@@ -92,13 +92,13 @@ This starts Vite on `localhost:1420`, builds the sidecar in-tree, and opens the 
 
 ## Build
 
-Produce a packaged `Cairn.app` and a plain `.dmg`:
+Produce a packaged `Cairn.app` and transfer zip:
 
 ```sh
 bun run build:app
 ```
 
-The script (`scripts/build-app.sh`) compiles the sidecar into a single executable named for the Rust target triple Tauri expects, runs `tauri build`, then creates a `.dmg` with `hdiutil` (skipping Tauri's AppleScript-driven dmg layout). Output lands in `src-tauri/target/release/bundle/`.
+The script (`scripts/build-app.sh`) runs `tauri build`, whose `beforeBuildCommand` compiles the frontend and the sidecar executable named for the Rust target triple Tauri expects. It then ad-hoc signs the app and creates a transfer zip. Set `CAIRN_BUILD_DMG=1` to also create a plain `.dmg` with `hdiutil`. Output lands in `src-tauri/target/release/bundle/`.
 
 ## Scripts
 
@@ -107,7 +107,8 @@ The script (`scripts/build-app.sh`) compiles the sidecar into a single executabl
 | `bun run dev` | Vite dev server only (no Tauri window). |
 | `bun tauri dev` | Full dev app — frontend + Rust shell + sidecar. |
 | `bun run build` | Type-check frontend and produce a Vite production bundle. |
-| `bun run build:app` | Build a packaged `.app` and `.dmg`. |
+| `bun run build:sidecar` | Compile the sidecar executable Tauri bundles. |
+| `bun run build:app` | Build a packaged `.app` and transfer zip; set `CAIRN_BUILD_DMG=1` for a `.dmg`. |
 | `bun run lint` / `bun run lint:fix` | Biome check / autofix. |
 | `bun run typecheck` | `tsc --noEmit` for both frontend and sidecar. |
 | `bun run test` | Frontend (Vitest) + sidecar (`bun test`). |

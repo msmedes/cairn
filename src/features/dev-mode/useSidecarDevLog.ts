@@ -66,7 +66,7 @@ export function useSidecarDevLog() {
   const [events, setEvents] = useState<SidecarDevLogEntry[]>([]);
 
   useEffect(() => {
-    if (!hasTauriRuntime()) return;
+    if (!import.meta.env.DEV || !hasTauriRuntime()) return;
 
     let cancelled = false;
     let unlisten: UnlistenFn | undefined;

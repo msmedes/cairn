@@ -58,6 +58,7 @@ function messageSignature(value: unknown) {
     ["get_cairn_settings failed", "settings.load_failed"],
     ["set_anthropic_api_key failed", "settings.api_key_failed"],
     ["getVersion failed", "settings.version_failed"],
+    ["open_cairn_repo failed", "menu.open_repo_failed"],
   ];
   return knownPrefixes.find(([prefix]) => value.startsWith(prefix))?.[1];
 }

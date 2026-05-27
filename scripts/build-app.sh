@@ -2,11 +2,10 @@
 # Build a packaged Cairn.app / .zip.
 #
 # Steps:
-#   1. Compile the bun sidecar (TS + npm deps + bun runtime) into a single
-#      executable, named with the Rust target triple Tauri expects.
-#   2. Run `tauri build`, which bundles the sidecar binary + prompts +
+#   1. Run `tauri build`; Tauri's `beforeBuildCommand` compiles the frontend
+#      and sidecar binary, then bundles the sidecar + prompts +
 #      pi-coding-agent's package.json into Cairn.app.
-#   3. Ad-hoc sign the app bundle and produce a zip for transfer.
+#   2. Ad-hoc sign the app bundle and produce a zip for transfer.
 #
 # Output: src-tauri/target/release/bundle/macos/
 
@@ -15,20 +14,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) BUN_TARGET=bun-darwin-arm64; RUST_TARGET=aarch64-apple-darwin ;;
-  Darwin-x86_64) BUN_TARGET=bun-darwin-x64; RUST_TARGET=x86_64-apple-darwin ;;
-  Linux-x86_64) BUN_TARGET=bun-linux-x64; RUST_TARGET=x86_64-unknown-linux-gnu ;;
+  Darwin-arm64) RUST_TARGET=aarch64-apple-darwin ;;
+  Darwin-x86_64) RUST_TARGET=x86_64-apple-darwin ;;
+  Linux-x86_64) RUST_TARGET=x86_64-unknown-linux-gnu ;;
   *) echo "unsupported host: $(uname -s)-$(uname -m)" >&2; exit 1 ;;
 esac
-
-SIDECAR_OUT="src-tauri/binaries/cairn-sidecar-${RUST_TARGET}"
-
-echo "==> compiling sidecar -> ${SIDECAR_OUT}"
-mkdir -p src-tauri/binaries
-bun build --compile \
-  --target="${BUN_TARGET}" \
-  ./sidecar/index.ts \
-  --outfile "${SIDECAR_OUT}"
 
 echo "==> tauri build"
 bun run tauri build
