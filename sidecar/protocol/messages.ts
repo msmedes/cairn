@@ -66,7 +66,7 @@ export type McpAuthStatusEvent = {
 
 export type SidecarOutMsg =
   | HydrateEvent
-  | { type: "active_project"; project: ActiveProjectInfo }
+  | { type: "active_project"; project: ActiveProjectInfo | null }
   | { type: "ready" }
   | { type: "recents"; entries: RecentProjectInfo[] }
   | { type: "text_delta"; delta: string }
@@ -77,6 +77,7 @@ export type SidecarOutMsg =
       questions: AskUserQuestionBundle;
     }
   | { type: "creating_started"; target: CreatingTarget; message: string }
+  | { type: "live_preview_set"; url: string; label: string }
   | McpAuthStatusEvent
   | { type: "agent_end" }
   | { type: "error"; message: string; recoverable?: boolean };

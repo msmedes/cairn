@@ -89,6 +89,7 @@ vi.mock("../features/dev-mode/useSidecarDevLog", () => ({
 
 type SidecarSessionHandlers = {
   onCreatingStarted: (target: CreatingTarget, message: string) => void;
+  onLivePreviewSet: (url: string, label: string) => void;
   onAgentEnd: () => void;
   onHydrate: () => void;
   onError: () => void;
@@ -639,6 +640,114 @@ describe("App panel tabs", () => {
     expect(openUrlMock).toHaveBeenCalledWith(
       "https://github.com/msmedes/cairn",
     );
+  });
+
+  test("live preview chip opens the latest declared URL and survives post-prompt hydrate", async () => {
+    bootstrapTauriRuntime();
+    render(<App />);
+
+    act(() => {
+      sidecarSessionHandlers?.onLivePreviewSet(
+        "http://localhost:5173",
+        "Your recipe finder",
+      );
+    });
+
+    const chip = screen.getByRole("button", { name: "Your recipe finder" });
+    expect(chip).toHaveAttribute("title", "http://localhost:5173");
+
+    fireEvent.click(chip);
+
+    expect(openUrlMock).toHaveBeenCalledWith("http://localhost:5173");
+
+    act(() => {
+      sidecarSessionHandlers?.onLivePreviewSet(
+        "http://localhost:4173",
+        "Your meal planner",
+      );
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Your recipe finder" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Your meal planner" }),
+    ).toHaveAttribute("title", "http://localhost:4173");
+
+    act(() => {
+      sidecarSessionHandlers?.onHydrate();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Your meal planner" }),
+    ).toBeInTheDocument();
+  });
+
+  test("live preview chip clears when the active project changes", async () => {
+    bootstrapTauriRuntime();
+    mockActiveProject = {
+      id: "project-1",
+      name: "first",
+      path: "/tmp/first-project",
+      displayName: "First Project",
+    };
+    const { rerender } = render(<App />);
+
+    act(() => {
+      sidecarSessionHandlers?.onLivePreviewSet(
+        "http://localhost:5173",
+        "Your recipe finder",
+      );
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Your recipe finder" }),
+    ).toBeInTheDocument();
+
+    mockActiveProject = {
+      id: "project-2",
+      name: "second",
+      path: "/tmp/second-project",
+      displayName: "Second Project",
+    };
+    rerender(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Your recipe finder" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test("live preview chip clears when there is no active project", async () => {
+    bootstrapTauriRuntime();
+    mockActiveProject = {
+      id: "project-1",
+      name: "first",
+      path: "/tmp/first-project",
+      displayName: "First Project",
+    };
+    const { rerender } = render(<App />);
+
+    act(() => {
+      sidecarSessionHandlers?.onLivePreviewSet(
+        "http://localhost:5173",
+        "Your recipe finder",
+      );
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Your recipe finder" }),
+    ).toBeInTheDocument();
+
+    mockActiveProject = null;
+    rerender(<App />);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Your recipe finder" }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   test("bug report submission uses the current menu-event snapshot", async () => {

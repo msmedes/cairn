@@ -374,6 +374,9 @@ async function openProject(
       onCreatingStart: (target, message) => {
         emit({ type: "creating_started", target, message });
       },
+      onLivePreviewSet: (url, label) => {
+        emit({ type: "live_preview_set", url, label });
+      },
       askUserQuestion: ({ toolCallId, questions }) => {
         const pending =
           askUserQuestionPendingRegistry.registerPending(toolCallId);
@@ -516,6 +519,7 @@ async function handleNewProject() {
   disposeSession();
   activeProject = null;
   process.chdir(startupCwd);
+  emit({ type: "active_project", project: null });
   emit({ type: "hydrate", messages: [] });
   emitProjectState();
 }

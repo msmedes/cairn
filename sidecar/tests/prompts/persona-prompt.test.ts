@@ -57,6 +57,13 @@ test("persona prompt frames creating indicators around artifacts, not files", ()
   expect(personaPrompt).not.toContain("target file");
 });
 
+test("persona prompt constrains live preview declaration", () => {
+  expect(personaPrompt).toContain("set_live_preview");
+  expect(personaPrompt).toContain("after there is evidence the URL responds");
+  expect(personaPrompt).toContain("There is no clear tool");
+  expect(personaPrompt).toContain("clears on project switch and app restart");
+});
+
 test("persona prompt lets redirect fixes use direct edits or sub-agent dispatch", () => {
   expect(personaPrompt).toContain(
     "either edit the file directly or dispatch `spawn_subagent(implement-issue)`",

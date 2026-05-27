@@ -9,6 +9,7 @@ import type {
   CreatingIndicator,
   CreatingTarget,
 } from "../hooks/useCreatingIndicator";
+import type { LivePreview } from "../hooks/useLivePreview";
 import { PanelTabs } from "./internal/PanelTabs";
 
 type ProjectPanelTab = "project" | "plan" | "tasks";
@@ -27,6 +28,8 @@ type ProjectPanelProps = {
   planArtifact: PlanArtifactEnvelope | null;
   tasksArtifact: TasksArtifactEnvelope | null;
   onTabSelected: (tab: ProjectPanelTab) => void;
+  livePreview: LivePreview | null;
+  onLivePreviewClicked: (url: string) => void;
 };
 
 const panelClass =
@@ -88,6 +91,8 @@ export function ProjectPanel({
   planArtifact,
   tasksArtifact,
   onTabSelected,
+  livePreview,
+  onLivePreviewClicked,
 }: ProjectPanelProps) {
   const showBriefArtifact = activeTab === "project" && briefArtifact;
   const showPlanArtifact = activeTab === "plan" && planArtifact;
@@ -104,6 +109,8 @@ export function ProjectPanel({
         tabs={tabs}
         activeKey={activeTab}
         onSelect={(key) => onTabSelected(normalizePanelTab(key))}
+        livePreview={livePreview}
+        onLivePreviewClicked={onLivePreviewClicked}
       />
       <div className={panelBodyClass}>
         {showBriefArtifact ? (

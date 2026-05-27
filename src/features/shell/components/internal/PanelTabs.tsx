@@ -1,3 +1,6 @@
+import type { LivePreview } from "../../hooks/useLivePreview";
+import { LivePreviewChip } from "./LivePreviewChip";
+
 export type PanelTab = {
   key: string;
   label: string;
@@ -8,6 +11,8 @@ type PanelTabsProps = {
   tabs: PanelTab[];
   activeKey: string;
   onSelect: (key: string) => void;
+  livePreview: LivePreview | null;
+  onLivePreviewClicked: (url: string) => void;
 };
 
 const panelTabsClass =
@@ -19,7 +24,13 @@ const tabClass =
 const activeTabClass =
   "tab-active bg-[color-mix(in_srgb,var(--muted)_92%,transparent)] text-foreground shadow-sm";
 
-export function PanelTabs({ tabs, activeKey, onSelect }: PanelTabsProps) {
+export function PanelTabs({
+  tabs,
+  activeKey,
+  onSelect,
+  livePreview,
+  onLivePreviewClicked,
+}: PanelTabsProps) {
   return (
     <div className={panelTabsClass} role="tablist" aria-label="Project panel">
       {tabs.map((tab) => {
@@ -39,6 +50,10 @@ export function PanelTabs({ tabs, activeKey, onSelect }: PanelTabsProps) {
           </button>
         );
       })}
+      <LivePreviewChip
+        livePreview={livePreview}
+        onClick={onLivePreviewClicked}
+      />
     </div>
   );
 }

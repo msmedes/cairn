@@ -50,6 +50,7 @@ import {
 } from "../features/shell/components/ProjectPanel";
 import { useActivePanelTab } from "../features/shell/hooks/useActivePanelTab";
 import { useCreatingIndicator } from "../features/shell/hooks/useCreatingIndicator";
+import { useLivePreview } from "../features/shell/hooks/useLivePreview";
 import { usePaneSplit } from "../features/shell/hooks/usePaneSplit";
 import { cx } from "../lib/cx";
 import { hasTauriRuntime } from "../lib/tauri";
@@ -116,10 +117,20 @@ function App() {
     hydrate: clearCreatingOnHydrate,
     error: clearCreatingOnError,
   } = useCreatingIndicator(creatingContent);
+  const {
+    livePreview,
+    live_preview_set: setLivePreview,
+    project_changed: clearLivePreviewOnProjectChanged,
+    error: clearLivePreviewOnError,
+  } = useLivePreview();
   const handleHydrate = useCallback(() => {
     clearCreatingOnHydrate();
     setRecapInteracted(false);
   }, [clearCreatingOnHydrate]);
+  const handleSidecarError = useCallback(() => {
+    clearCreatingOnError();
+    clearLivePreviewOnError();
+  }, [clearCreatingOnError, clearLivePreviewOnError]);
   const mcpAuthStatusHandlerRef = useRef<(event: McpAuthStatusEvent) => void>(
     () => {},
   );
@@ -144,9 +155,10 @@ function App() {
     openProjectDialog,
   } = useSidecarSession({
     onCreatingStarted: startCreating,
+    onLivePreviewSet: setLivePreview,
     onAgentEnd: clearCreatingOnAgentEnd,
     onHydrate: handleHydrate,
-    onError: clearCreatingOnError,
+    onError: handleSidecarError,
     onMcpAuthStatus: handleMcpAuthStatus,
   });
   const { events: devEvents, clearEvents: clearDevEvents } = useSidecarDevLog();
@@ -158,6 +170,19 @@ function App() {
     startResizing,
   } = usePaneSplit();
   const activeProjectPath = activeProject?.path ?? null;
+  const previousActiveProjectPathRef = useRef<string | null | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    const previousPath = previousActiveProjectPathRef.current;
+    previousActiveProjectPathRef.current = activeProjectPath;
+
+    if (previousPath === undefined || previousPath === activeProjectPath) {
+      return;
+    }
+
+    clearLivePreviewOnProjectChanged();
+  }, [activeProjectPath, clearLivePreviewOnProjectChanged]);
   const settings = useSettingsBridge({
     activeProjectPath,
     authenticateMcpServer,
@@ -266,6 +291,12 @@ function App() {
     void sendPrompt(text, images);
   }
 
+  function openLivePreview(url: string) {
+    openUrl(url).catch((err) => {
+      console.error("open_live_preview failed", err);
+    });
+  }
+
   return (
     <main
       ref={appRef}
@@ -312,6 +343,8 @@ function App() {
         planArtifact={projectPlanArtifact}
         tasksArtifact={projectTasksArtifact}
         onTabSelected={setActiveTab}
+        livePreview={livePreview}
+        onLivePreviewClicked={openLivePreview}
       />
       <DevModeLayer
         isOpen={devPanelOpen}

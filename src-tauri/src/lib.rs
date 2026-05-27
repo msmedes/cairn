@@ -130,7 +130,7 @@ struct ActiveProject {
 
 #[derive(Deserialize)]
 struct ActiveProjectEvent {
-    project: ActiveProject,
+    project: Option<ActiveProject>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -975,6 +975,13 @@ fn sidecar_status_from_state(state: &SidecarState) -> SidecarStatus {
     }
 }
 
+fn apply_active_project_event(value: Value, state: &SidecarState) {
+    if let Ok(parsed) = serde_json::from_value::<ActiveProjectEvent>(value) {
+        *lock_state(&state.active_project) = parsed.project;
+        *lock_state(&state.last_project_open_error) = None;
+    }
+}
+
 fn clear_live_assistant_text(state: &SidecarState) {
     lock_state(&state.live_assistant_text).clear();
 }
@@ -1723,10 +1730,7 @@ async fn handle_sidecar_stdout_value(value: Value, app: &AppHandle, state: &Arc<
         }
         Some("active_project") => {
             *lock_state(&state.last_pending_question) = None;
-            if let Ok(parsed) = serde_json::from_value::<ActiveProjectEvent>(value.clone()) {
-                *lock_state(&state.active_project) = Some(parsed.project);
-                *lock_state(&state.last_project_open_error) = None;
-            }
+            apply_active_project_event(value.clone(), state);
         }
         Some("recents") => {
             if let Ok(parsed) = serde_json::from_value::<RecentsEvent>(value.clone()) {
@@ -2537,6 +2541,24 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![("user", "Persist me only after the sidecar starts.")]
         );
+    }
+
+    #[test]
+    fn active_project_null_event_clears_cached_status() {
+        let state = SidecarState::default();
+        *lock_state(&state.active_project) = Some(ActiveProject {
+            id: "project-1".into(),
+            name: "first".into(),
+            path: "/tmp/first-project".into(),
+            display_name: "First Project".into(),
+        });
+        *lock_state(&state.last_project_open_error) = Some("stale path".into());
+
+        apply_active_project_event(json!({ "type": "active_project", "project": null }), &state);
+
+        let status = sidecar_status_from_state(&state);
+        assert!(status.active_project.is_none());
+        assert!(status.project_open_error.is_none());
     }
 
     #[test]

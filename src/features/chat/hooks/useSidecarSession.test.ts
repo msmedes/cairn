@@ -19,6 +19,14 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 function noop() {}
 
+const defaultHandlers = {
+  onCreatingStarted: noop,
+  onLivePreviewSet: noop,
+  onAgentEnd: noop,
+  onHydrate: noop,
+  onError: noop,
+};
+
 function bootstrapTauriRuntime() {
   (
     window as typeof window & { __TAURI_INTERNALS__?: unknown }
@@ -58,14 +66,7 @@ describe("useSidecarSession", () => {
   });
 
   test("sendPrompt forwards image payloads and keeps thumbnails in the optimistic user message", async () => {
-    const { result } = renderHook(() =>
-      useSidecarSession({
-        onCreatingStarted: noop,
-        onAgentEnd: noop,
-        onHydrate: noop,
-        onError: noop,
-      }),
-    );
+    const { result } = renderHook(() => useSidecarSession(defaultHandlers));
 
     await waitFor(() => {
       expect(result.current.ready).toBe(true);
@@ -95,14 +96,7 @@ describe("useSidecarSession", () => {
   });
 
   test("pending questions can be submitted or skipped through the sidecar command", async () => {
-    const { result } = renderHook(() =>
-      useSidecarSession({
-        onCreatingStarted: noop,
-        onAgentEnd: noop,
-        onHydrate: noop,
-        onError: noop,
-      }),
-    );
+    const { result } = renderHook(() => useSidecarSession(defaultHandlers));
 
     await waitFor(() => {
       expect(result.current.ready).toBe(true);
@@ -204,20 +198,39 @@ describe("useSidecarSession", () => {
       },
     };
 
-    const { result } = renderHook(() =>
-      useSidecarSession({
-        onCreatingStarted: noop,
-        onAgentEnd: noop,
-        onHydrate: noop,
-        onError: noop,
-      }),
-    );
+    const { result } = renderHook(() => useSidecarSession(defaultHandlers));
 
     await waitFor(() => {
       expect(result.current.pendingQuestion?.toolCallId).toBe(
         "tool-call-snapshot",
       );
     });
+  });
+
+  test("routes live_preview_set events to the live preview handler", async () => {
+    const onLivePreviewSet = vi.fn();
+    renderHook(() =>
+      useSidecarSession({ ...defaultHandlers, onLivePreviewSet }),
+    );
+
+    await waitFor(() => {
+      expect(sidecarEventHandlers).toHaveLength(1);
+    });
+
+    act(() => {
+      sidecarEventHandlers[0]?.({
+        payload: {
+          type: "live_preview_set",
+          url: "http://localhost:5173",
+          label: "Your recipe finder",
+        },
+      });
+    });
+
+    expect(onLivePreviewSet).toHaveBeenCalledWith(
+      "http://localhost:5173",
+      "Your recipe finder",
+    );
   });
 
   test("guards duplicate question submissions while the command is in flight", async () => {
@@ -233,14 +246,7 @@ describe("useSidecarSession", () => {
       }
       return Promise.resolve(null);
     });
-    const { result } = renderHook(() =>
-      useSidecarSession({
-        onCreatingStarted: noop,
-        onAgentEnd: noop,
-        onHydrate: noop,
-        onError: noop,
-      }),
-    );
+    const { result } = renderHook(() => useSidecarSession(defaultHandlers));
 
     await waitFor(() => {
       expect(result.current.ready).toBe(true);
